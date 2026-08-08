@@ -21,6 +21,7 @@ export interface Agent {
   maxTokens?: number;
   maxIterations?: number;
   tools: string[];
+  skills?: string[];
   cwd?: string;
   memory?: AgentMemoryConfig;
   context?: AgentContextConfig;
@@ -66,6 +67,15 @@ export interface McpServerConfig {
   status?: { id: string; connected: boolean; error?: string; toolCount: number };
 }
 
+export interface SkillDef {
+  name: string;
+  description: string;
+  body: string;
+  location: string;
+  updatedAt: string;
+  hasReferences: boolean;
+}
+
 export interface MemorySnapshot {
   agentId: string;
   memoryFile?: { content: string; updatedAt: string; sizeBytes: number };
@@ -95,6 +105,7 @@ export interface AppSettings {
   searchApi?: { provider: "duckduckgo" | "serper" | "tavily"; apiKey?: string };
   codeExecutionConfirm: "ask" | "always" | "never";
   defaultProviderId?: string;
+  mem0?: { endpoint: string; apiKey?: string; enabled: boolean };
 }
 
 export type TaskMode = "single" | "workflow" | "chat";

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Cloud, Globe, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
+import { BookOpen, Cloud, Globe, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
 import { api } from "../lib/api";
-import type { AppSettings, McpServerConfig, ProviderConfig } from "../types";
+import type { AppSettings, McpServerConfig, ProviderConfig, SkillDef } from "../types";
 import {
-  Badge, Button, Card, Input, Label, Modal, Select, Spinner, cls,
+  Badge, Button, Card, Input, Label, Modal, Select, Spinner, Textarea, cls,
 } from "../components/ui";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -303,8 +303,116 @@ function McpSection() {
   );
 }
 
+// ---------- Skill 表单 ----------
+function SkillForm({ initial, onDone }: { initial?: SkillDef; onDone: () => void }) {
+  const [form, setForm] = useState({
+    name: initial?.name ?? "",
+    description: initial?.description ?? "",
+    body: initial?.body ?? "",
+  });
+
+  async function save() {
+    if (!form.name.trim() || !form.description.trim() || !form.body.trim()) return;
+    const body = { name: form.name, description: form.description, body: form.body };
+    if (initial) await api.put(`/skills/${initial.name}`, body);
+    else await api.post("/skills", body);
+    onDone();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <Label>名称（小写字母/数字/连字符）</Label>
+        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="code-review" disabled={!!initial} />
+      </div>
+      <div>
+        <Label>描述（≤1024 字符，模型据此判断何时用此 skill）</Label>
+        <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="代码评审最佳实践…" />
+      </div>
+      <div>
+        <Label>SKILL.md 正文（markdown）</Label>
+        <Textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} rows={10} placeholder="# 技能说明&#10;## 步骤&#10;## 检查清单" />
+      </div>
+      <div className="flex justify-end gap-2 border-t border-border pt-4">
+        <Button onClick={onDone} variant="ghost">取消</Button>
+        <Button variant="primary" onClick={save}>保存</Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Skill 池 ----------
+function SkillSection() {
+  const [skills, setSkills] = useState<SkillDef[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<SkillDef | undefined>();
+
+  async function refresh() {
+    setSkills(await api.get<SkillDef[]>("/skills"));
+  }
+  useEffect(() => { void refresh(); }, []);
+
+  async function remove(name: string) {
+    if (!confirm(`确定删除 skill ${name}？`)) return;
+    await api.del(`/skills/${name}`);
+    void refresh();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted">Skill 池：可被 Agent 勾选启用，运行时会注入其 SKILL.md 正文</p>
+        <Button variant="primary" onClick={() => { setEditing(undefined); setShowForm(true); }} className="px-3 py-1.5 text-sm">
+          + 新建 Skill
+        </Button>
+      </div>
+
+      {skills.length === 0 && (
+        <Card className="p-8 text-center text-sm text-muted">Skill 池为空，点击右上角新建</Card>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-2">
+        {skills.map((s) => (
+          <Card key={s.name} className="p-4">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                  <BookOpen className="h-4 w-4" />
+                </div>
+                <span className="font-semibold text-fg">{s.name}</span>
+              </div>
+              <div className="flex gap-1">
+                <button onClick={() => { setEditing(s); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" title="编辑">
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button onClick={() => remove(s.name)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" title="删除">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+            <p className="mt-2 line-clamp-2 text-xs text-muted">{s.description}</p>
+            <div className="mt-2 text-[10px] text-muted">
+              {s.body.length} 字符 · {s.hasReferences ? "有 references" : "无 references"}
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      <Modal open={showForm} onClose={() => setShowForm(false)} title={editing ? "编辑 Skill" : "新建 Skill"} wide>
+        <SkillForm
+          initial={editing}
+          onDone={() => {
+            setShowForm(false);
+            void refresh();
+          }}
+        />
+      </Modal>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "general">("providers");
+  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "skills" | "general">("providers");
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -350,6 +458,7 @@ export default function SettingsPage() {
     { key: "providers" as const, label: "LLM Providers", icon: <Plug className="h-4 w-4" /> },
     { key: "tools" as const, label: "工具与安全", icon: <Wrench className="h-4 w-4" /> },
     { key: "mcp" as const, label: "MCP", icon: <Server className="h-4 w-4" /> },
+    { key: "skills" as const, label: "Skill 池", icon: <BookOpen className="h-4 w-4" /> },
     { key: "general" as const, label: "通用", icon: <Settings className="h-4 w-4" /> },
   ];
 
@@ -476,10 +585,41 @@ export default function SettingsPage() {
               </div>
             </div>
           </Card>
+
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-fg">外部记忆（Mem0）</h3>
+                <p className="mt-0.5 text-xs text-muted">可选：连接 Mem0 服务获得语义/向量记忆（增强跨任务检索）</p>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={!!settings.mem0?.enabled}
+                  onChange={(e) => saveSettings({ mem0: { endpoint: settings.mem0?.endpoint ?? "", apiKey: settings.mem0?.apiKey, enabled: e.target.checked } })}
+                />
+                启用
+              </label>
+            </div>
+            {settings.mem0?.enabled && (
+              <div className="mt-3 grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Endpoint</Label>
+                  <Input value={settings.mem0.endpoint} onChange={(e) => saveSettings({ mem0: { endpoint: e.target.value, apiKey: settings.mem0?.apiKey, enabled: true } })} placeholder="https://api.mem0.ai" />
+                </div>
+                <div>
+                  <Label>API Key</Label>
+                  <Input type="password" value={settings.mem0.apiKey ?? ""} onChange={(e) => saveSettings({ mem0: { endpoint: settings.mem0?.endpoint ?? "", apiKey: e.target.value, enabled: true } })} placeholder="m0-…" />
+                </div>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 
       {tab === "mcp" && <McpSection />}
+
+      {tab === "skills" && <SkillSection />}
 
       {tab === "general" && (
         <Card className="p-5">

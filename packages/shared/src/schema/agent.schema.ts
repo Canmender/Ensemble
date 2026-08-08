@@ -23,6 +23,7 @@ export const agentConfigSchema = z.object({
   maxTokens: z.number().int().positive().optional(),
   maxIterations: z.number().int().min(1).max(50).default(10),
   tools: z.array(z.string()).default([]),
+  skills: z.array(z.string()).default([]),
   cwd: z.string().optional(),
   memory: z
     .object({

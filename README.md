@@ -7,7 +7,10 @@
 - **桌面原生**：Electron 应用，本地同源服务，无云端依赖，数据与密钥留在本机
 - **内部自定义 Agent**：为每个 Agent 选择模型（Anthropic / OpenAI 兼容 / 本地端点）、编写角色提示词、按需启用工具
 - **多模型提供商**：Anthropic Claude API · OpenAI 兼容（OpenRouter / DeepSeek / Ollama）· 自定义端点
-- **可插拔工具**：文件读写、命令执行、联网搜索、网页抓取（按 Agent 配置启用）
+- **可插拔工具**：文件读写、命令执行、联网搜索、网页抓取、**MCP 工具接入**（按 Agent 配置启用）
+- **Skill 系统**：Skill 池（SKILL.md 标准）+ 每个 Agent 独立勾选，运行注入上下文
+- **Agent 记忆**：两级文件记忆（daily log + MEMORY.md）+ 可选 **Mem0 外部语义记忆**
+- **现代 harness**：Hook 化工具循环、上下文主动压缩、大结果 offload、overflow 恢复
 - **三种协作模式**：🎯 单一分发 · 🛠️ 工作流 DAG · 💬 对话式群聊
 - **实时流式**：token 级输出、工具调用、运行日志实时可见
 - **安全**：API Key 用系统级加密（Windows DPAPI）存储；工具操作有工作区白名单与确认弹窗
@@ -77,6 +80,12 @@ packages/
 | `POST /api/runs/:id/cancel` | 取消运行 |
 | `GET/PUT /api/settings` | 应用设置（工作区 / 确认策略 / 搜索） |
 | `WS /ws` | 实时事件推送 |
+
+## 🧠 Agent 能力详解
+
+- **记忆**：Agents → Agent → 记忆按钮可查看/整理。开启"长期记忆"后 Agent 跨任务积累（需消耗少量 token 做记忆提取）。可选连接 Mem0 服务获得语义检索（设置 → 工具与安全 → 外部记忆）。
+- **Skill**：设置 → Skill 池 管理 SKILL.md；创建 Agent 时勾选启用的 Skill，运行时注入上下文（全量注入 SKILL.md 正文）。
+- **MCP**：设置 → MCP 添加服务器（stdio 命令或 HTTP URL），工具自动注册为 `mcp__<server>__<tool>`，Agent 勾选后即可调用。
 
 ## 🔐 安全说明
 

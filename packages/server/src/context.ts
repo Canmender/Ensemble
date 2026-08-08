@@ -11,8 +11,12 @@ import { FileKeyStore, type KeyStore } from "./keychain";
 import { ToolRegistry } from "./tools/types";
 import { registerBuiltinTools } from "./tools";
 import { MemoryProviderImpl, type MemoryProvider } from "./memory/provider";
+import { Mem0Backend } from "./memory/mem0";
 import { McpConfigStore } from "./tools/mcp/config";
 import { McpManager } from "./tools/mcp/manager";
+import { OffloadStore } from "./context/offload";
+import { SkillStore, BUILTIN_SKILLS } from "./skills";
+import { logger } from "./util/logger";
 
 /** 应用服务容器：把所有模块组装起来，供 API 层使用 */
 export interface AppContext {
@@ -27,6 +31,7 @@ export interface AppContext {
   providerRegistry: ProviderRegistry;
   toolRegistry: ToolRegistry;
   memoryProvider: MemoryProvider;
+  skillStore: SkillStore;
   mcpConfig: McpConfigStore;
   mcpManager: McpManager;
   reloadAgents: () => void;
@@ -55,15 +60,45 @@ export function createAppContext(
   registerBuiltinTools(toolRegistry, () => config.getSettings());
 
   const dataDir = dirname(env.dbPath);
+  const mem0Cfg = config.getSettings().mem0;
+  const mem0Backend =
+    mem0Cfg?.enabled && mem0Cfg?.endpoint ? new Mem0Backend(mem0Cfg) : undefined;
   const memoryProvider = new MemoryProviderImpl(
     join(dataDir, "memories"),
     (id) => config.getAgent(id),
     providerRegistry,
+    mem0Backend,
   );
 
   const mcpConfig = new McpConfigStore(join(env.configDir, "mcp.json"));
   const mcpManager = new McpManager(mcpConfig, toolRegistry);
   void mcpManager.reload();
+
+  // 每日维护：记忆 consolidate/轮转 + offload 清理
+  const offloadStore = new OffloadStore(join(dataDir, "offload", "agents"));
+  const maintenanceTimer = setInterval(() => {
+    for (const a of config.listAgents()) {
+      if (a.memory?.enabled) {
+        void memoryProvider.consolidate(a.id).catch(() => {});
+        memoryProvider.rotate(a.id, 90);
+      }
+      offloadStore.cleanup(a.id, 7 * 86_400_000);
+    }
+  }, 24 * 3600_000);
+  maintenanceTimer.unref?.();
+
+  // Skill 池（首次写入内置 skill）
+  const skillRoot = join(dataDir, "skills");
+  const skillStore = new SkillStore(skillRoot);
+  if (skillStore.list().length === 0) {
+    for (const s of BUILTIN_SKILLS) {
+      try {
+        skillStore.save(s);
+      } catch (err) {
+        logger.warn(`bootstrap skill ${s.name} failed: ${String(err)}`);
+      }
+    }
+  }
 
   const registry = new AdapterRegistry({
     providerRegistry,
@@ -72,6 +107,7 @@ export function createAppContext(
     askConfirm: deps.askConfirm,
     offloadBaseDir: join(dataDir, "offload"),
     memoryProvider,
+    skillStore,
   });
   const engine = new OrchestrationEngine(store, registry, hub, (id) => config.getWorkflow(id));
 
@@ -101,11 +137,13 @@ export function createAppContext(
     providerRegistry,
     toolRegistry,
     memoryProvider,
+    skillStore,
     mcpConfig,
     mcpManager,
     reloadAgents,
     reloadProviders,
     dispose: async () => {
+      clearInterval(maintenanceTimer);
       registry.disposeAll();
       memoryProvider.dispose();
       await mcpManager.dispose();

@@ -4,6 +4,7 @@ import { MemoryLlm } from "./llm";
 import type { MemorySnapshot } from "./types";
 import { estimateTokens } from "../adapters/builtin/context";
 import type { ProviderRegistry } from "../llm/registry";
+import type { MemoryBackend } from "./backend";
 import { logger } from "../util/logger";
 
 export interface MemoryProvider {
@@ -26,6 +27,7 @@ export class MemoryProviderImpl implements MemoryProvider {
     private memoryRoot: string,
     private getAgent: (id: string) => AgentConfig | undefined,
     private providerRegistry: ProviderRegistry,
+    private mem0Backend?: MemoryBackend,
   ) {
     this.store = new MemoryStore(memoryRoot);
   }
@@ -48,10 +50,24 @@ export class MemoryProviderImpl implements MemoryProvider {
 
   async inject(systemPrompt: string, agentId: string): Promise<string> {
     if (!this.isEnabled(agentId)) return systemPrompt;
-    const mem = this.store.readMemoryFile(agentId);
-    if (!mem?.content) return systemPrompt;
     const maxChars = this.cfg(agentId)?.injectMaxChars ?? 4000;
-    return `${systemPrompt}\n\n[长期记忆]\n${mem.content.slice(0, maxChars)}`;
+
+    const parts: string[] = [];
+    const mem = this.store.readMemoryFile(agentId);
+    if (mem?.content) parts.push(mem.content.slice(0, maxChars));
+
+    // 外部记忆（Mem0）：语义检索相关记忆追加
+    if (this.mem0Backend?.enabled) {
+      try {
+        const related = await this.mem0Backend.search(agentId, systemPrompt.slice(0, 200), 5);
+        if (related.length) parts.push(`## 相关历史记忆\n${related.join("\n").slice(0, maxChars)}`);
+      } catch {
+        /* 外部记忆失败静默降级 */
+      }
+    }
+
+    if (!parts.length) return systemPrompt;
+    return `${systemPrompt}\n\n[长期记忆]\n${parts.join("\n\n")}`;
   }
 
   async scheduleFlush(agentId: string, transcript: string, prompt: string): Promise<void> {
@@ -85,8 +101,15 @@ export class MemoryProviderImpl implements MemoryProvider {
     if (!llm) return;
     const now = new Date();
     const date = now.toISOString().slice(0, 10);
-    const block = await llm.flush(transcript, prompt, now);
-    this.store.appendDaily(agentId, date, block);
+    const out = await llm.flush(transcript, prompt, now);
+    this.store.appendDaily(agentId, date, out.text);
+    this.recordUsage(agentId, out.usage);
+
+    // 外部记忆（Mem0）：同步存储提取的事实
+    if (this.mem0Backend?.enabled) {
+      await this.mem0Backend.add(agentId, out.text).catch(() => {});
+    }
+
     const meta = this.store.readMeta(agentId);
     this.store.writeMeta(agentId, {
       lastFlushAt: now.toISOString(),
@@ -111,8 +134,9 @@ export class MemoryProviderImpl implements MemoryProvider {
       .join("\n");
     const old = this.store.readMemoryFile(agentId)?.content ?? "";
     const maxChars = this.cfg(agentId)?.injectMaxChars ?? 4000;
-    const newMem = await llm.consolidate(agentId, old, logs, maxChars);
-    this.store.writeMemoryFile(agentId, newMem);
+    const out = await llm.consolidate(agentId, old, logs, maxChars);
+    this.store.writeMemoryFile(agentId, out.text);
+    this.recordUsage(agentId, out.usage);
     const meta = this.store.readMeta(agentId);
     this.store.writeMeta(agentId, {
       lastConsolidateAt: new Date().toISOString(),
@@ -127,6 +151,16 @@ export class MemoryProviderImpl implements MemoryProvider {
   clear(agentId: string): void {
     this.store.clear(agentId);
     this.lastTokens.delete(agentId);
+  }
+
+  /** 轮转单个 agent 的 daily 日志 */
+  rotate(agentId: string, keepDays = 90): number {
+    return this.store.rotate(agentId, keepDays);
+  }
+
+  private recordUsage(agentId: string, usage: { inputTokens?: number; outputTokens?: number } | undefined): void {
+    if (!usage) return;
+    this.store.addUsage(agentId, (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0));
   }
 
   dispose(): void {

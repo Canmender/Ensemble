@@ -14,5 +14,6 @@ export interface MemorySnapshot {
     lastConsolidateAt?: string;
     flushCount: number;
     consolidateCount: number;
+    memUsageTokens?: number;
   };
 }

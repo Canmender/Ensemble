@@ -9,6 +9,7 @@ export interface AdapterRegistryDeps {
   askConfirm?: BuiltinAdapterDeps["askConfirm"];
   offloadBaseDir?: BuiltinAdapterDeps["offloadBaseDir"];
   memoryProvider?: BuiltinAdapterDeps["memoryProvider"];
+  skillStore?: BuiltinAdapterDeps["skillStore"];
 }
 
 /** 按 kind 创建适配器实例。未来新增 agent 类型在此扩展。 */
@@ -22,6 +23,7 @@ export function createAdapter(cfg: AgentConfig, deps: AdapterRegistryDeps): Agen
         askConfirm: deps.askConfirm,
         offloadBaseDir: deps.offloadBaseDir,
         memoryProvider: deps.memoryProvider,
+        skillStore: deps.skillStore,
       });
     default: {
       const _exhaustive: never = cfg.kind;

@@ -24,4 +24,6 @@ export interface AppSettings {
   searchApi?: { provider: "duckduckgo" | "serper" | "tavily"; apiKey?: string };
   codeExecutionConfirm: "ask" | "always" | "never";
   defaultProviderId?: string;
+  /** 外部记忆（Mem0）可选配置 */
+  mem0?: { endpoint: string; apiKey?: string; enabled: boolean };
 }

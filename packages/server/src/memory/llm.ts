@@ -1,12 +1,17 @@
-import type { LLMProvider } from "../llm/types";
+import type { LLMProvider, LLMResult } from "../llm/types";
 import { estimateTokens } from "../adapters/builtin/context";
+
+export interface MemoryLlmOutput {
+  text: string;
+  usage?: LLMResult["usage"];
+}
 
 /** 记忆 LLM 调用（flush / consolidate），复用 provider.chat */
 export class MemoryLlm {
   constructor(private deps: { provider: LLMProvider; model: string }) {}
 
   /** flush：对话窗口 → daily log 要点块 */
-  async flush(transcript: string, prompt: string, now: Date): Promise<string> {
+  async flush(transcript: string, prompt: string, now: Date): Promise<MemoryLlmOutput> {
     const dateStr = now.toISOString().slice(0, 16).replace("T", " ");
     const sys = `你是记忆提取器。从对话中提取值得长期记住的事实，输出 markdown 要点（≤30 行，去掉寒暄）：
 - 用户偏好
@@ -24,11 +29,11 @@ export class MemoryLlm {
       ],
       maxTokens: 700,
     });
-    return `## ${dateStr} · task: ${prompt.slice(0, 80)}\n${result.text.trim()}\n`;
+    return { text: `## ${dateStr} · task: ${prompt.slice(0, 80)}\n${result.text.trim()}\n`, usage: result.usage };
   }
 
   /** consolidate：daily logs + 旧 MEMORY.md → 新 MEMORY.md */
-  async consolidate(agentId: string, oldMemory: string, dailyLogs: string, maxChars: number): Promise<string> {
+  async consolidate(agentId: string, oldMemory: string, dailyLogs: string, maxChars: number): Promise<MemoryLlmOutput> {
     const sys = `你是长期记忆整理者。合并去重、丢弃过期信息、保留精确可复用的事实。
 输出 markdown（≤${maxChars} 字符），结构：
 # 长期记忆 — ${agentId}
@@ -48,7 +53,7 @@ export class MemoryLlm {
       ],
       maxTokens: 1200,
     });
-    return result.text.trim().slice(0, maxChars);
+    return { text: result.text.trim().slice(0, maxChars), usage: result.usage };
   }
 }
 

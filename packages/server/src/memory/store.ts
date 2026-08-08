@@ -1,5 +1,5 @@
 import {
-  mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync, statSync,
+  mkdirSync, appendFileSync, readFileSync, writeFileSync, readdirSync, rmSync, existsSync, statSync, unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
 import type { MemoryDailyEntry, MemorySnapshot } from "./types";
@@ -9,6 +9,8 @@ interface Meta {
   lastConsolidateAt?: string;
   flushCount?: number;
   consolidateCount?: number;
+  /** 记忆 LLM 调用累计 token（成本遥测） */
+  memUsageTokens?: number;
 }
 
 /**
@@ -102,6 +104,7 @@ export class MemoryStore {
         lastConsolidateAt: meta.lastConsolidateAt,
         flushCount: meta.flushCount ?? 0,
         consolidateCount: meta.consolidateCount ?? 0,
+        memUsageTokens: meta.memUsageTokens ?? 0,
       },
     };
   }
@@ -109,5 +112,31 @@ export class MemoryStore {
   clear(agentId: string): void {
     const dir = this.agentDir(agentId);
     if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  }
+
+  /** 轮转：清理 keepDays 之前的 daily 日志，返回删除数 */
+  rotate(agentId: string, keepDays = 90): number {
+    const dir = join(this.agentDir(agentId), "daily");
+    let removed = 0;
+    const cutoff = new Date(Date.now() - keepDays * 86_400_000).toISOString().slice(0, 10);
+    try {
+      for (const f of readdirSync(dir)) {
+        const date = f.replace(/\.md$/, "");
+        if (/^\d{4}-\d{2}-\d{2}$/.test(date) && date < cutoff) {
+          unlinkSync(join(dir, f));
+          removed++;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    return removed;
+  }
+
+  /** 累计记忆 LLM 调用 token */
+  addUsage(agentId: string, tokens: number): void {
+    if (!tokens) return;
+    const meta = this.readMeta(agentId);
+    this.writeMeta(agentId, { memUsageTokens: (meta.memUsageTokens ?? 0) + tokens });
   }
 }

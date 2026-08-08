@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Bot, Brain, Pencil, Trash2, Zap } from "lucide-react";
 import { api } from "../lib/api";
-import type { Agent, MemorySnapshot, ProviderConfig } from "../types";
+import type { Agent, MemorySnapshot, ProviderConfig, SkillDef } from "../types";
 import {
-  Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, Textarea,
+  Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, Textarea, cls,
 } from "../components/ui";
 
 function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void }) {
@@ -20,6 +20,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
         temperature: 0.7,
         maxIterations: 10,
         tools: [],
+        skills: [],
         memory: { enabled: false },
         context: {},
         capabilities: { sessionResume: true, partialStreaming: true, toolUseEvents: false, concurrent: true, cwdConfigurable: true },
@@ -29,6 +30,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [allTools, setAllTools] = useState<string[]>([]);
+  const [allSkills, setAllSkills] = useState<SkillDef[]>([]);
   const [customModel, setCustomModel] = useState("");
   const [loadingModels, setLoadingModels] = useState(false);
 
@@ -36,9 +38,14 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
 
   useEffect(() => {
     void (async () => {
-      const [p, h] = await Promise.all([api.get<ProviderConfig[]>("/providers"), api.get<any>("/health")]);
+      const [p, h, sk] = await Promise.all([
+        api.get<ProviderConfig[]>("/providers"),
+        api.get<any>("/health"),
+        api.get<SkillDef[]>("/skills").catch(() => []),
+      ]);
       setProviders(p ?? []);
       setAllTools(h?.tools ?? []);
+      setAllSkills(sk ?? []);
       if (!initial) {
         const enabled = (p ?? []).find((x) => x.enabled);
         if (enabled) set({ providerId: enabled.id, model: enabled.defaultModel ?? "" });
@@ -61,6 +68,11 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
 
   function toggleTool(name: string) {
     set({ tools: form.tools.includes(name) ? form.tools.filter((t) => t !== name) : [...form.tools, name] });
+  }
+
+  function toggleSkill(name: string) {
+    const cur = form.skills ?? [];
+    set({ skills: cur.includes(name) ? cur.filter((s) => s !== name) : [...cur, name] });
   }
 
   const activeModel = customModel || form.model;
@@ -174,6 +186,32 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
             ))
           )}
         </div>
+      </div>
+
+      {/* 启用的 Skills */}
+      <div>
+        <Label>启用的 Skill（运行时注入其 SKILL.md 到上下文）</Label>
+        {allSkills.length === 0 ? (
+          <span className="text-xs text-muted">Skill 池为空，到 设置 → Skill 池 添加</span>
+        ) : (
+          <div className="grid gap-1.5">
+            {allSkills.map((s) => (
+              <button
+                key={s.name}
+                onClick={() => toggleSkill(s.name)}
+                className={cls(
+                  "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                  (form.skills ?? []).includes(s.name)
+                    ? "border-primary bg-primary/10"
+                    : "border-border text-muted hover:border-primary/50",
+                )}
+              >
+                <span className={cls("font-medium", (form.skills ?? []).includes(s.name) ? "text-primary" : "text-fg")}>{s.name}</span>
+                <span className="truncate text-xs text-muted">{s.description}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* 记忆 + 上下文配置 */}

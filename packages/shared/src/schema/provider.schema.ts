@@ -29,6 +29,13 @@ export const appSettingsSchema = z.object({
     .optional(),
   codeExecutionConfirm: z.enum(["ask", "always", "never"]).default("ask"),
   defaultProviderId: z.string().optional(),
+  mem0: z
+    .object({
+      endpoint: z.string().min(1),
+      apiKey: z.string().optional(),
+      enabled: z.boolean(),
+    })
+    .optional(),
 });
 
 export type AppSettingsInput = z.input<typeof appSettingsSchema>;

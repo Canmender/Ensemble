@@ -35,6 +35,8 @@ export interface AgentConfig {
   maxIterations?: number;
   /** 启用的工具名列表 */
   tools: string[];
+  /** 启用的 skill 名列表 */
+  skills?: string[];
   cwd?: string;
   /** 记忆配置（默认关闭） */
   memory?: AgentMemoryConfig;

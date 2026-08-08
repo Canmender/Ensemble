@@ -17,6 +17,8 @@ export interface BuiltinAdapterDeps {
   offloadBaseDir?: string;
   /** 记忆 provider（P2；未注入则跳过记忆 hook） */
   memoryProvider?: import("../../memory/provider").MemoryProvider;
+  /** skill 池（S2；未注入则跳过 skill 注入） */
+  skillStore?: import("../../skills").SkillStore;
 }
 
 /**
@@ -53,6 +55,18 @@ export class BuiltinAgentExecutor implements AgentAdapter {
 
     const tools = this.deps.toolRegistry.forNames(this.cfg.tools);
 
+    // 组装 system prompt：基础角色 + 启用的 skill（全量注入 SKILL.md 正文）
+    let systemPrompt = this.cfg.systemPrompt ?? "";
+    if (this.deps.skillStore && this.cfg.skills?.length) {
+      const skills = this.deps.skillStore.forNames(this.cfg.skills);
+      if (skills.length) {
+        const skillBlock = skills
+          .map((s) => `## Skill: ${s.name}\n${s.description}\n\n${s.body}`)
+          .join("\n\n---\n\n");
+        systemPrompt = `${systemPrompt ? systemPrompt + "\n\n" : ""}以下是你可用的技能，任务相关时按技能方法执行：\n\n${skillBlock}`;
+      }
+    }
+
     // 上下文压缩器（主动压缩 + 大结果 offload + overflow 恢复）
     const ctxManager = new ContextManager({
       config: this.cfg.context ?? {},
@@ -77,7 +91,7 @@ export class BuiltinAgentExecutor implements AgentAdapter {
     yield* runAgenticLoop({
       provider,
       model: this.cfg.model,
-      systemPrompt: this.cfg.systemPrompt,
+      systemPrompt,
       prompt: input.prompt,
       context: input.context,
       tools,
