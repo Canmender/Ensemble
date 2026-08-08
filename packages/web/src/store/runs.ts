@@ -39,6 +39,39 @@ export interface LiveRun {
 /** 每 run 已消费的 event seq（去重：catchUp 与 WS 推送可能重叠） */
 const seenSeqs = new Map<string, Set<number>>();
 
+/** 事件缓冲：高频 token 流合并渲染（50ms 节流，避免每 token 一次 setState） */
+const pendingEvents = new Map<string, AgentEventItem[]>();
+let flushTimer: number | undefined;
+
+function flushPending(): void {
+  flushTimer = undefined;
+  if (pendingEvents.size === 0) return;
+  useRunStore.setState((s) => {
+    const live = { ...s.live };
+    for (const [runId, items] of pendingEvents) {
+      const run = live[runId];
+      if (!run) continue;
+      let seen = seenSeqs.get(runId);
+      if (!seen) {
+        seen = new Set();
+        seenSeqs.set(runId, seen);
+      }
+      const fresh = items.filter((i) => !seen.has(i.seq));
+      if (!fresh.length) continue;
+      for (const i of fresh) seen.add(i.seq);
+      const jobs = { ...run.jobs };
+      for (const item of fresh) {
+        if (item.jobId && jobs[item.jobId]) {
+          jobs[item.jobId] = { ...jobs[item.jobId], events: [...jobs[item.jobId].events, item] };
+        }
+      }
+      live[runId] = { ...run, jobs, events: [...run.events, ...fresh] };
+    }
+    pendingEvents.clear();
+    return { live };
+  });
+}
+
 interface RunStore {
   live: Record<string, LiveRun>;
   getOrCreate: (runId: string) => LiveRun;
@@ -91,24 +124,13 @@ export const useRunStore = create<RunStore>((set, get) => ({
   },
 
   appendEvent(runId, item) {
-    set((s) => {
-      const run = s.live[runId];
-      if (!run) return s;
-      let seen = seenSeqs.get(runId);
-      if (!seen) {
-        seen = new Set();
-        seenSeqs.set(runId, seen);
-      }
-      if (seen.has(item.seq)) return s;
-      seen.add(item.seq);
-      const jobs = { ...run.jobs };
-      if (item.jobId && jobs[item.jobId]) {
-        jobs[item.jobId] = { ...jobs[item.jobId], events: [...jobs[item.jobId].events, item] };
-      }
-      return {
-        live: { ...s.live, [runId]: { ...run, jobs, events: [...run.events, item] } },
-      };
-    });
+    // 入缓冲，50ms 节流合并（高频 token 流只触发一次渲染批次）
+    const list = pendingEvents.get(runId) ?? [];
+    list.push(item);
+    pendingEvents.set(runId, list);
+    if (flushTimer === undefined) {
+      flushTimer = window.setTimeout(flushPending, 50);
+    }
   },
 
   appendMessage(runId, m) {

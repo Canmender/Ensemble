@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, Loader2,
@@ -81,10 +81,36 @@ function RunDetail({ runId }: { runId: string }) {
   const events = useMemo(() => (live?.events ?? []).slice().sort((a, b) => a.seq - b.seq), [live?.events]);
   const messages = live?.messages ?? [];
 
+  // 协作链：按事件首次出现顺序排列各 job（工作流/单发协作流转可视化）
+  const orderedJobs = useMemo(() => {
+    const jobOrder = [...new Set(events.map((e) => e.jobId).filter(Boolean))] as string[];
+    const byId = Object.fromEntries(jobs.map((j) => [j.id, j]));
+    const ordered = jobOrder.map((id) => byId[id]).filter(Boolean);
+    const rest = jobs.filter((j) => !jobOrder.includes(j.id));
+    return [...ordered, ...rest];
+  }, [jobs, events]);
+
   if (!live) return <Spinner label="加载中" />;
 
   return (
     <div className="space-y-3">
+      {/* 协作链：按执行顺序的 agent 流转 */}
+      {orderedJobs.length > 1 && (
+        <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg bg-bg p-2">
+          {orderedJobs.map((j, i) => (
+            <Fragment key={j.id}>
+              {i > 0 && <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted" />}
+              <span className="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs">
+                <StatusDot status={j.status} />
+                <Bot className="h-3 w-3 text-primary" />
+                <span className="font-medium text-fg">{j.agentName}</span>
+                <span className="text-[10px] text-muted">{statusLabel(j.status)}</span>
+              </span>
+            </Fragment>
+          ))}
+        </div>
+      )}
+
       {/* Jobs */}
       {jobs.length > 0 && (
         <div className="space-y-1.5">

@@ -95,11 +95,11 @@ export function createAppContext(
   }, 24 * 3600_000);
   maintenanceTimer.unref?.();
 
-  // Skill 池（首次写入内置 skill）
+  // Skill 池（逐个补写内置 skill：已存在的跳过，新增的会补上）
   const skillRoot = join(dataDir, "skills");
   const skillStore = new SkillStore(skillRoot);
-  if (skillStore.list().length === 0) {
-    for (const s of BUILTIN_SKILLS) {
+  for (const s of BUILTIN_SKILLS) {
+    if (!skillStore.get(s.name)) {
       try {
         skillStore.save(s);
       } catch (err) {

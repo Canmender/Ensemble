@@ -133,6 +133,11 @@ export default function RunPage() {
   const jobs = useMemo(() => Object.values(live?.jobs ?? {}), [live?.jobs]);
   const messages = live?.messages ?? [];
 
+  // 长任务日志限制（只渲染最近 800 条，避免 DOM 爆炸）
+  const LOG_LIMIT = 800;
+  const hiddenCount = sortedEvents.length > LOG_LIMIT ? sortedEvents.length - LOG_LIMIT : 0;
+  const visibleEvents = hiddenCount ? sortedEvents.slice(-LOG_LIMIT) : sortedEvents;
+
   const status = live?.status ?? run?.status ?? "queued";
   const isChat = run?.mode === "chat";
 
@@ -231,7 +236,12 @@ export default function RunPage() {
               {sortedEvents.length === 0 ? (
                 <div className="text-xs text-muted/70">等待事件…</div>
               ) : (
-                sortedEvents.map((item, i) => <LogLine key={i} item={item} />)
+                <>
+                  {hiddenCount > 0 && (
+                    <div className="py-1 text-[11px] text-muted/70">… 前面 {hiddenCount} 条事件已折叠</div>
+                  )}
+                  {visibleEvents.map((item, i) => <LogLine key={i} item={item} />)}
+                </>
               )}
             </div>
           </Card>

@@ -114,4 +114,104 @@ export const BUILTIN_SKILLS: Array<{ name: string; description: string; body: st
 - 子任务列表（编号 + 目标 + 验证方式）
 - 建议执行顺序`,
   },
+  {
+    name: "api-design",
+    description: "REST API 设计：资源建模、HTTP 方法语义、状态码、错误格式、版本化",
+    body: `# REST API 设计
+
+## 资源建模
+- 名词复数表示资源：/users、/orders/{id}
+- 子资源表示从属：/users/{id}/orders
+- 避免动词 URL，用 HTTP 方法表达操作
+
+## HTTP 方法
+- GET：查询（无副作用）
+- POST：创建/非幂等操作
+- PUT：整体替换（幂等）
+- PATCH：部分更新
+- DELETE：删除（幂等）
+
+## 状态码
+- 2xx 成功、4xx 客户端错误、5xx 服务端错误
+- 200/201/204、400/401/403/404/409/422
+
+## 错误格式
+统一 JSON：{ error: { code, message, details? } }
+
+## 版本化
+- URL 前缀 /v1 或 header 协商
+- 向后兼容原则`,
+  },
+  {
+    name: "sql-query",
+    description: "SQL 查询编写：明确表结构、索引感知、性能优化、避免常见错误",
+    body: `# SQL 查询
+
+## 步骤
+1. 明确所需字段与过滤条件
+2. 确认表结构与连接关系（JOIN vs 子查询）
+3. 考虑索引与执行计划
+
+## 最佳实践
+- SELECT 只取需要的列，避免 SELECT *
+- JOIN 用明确的 ON 条件
+- WHERE 过滤尽早（先缩行）
+- 大表分页用 LIMIT/OFFSET 或游标
+- 聚合用 GROUP BY，过滤聚合结果用 HAVING
+
+## 避免
+- N+1 查询
+- 隐式类型转换导致索引失效
+- 在 WHERE 中对索引列做函数运算
+- 无 LIMIT 的潜在大结果集`,
+  },
+  {
+    name: "git-workflow",
+    description: "Git 工作流：分支策略、提交规范、冲突处理、rebase 与 merge 选择",
+    body: `# Git 工作流
+
+## 分支策略
+- main 保持可发布
+- 功能分支：feature/xxx
+- 修复分支：fix/xxx
+
+## 提交规范
+- 小步提交，单一职责
+- 信息格式：<type>: <subject>（feat/fix/docs/refactor/test/chore）
+- 关联 issue 编号
+
+## 操作
+- 提交前：git status + git diff 检查
+- 同步：先 pull --rebase 再 push
+- 冲突：理解双方意图，谨慎选择保留
+
+## 何时用
+- rebase：保持线性历史（个人分支）
+- merge：保留合并记录（共享/长期分支）`,
+  },
+  {
+    name: "regex-expert",
+    description: "正则表达式编写与调试：明确需求、分解、转义、测试边界",
+    body: `# 正则表达式
+
+## 步骤
+1. 明确匹配目标（精确字符、模式、长度）
+2. 分解为原子模式，逐步组合
+3. 注意转义与特殊字符
+4. 用测试用例验证（正常 + 边界 + 非法输入）
+
+## 常见模式
+- 邮箱、URL、日期、数字、手机号
+- 捕获组提取关键部分
+
+## 避免
+- 过度贪婪（.* 慎用）
+- 未转义的元字符
+- 灾难性回溯（嵌套量词）
+- 只测正常情况不测边界
+
+## 输出
+- 正则 + 说明
+- 匹配/不匹配的测试用例`,
+  },
 ];
