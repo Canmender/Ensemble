@@ -1,10 +1,115 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageSquare, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
+import { MessageSquare, ShieldCheck, Sparkles } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
-import type { Agent, Run } from "../types";
-import { Button, Card, Input, Select, Spinner, Textarea, cls, statusLabel } from "../components/ui";
+import type { Agent, Run, WorkflowDef } from "../types";
+import { Button, Card, Input, Label, Select, Spinner, Textarea, cls, statusLabel } from "../components/ui";
+
+/** 审批面板：头脑风暴通过后放入看板/工作流开始制作 */
+function ApprovalPanel({ runTitle, messages }: { runTitle: string; messages: any[] }) {
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [workflows, setWorkflows] = useState<WorkflowDef[]>([]);
+  const [mode, setMode] = useState<"single" | "workflow">("single");
+  const [agentId, setAgentId] = useState("");
+  const [workflowId, setWorkflowId] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [created, setCreated] = useState<Run | null>(null);
+
+  useEffect(() => {
+    // 默认任务 prompt = 讨论的最后一条 assistant 结论
+    const last = [...messages].reverse().find((m) => m.agentId !== "user");
+    if (last) setPrompt(last.content.slice(0, 800));
+    void api.get<Agent[]>("/agents").then((a) => {
+      setAgents(a);
+      const enabled = a.find((x) => x.enabled);
+      if (enabled) setAgentId(enabled.id);
+    });
+    void api.get<WorkflowDef[]>("/workflows").then((w) => {
+      setWorkflows(w ?? []);
+      if (w?.length) setWorkflowId(w[0].id);
+    });
+  }, []);
+
+  async function approve() {
+    if (!prompt.trim()) return;
+    setSubmitting(true);
+    try {
+      const input =
+        mode === "single"
+          ? { mode: "single" as const, prompt, agentIds: [agentId] }
+          : { mode: "workflow" as const, workflowId, prompt };
+      const run = await api.post<Run>("/tasks", { title: `${runTitle.slice(0, 30)} → 制作`, input });
+      setCreated(run);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Card className="mt-4 border-primary/40 p-5">
+      <div className="mb-3 flex items-center gap-2">
+        <ShieldCheck className="h-5 w-5 text-primary" />
+        <span className="text-sm font-semibold text-fg">审批头脑风暴结果</span>
+        <span className="text-xs text-muted">通过后将作为制作任务放入看板 / 工作流</span>
+      </div>
+
+      <div className="mb-3">
+        <Label>制作任务内容（默认取讨论结论）</Label>
+        <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} />
+      </div>
+
+      <div className="mb-3 flex items-end gap-3">
+        <div className="w-32">
+          <Label>制作方式</Label>
+          <Select value={mode} onChange={(e) => setMode(e.target.value as any)}>
+            <option value="single">单发</option>
+            <option value="workflow">工作流</option>
+          </Select>
+        </div>
+        {mode === "single" ? (
+          <div className="flex-1">
+            <Label>执行 Agent</Label>
+            <Select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        ) : (
+          <div className="flex-1">
+            <Label>工作流</Label>
+            <Select value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
+              {workflows.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        )}
+        <Button variant="primary" onClick={approve} disabled={submitting || !prompt.trim()}>
+          <ShieldCheck className="h-4 w-4" /> 审批通过，开始制作
+        </Button>
+      </div>
+
+      {created && (
+        <div className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-sm text-success">
+          <span>✓ 已创建，已放入看板开始执行</span>
+          <Link to={`/runs/${created.id}`} className="text-primary hover:underline">
+            查看运行
+          </Link>
+          <Link to="/" className="text-primary hover:underline">看板</Link>
+          <Link to="/workflows" className="text-primary hover:underline">工作流</Link>
+        </div>
+      )}
+    </Card>
+  );
+}
 
 /** 头脑风暴空间：agent 之间的想法迸发地，不直接参与项目制作 */
 export default function ChatPage() {
@@ -176,6 +281,11 @@ export default function ChatPage() {
           <div className="text-sm text-muted">选择 Agent 并输入话题，开始一场头脑风暴</div>
           <div className="mt-1 max-w-sm text-xs text-muted/70">讨论结果不会直接修改项目，只为前期想法提供灵感</div>
         </Card>
+      )}
+
+      {/* 头脑风暴完成 → 审批面板 */}
+      {activeRunId && status === "success" && (
+        <ApprovalPanel runTitle={currentRun?.taskTitle ?? "头脑风暴"} messages={messages} />
       )}
     </div>
   );

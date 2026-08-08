@@ -273,6 +273,30 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
           </div>
         ) : null}
 
+        {/* 工作流步骤进度（与工作流页同步） */}
+        {run.mode === "workflow" && jobs.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1.5">
+            {jobs.map((j) => (
+              <span
+                key={j.id}
+                className={cls(
+                  "h-1 flex-1 rounded-full",
+                  j.status === "success"
+                    ? "bg-success"
+                    : j.status === "error" || j.status === "cancelled"
+                      ? "bg-destructive"
+                      : j.status === "running" || j.status === "thinking"
+                        ? "animate-pulse bg-primary"
+                        : "bg-muted/30",
+                )}
+              />
+            ))}
+            <span className="text-[10px] text-muted">
+              {jobs.filter((j) => j.status === "success").length}/{jobs.length}
+            </span>
+          </div>
+        )}
+
         {/* summary（结果优先，过程展开看） */}
         {(finalResult || status === "running" || status === "queued") && (
           <div
