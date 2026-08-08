@@ -11,7 +11,6 @@ const historyLoaded = new Set<string>();
 
 async function loadRunDetail(runId: string) {
   if (historyLoaded.has(runId)) return;
-  historyLoaded.add(runId);
   try {
     const d = await api.get<any>(`/runs/${runId}`);
     const store = useRunStore.getState();
@@ -22,12 +21,13 @@ async function loadRunDetail(runId: string) {
     for (const job of d.jobs ?? []) {
       store.upsertJob(runId, job.id, { agentName: job.agentName, status: job.status, result: job.result });
       for (const ev of job.events ?? []) {
-        evSeq += 1;
+        evSeq -= 1; // 负 seq，避免与 WS 真实 seq 冲突/去重错乱
         store.appendEvent(runId, { seq: evSeq, jobId: job.id, event: ev });
       }
     }
+    historyLoaded.add(runId);
   } catch {
-    /* ignore */
+    /* 失败不标记，可重试 */
   }
 }
 
@@ -43,7 +43,7 @@ function WorkflowChain({ runId }: { runId: string }) {
     ...jobs.filter((j) => !order.includes(j.id)),
   ];
 
-  const currentIdx = ordered.findIndex((j) => ["running", "thinking", "starting", "queued"].includes(j.status));
+  const currentIdx = ordered.findIndex((j) => ["running", "thinking", "starting"].includes(j.status));
   const currentJob = currentIdx >= 0 ? ordered[currentIdx] : undefined;
 
   return (
@@ -51,7 +51,8 @@ function WorkflowChain({ runId }: { runId: string }) {
       {/* 步骤链 */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-2">
         {ordered.map((j, i) => {
-          const done = j.status === "success" || (currentIdx >= 0 && i < currentIdx);
+          const failed = j.status === "error" || j.status === "cancelled";
+          const done = j.status === "success" || failed || (currentIdx >= 0 && i < currentIdx);
           const isCurrent = i === currentIdx;
           return (
             <Fragment key={j.id}>
@@ -59,18 +60,20 @@ function WorkflowChain({ runId }: { runId: string }) {
               <div
                 className={cls(
                   "flex shrink-0 flex-col items-center gap-0.5 rounded-lg border px-3 py-2 text-center",
-                  isCurrent
-                    ? "border-primary bg-primary/10"
-                    : done
-                      ? "border-success/40 bg-success/5"
-                      : "border-border bg-surface opacity-60",
+                  failed
+                    ? "border-destructive/50 bg-destructive/5"
+                    : isCurrent
+                      ? "border-primary bg-primary/10"
+                      : done
+                        ? "border-success/40 bg-success/5"
+                        : "border-border bg-surface opacity-60",
                 )}
               >
                 <span className="text-[10px] text-muted">Step {i + 1}</span>
-                <Bot className={cls("h-4 w-4", isCurrent ? "text-primary" : done ? "text-success" : "text-muted")} />
+                <Bot className={cls("h-4 w-4", failed ? "text-destructive" : isCurrent ? "text-primary" : done ? "text-success" : "text-muted")} />
                 <span className="max-w-[90px] truncate text-xs font-medium text-fg">{j.agentName}</span>
-                <span className={cls("text-[10px]", done ? "text-success" : isCurrent ? "text-primary" : "text-muted")}>
-                  {done ? "✓ 完成" : isCurrent ? statusLabel(j.status) : "待执行"}
+                <span className={cls("text-[10px]", failed ? "text-destructive" : done ? "text-success" : isCurrent ? "text-primary" : "text-muted")}>
+                  {failed ? "✗ 失败" : done ? "✓ 完成" : isCurrent ? statusLabel(j.status) : "待执行"}
                 </span>
               </div>
             </Fragment>
@@ -86,9 +89,9 @@ function WorkflowChain({ runId }: { runId: string }) {
         </div>
       )}
 
-      {ordered.map((j, i) => j.result && (j.status === "success" || (currentIdx >= 0 && i < currentIdx)) && (
+      {ordered.map((j, i) => j.result && !["queued", "running", "thinking", "starting"].includes(j.status) && (
         <details key={j.id} className="mt-1 rounded-lg bg-bg p-2 text-xs">
-          <summary className="cursor-pointer text-muted hover:text-fg">
+          <summary className={cls("cursor-pointer hover:text-fg", j.status === "error" || j.status === "cancelled" ? "text-destructive" : "text-muted")}>
             Step {i + 1} · {j.agentName} 的输出
           </summary>
           <div className="mt-1 whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-fg">

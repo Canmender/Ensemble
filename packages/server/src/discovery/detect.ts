@@ -85,7 +85,7 @@ function detectHarness(def: HarnessDef): DetectedAgent | null {
     cmd: def.cmd,
     headless: def.headless,
     promptMode: def.promptMode,
-    version: getVersion(`${def.cmd} --version`),
+    version: getVersion(def.cmd),
     configPath,
     memoryDbPath,
     skills: configPath ? readSkillDirs(join(configPath, "skills")) : [],

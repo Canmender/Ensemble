@@ -75,13 +75,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
   }
 
   const patchLocal = (patch: Partial<LocalAgentConfig>) =>
-    set({
-      local: {
-        command: form.local?.command ?? "",
-        promptMode: form.local?.promptMode ?? "arg",
-        ...patch,
-      },
-    });
+    set({ local: { ...(form.local ?? { command: "" }), ...patch } });
 
   function toggleSkill(name: string) {
     const cur = form.skills ?? [];
@@ -92,7 +86,8 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
 
   async function save() {
     if (!form.id.trim() || !form.name.trim()) return;
-    const body = { ...form, model: activeModel };
+    // builtin 不带 local（避免空 command 触发 schema 校验 / 残留死配置）
+    const body = { ...form, model: activeModel, local: form.kind === "local" ? form.local : undefined };
     if (initial) {
       await api.put(`/agents/${initial.id}`, body);
     } else {

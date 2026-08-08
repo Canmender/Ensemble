@@ -327,7 +327,6 @@ export default function DashboardPage() {
       setExpanded((prev) => (prev === runId ? null : runId));
       const store = useRunStore.getState();
       if (historyLoaded.has(runId)) return;
-      historyLoaded.add(runId);
       try {
         const d = await api.get<{ run: Run; jobs: any[]; chatMessages: any[] }>(`/runs/${runId}`);
         store.getOrCreate(runId);
@@ -342,15 +341,16 @@ export default function DashboardPage() {
             sessionId: job.sessionId,
           });
           for (const ev of job.events ?? []) {
-            evSeq += 1;
+            evSeq -= 1;
             store.appendEvent(runId, { seq: evSeq, jobId: job.id, event: ev });
           }
         }
         for (const m of d.chatMessages ?? []) {
           store.appendMessage(runId, { jobId: m.jobId, agentId: m.agentId, content: m.content });
         }
+        historyLoaded.add(runId);
       } catch {
-        /* 加载失败不阻塞看板 */
+        /* 加载失败不标记，可重试 */
       }
     },
     [],

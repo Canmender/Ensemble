@@ -4,7 +4,7 @@ import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
 import type { Agent, Run } from "../types";
-import { Button, Card, Input, Select, Spinner, Textarea, cls } from "../components/ui";
+import { Button, Card, Input, Select, Spinner, Textarea, cls, statusLabel } from "../components/ui";
 
 /** 头脑风暴空间：agent 之间的想法迸发地，不直接参与项目制作 */
 export default function ChatPage() {
@@ -30,8 +30,10 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (!activeRunId) return;
+    let cancelled = false;
     wsClient.subscribe(activeRunId);
     void api.get<{ run: Run; chatMessages: any[] }>(`/runs/${activeRunId}`).then((d) => {
+      if (cancelled) return;
       setCurrentRun(d.run);
       const store = useRunStore.getState();
       store.getOrCreate(activeRunId);
@@ -41,7 +43,10 @@ export default function ChatPage() {
         store.appendMessage(activeRunId, { jobId: m.jobId, agentId: m.agentId, content: m.content });
       }
     });
-    return () => wsClient.unsubscribe(activeRunId);
+    return () => {
+      cancelled = true;
+      wsClient.unsubscribe(activeRunId);
+    };
   }, [activeRunId]);
 
   // 自动滚动到最新
@@ -132,7 +137,7 @@ export default function ChatPage() {
                   Agent 们正在讨论…
                 </>
               ) : (
-                statusLabel(status)
+                statusLabel(status ?? "")
               )}
             </span>
           </div>
@@ -151,7 +156,9 @@ export default function ChatPage() {
                     {m.agentId !== "user" && (
                       <div className="mb-1 text-[11px] font-semibold text-primary">@{m.agentId}</div>
                     )}
-                    <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{m.content}</div>
+                    <div className={cls("whitespace-pre-wrap text-sm leading-relaxed", m.agentId === "user" ? "" : "text-fg")}>
+                      {m.content}
+                    </div>
                   </div>
                 </div>
               ))
@@ -174,7 +181,3 @@ export default function ChatPage() {
   );
 }
 
-function statusLabel(s?: string): string {
-  const map: Record<string, string> = { running: "讨论中", queued: "排队", success: "已完成", error: "已结束", cancelled: "已取消" };
-  return map[s ?? ""] ?? s ?? "";
-}
