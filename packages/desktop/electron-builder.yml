@@ -1,5 +1,6 @@
 appId: com.jungle.system
 productName: 丛林系统
+electronVersion: 43.3.0
 copyright: Copyright © 2026 丛林系统
 directories:
   output: release
@@ -27,7 +28,7 @@ nsis:
   shortcutName: 丛林系统
   uninstallDisplayName: 丛林系统
   deleteAppDataOnUninstall: false
-  artifactName: ${productName}-${version}-Setup.${ext}
+  artifactName: jungle-system-${version}-setup.${ext}
 publish:
   provider: github
   owner: Canmender
