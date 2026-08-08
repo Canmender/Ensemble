@@ -32,6 +32,7 @@ export function createWindow(loadUrl: string): BrowserWindow {
 }
 
 export function registerIpc(): void {
+  ipcMain.handle(IPC.appVersion, () => app.getVersion());
   ipcMain.handle(IPC.openConfigDir, async () => {
     const dir = app.getPath("userData");
     await shell.openPath(dir);
@@ -54,9 +55,10 @@ export function registerIpc(): void {
     uptime: process.uptime(),
   }));
 
-  // 开机自启（Windows 登录时启动）
-  ipcMain.handle(IPC.setAutoLaunch, (_e, enabled: boolean) => {
-    app.setLoginItemSettings({ openAtLogin: !!enabled });
+  // 开机自启（Windows 登录时启动，入参强校验）
+  ipcMain.handle(IPC.setAutoLaunch, (_e, enabled: unknown) => {
+    const on = typeof enabled === "boolean" && enabled;
+    app.setLoginItemSettings({ openAtLogin: on });
     return app.getLoginItemSettings().openAtLogin;
   });
   ipcMain.handle(IPC.isAutoLaunch, () => app.getLoginItemSettings().openAtLogin);
@@ -64,8 +66,9 @@ export function registerIpc(): void {
   // 工具执行确认对话框（P2 工具安全）
   ipcMain.handle(
     IPC.confirmTool,
-    async (_e, payload: { tool: string; args: unknown }) => {
-      const text = `${payload.tool}\n\n参数: ${JSON.stringify(payload.args, null, 2)}`;
+    async (_e, payload: { tool?: string; args?: unknown }) => {
+      if (!payload || typeof payload.tool !== "string") return false;
+      const text = `${payload.tool}\n\n参数: ${JSON.stringify(payload.args ?? {}, null, 2)}`;
       const { response } = await dialog.showMessageBox({
         type: "warning",
         buttons: ["允许", "取消"],

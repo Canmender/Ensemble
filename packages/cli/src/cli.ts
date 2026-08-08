@@ -12,7 +12,7 @@
  *   ma run --workflow <id> "prompt"  工作流任务
  *   ma run --chat <a,b> --rounds 3 "prompt"  群聊
  *   ma create agent --id x --name y --provider p --model m [--tools t1,t2]
- *   ma create agent-local --id x --name y --command "claude -p"
+ *   ma create agent --id x --name y --command "claude -p"   # --command 即本地 Agent
  *   ma create provider --id x --name y --type openai --base-url U --api-key K
  *   ma create skill --name x --desc d --body-file f
  */
@@ -85,6 +85,7 @@ async function cmdList(type: string): Promise<void> {
 
 async function cmdRun(args: string[], flags: Record<string, string>): Promise<void> {
   const prompt = args.join(" ") || flags.prompt;
+  if (!prompt) return console.error("用法: ma run --agent <id>|--workflow <id>|--chat <ids> \"prompt\"");
   let input: unknown;
   if (flags.agent) input = { mode: "single", prompt, agentIds: flags.agent.split(",") };
   else if (flags.workflow) input = { mode: "workflow", workflowId: flags.workflow, prompt };
@@ -94,16 +95,18 @@ async function cmdRun(args: string[], flags: Record<string, string>): Promise<vo
 
   const run = await api<any>("POST", "/tasks", { title: prompt.slice(0, 40), input });
   console.log(`任务已创建: ${run.id} (${run.mode})`);
-  for (;;) {
+  // 轮询上限（最多 10 分钟），避免卡死的 run 挂住 CLI
+  for (let i = 0; i < 300; i++) {
     await sleep(2000);
     const d = await api<any>("GET", `/runs/${run.id}`);
     const cur = d.run;
     if (cur.status !== "running" && cur.status !== "queued") {
       if (cur.error) console.error(`运行 ${cur.status}: ${cur.error}`);
       else console.log(`运行 ${cur.status}: ${cur.finalResult ?? "(无结果)"}`);
-      break;
+      return;
     }
   }
+  console.error("运行超时（10 分钟），可到看板查看");
 }
 
 async function cmdCreateAgent(flags: Record<string, string>): Promise<void> {

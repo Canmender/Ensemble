@@ -14,7 +14,9 @@ const isDev = !app.isPackaged || !!process.env.RENDERER_URL;
 
 // ---------- 单实例锁（防多开，激活已运行窗口） ----------
 if (!app.requestSingleInstanceLock()) {
+  // 已有实例在运行：立即退出（不继续初始化，避免双实例）
   app.quit();
+  process.exit(0);
 } else {
   app.on("second-instance", () => {
     if (mainWindow) {
@@ -149,9 +151,14 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", () => {
+let cleanupDone = false;
+app.on("before-quit", (e) => {
   isQuitting = true;
-  void (async () => {
-    if (closeServer) await closeServer();
-  })();
+  // 等待本地服务/内存/MCP 子进程清理完成再退出（避免截断落盘）
+  if (cleanupDone || !closeServer) return;
+  e.preventDefault();
+  void closeServer().finally(() => {
+    cleanupDone = true;
+    app.quit();
+  });
 });

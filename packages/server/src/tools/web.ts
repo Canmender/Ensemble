@@ -1,6 +1,22 @@
 import type { AgentTool, ToolContext } from "./types";
 import { checkNetworkAllowed } from "./security";
 
+/** SSRF 防护：本地/内网地址判断 */
+function isPrivateHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, "");
+  return (
+    h === "localhost" ||
+    h === "127.0.0.1" ||
+    h === "::1" ||
+    h.endsWith(".local") ||
+    h.startsWith("127.") ||
+    h.startsWith("10.") ||
+    h.startsWith("192.168.") ||
+    h.startsWith("169.254.") ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(h)
+  );
+}
+
 const MAX_FETCH_BYTES = 512 * 1024;
 
 /** 网页转文本（粗略 strip 标签） */
@@ -80,6 +96,12 @@ export const webFetchTool: AgentTool = {
     if (denied) return denied;
     const { url } = input as { url: string };
     if (!/^https?:\/\//.test(url)) return "error: only http(s) URLs allowed";
+    // SSRF 防护：禁止访问本地/内网地址
+    try {
+      if (isPrivateHost(new URL(url).hostname)) return "安全围栏：禁止访问本地/内网地址";
+    } catch {
+      return "error: invalid url";
+    }
 
     const controller = new AbortController();
     const onAbort = () => controller.abort();

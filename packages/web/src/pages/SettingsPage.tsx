@@ -666,7 +666,7 @@ export default function SettingsPage() {
             <h3 className="mb-1 text-sm font-semibold text-fg">工作区根目录（工具白名单）</h3>
             <p className="mb-3 text-xs text-muted">Agent 的文件读写 / 命令执行默认只能访问此目录</p>
             <div className="flex gap-2">
-              <Input value={settings.workspaceRoot} onChange={(e) => saveSettings({ workspaceRoot: e.target.value })} placeholder="留空则无文件访问" />
+              <Input value={settings.workspaceRoot} onBlur={(e) => saveSettings({ workspaceRoot: e.target.value })} placeholder="留空则无文件访问" />
             </div>
           </Card>
 
@@ -732,7 +732,7 @@ export default function SettingsPage() {
                 <Label>命令白名单（前缀匹配，留空=全允许，空格分隔）</Label>
                 <Input
                   value={(settings.security?.allowedCommands ?? []).join(" ")}
-                  onChange={(e) =>
+                  onBlur={(e) =>
                     saveSettings({ security: { ...settings.security, allowedCommands: e.target.value.split(/\s+/).filter(Boolean) } })
                   }
                   placeholder="npm git node python"
@@ -742,7 +742,7 @@ export default function SettingsPage() {
                 <Label>命令黑名单（子串匹配，空格分隔）</Label>
                 <Input
                   value={(settings.security?.blockedCommands ?? []).join(" ")}
-                  onChange={(e) =>
+                  onBlur={(e) =>
                     saveSettings({ security: { ...settings.security, blockedCommands: e.target.value.split(/\s+/).filter(Boolean) } })
                   }
                   placeholder="rm -rf format shutdown"

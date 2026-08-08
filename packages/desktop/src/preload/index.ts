@@ -6,7 +6,7 @@ import { IPC } from "../shared/ipc";
  * api.ts/ws.ts 走相对路径的本地同源 HTTP/WS，无需在此暴露 HTTP 客户端。
  */
 contextBridge.exposeInMainWorld("desktop", {
-  version: process.env.npm_package_version ?? "0.1.0",
+  version: (): Promise<string> => ipcRenderer.invoke(IPC.appVersion),
   platform: process.platform,
   /** 工具执行确认对话框（P2 工具安全用） */
   confirmTool: (tool: string, args: unknown): Promise<boolean> =>

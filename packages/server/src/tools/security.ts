@@ -1,8 +1,19 @@
 import type { AppSettings } from "@jungle/shared";
 
-/** 危险命令模式（allowDangerousCommands=false 时阻止） */
-const DANGEROUS_RE =
-  /(^|\s)(rm\s+-(rf|-r\s+-f)|del\s+\/s|rd\s+\/s|format\s+|mkfs|shutdown|reboot|taskkill\s+\/f\s+\/im|reg\s+delete)(\s|$)/i;
+/** 危险命令名（首词精确匹配，避免误判/漏判） */
+const DANGEROUS_COMMANDS = new Set([
+  "rm", "del", "erase", "rd", "rmdir", "format", "mkfs", "mkfs.ext4",
+  "shutdown", "reboot", "halt", "poweroff", "taskkill", "reg", "format.com",
+]);
+
+/** 判断命令是否危险（解析首词命令名，忽略路径/扩展名） */
+export function isDangerousCommand(command: string): boolean {
+  const trimmed = command.trim();
+  if (!trimmed) return false;
+  const firstWord = trimmed.split(/\s+/)[0] ?? "";
+  const base = firstWord.toLowerCase().replace(/\.(exe|cmd|bat|com)$/i, "").split(/[\\/]/).pop() ?? "";
+  return DANGEROUS_COMMANDS.has(base);
+}
 
 /** 检查命令是否被安全围栏允许，返回拒绝原因（null = 允许） */
 export function checkCommandAllowed(command: string, security: AppSettings["security"]): string | null {
@@ -18,7 +29,8 @@ export function checkCommandAllowed(command: string, security: AppSettings["secu
     if (!ok) return "命令不在安全围栏白名单内";
   }
 
-  if (security.allowDangerousCommands === false && DANGEROUS_RE.test(command)) {
+  // 危险命令默认禁止（allowDangerousCommands !== true 即禁止，与 UI 默认一致）
+  if (security.allowDangerousCommands !== true && isDangerousCommand(command)) {
     return "危险命令被安全围栏阻止";
   }
 
