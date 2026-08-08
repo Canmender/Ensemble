@@ -1,4 +1,4 @@
-import type { AgentConfig } from "@multiagent/shared";
+import type { AgentConfig } from "@jungle/shared";
 import type { LoopContext, LoopHook } from "./types";
 import type { MemoryProvider } from "../memory/provider";
 

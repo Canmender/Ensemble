@@ -13,7 +13,7 @@ import {
   type ProviderConfig,
   type ProviderConfigInput,
   type AppSettings,
-} from "@multiagent/shared";
+} from "@jungle/shared";
 import { loadConfig } from "./config/loadConfig";
 import type { ServerEnv } from "./config/env";
 import { logger } from "./util/logger";

@@ -1,4 +1,4 @@
-import type { AppSettings } from "@multiagent/shared";
+import type { AppSettings } from "@jungle/shared";
 import type { ToolRegistry } from "./types";
 import { fileTools } from "./file";
 import { webTools } from "./web";

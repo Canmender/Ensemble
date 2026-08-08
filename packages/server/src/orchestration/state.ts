@@ -1,4 +1,4 @@
-import type { JobStatus, RunStatus } from "@multiagent/shared";
+import type { JobStatus, RunStatus } from "@jungle/shared";
 
 /**
  * 状态机纯函数。定义合法的状态流转，供引擎与前端共用。

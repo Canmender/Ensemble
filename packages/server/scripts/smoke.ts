@@ -1,6 +1,6 @@
 /**
  * 冒烟测试：通过完整装配跑一个内置 agent，打印归一化事件流。
- * 用法：pnpm --filter @multiagent/server smoke -- <agentId> ["prompt"]
+ * 用法：pnpm --filter @jungle/server smoke -- <agentId> ["prompt"]
  * 注意：需先在设置中配置 provider 并给 agent 指定 model，否则报 provider_missing/model_missing。
  */
 import { getEnv } from "../src/config/env";

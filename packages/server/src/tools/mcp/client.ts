@@ -11,7 +11,7 @@ export interface NativeMcpTool {
 
 /** MCP server 客户端封装：连接、listTools、callTool、close */
 export class McpToolClient {
-  private client = new Client({ name: "multiagent", version: "0.1.0" });
+  private client = new Client({ name: "jungle-system", version: "0.1.0" });
   private transport?: { close(): Promise<void> };
   private tools: NativeMcpTool[] = [];
 

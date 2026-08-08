@@ -1,8 +1,8 @@
 {
-  "name": "@multiagent/desktop",
+  "name": "@jungle/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "MultiAgent 桌面应用（Electron 壳）",
+  "description": "丛林系统 桌面应用（Electron 壳）",
   "main": "./dist/main/index.cjs",
   "scripts": {
     "build:main": "node scripts/build.mjs",
@@ -11,11 +11,11 @@
     "start": "electron .",
     "dev": "pnpm build && cross-env RENDERER_URL=http://localhost:5173 electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "package": "pnpm build && pnpm --filter @multiagent/web build && electron-builder --win"
+    "package": "pnpm build && pnpm --filter @jungle/web build && electron-builder --win"
   },
   "dependencies": {
-    "@multiagent/server": "workspace:*",
-    "@multiagent/shared": "workspace:*"
+    "@jungle/server": "workspace:*",
+    "@jungle/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

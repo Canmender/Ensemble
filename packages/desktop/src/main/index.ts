@@ -1,7 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import { startLocalServer } from "./server";
 import { createWindow, registerIpc } from "./window";
-import { logger } from "@multiagent/server";
+import { logger } from "@jungle/server";
 
 let mainWindow: BrowserWindow | null = null;
 let closeServer: (() => Promise<void>) | undefined;

@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentTaskInput, AgentEvent } from "@multiagent/shared";
+import type { AgentConfig, AgentTaskInput, AgentEvent } from "@jungle/shared";
 
 /** 统一 Agent 适配器契约：一次 startTask = 一个异步事件流 */
 export interface AgentAdapter {

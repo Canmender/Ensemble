@@ -1,4 +1,4 @@
-import type { Run, Task } from "@multiagent/shared";
+import type { Run, Task } from "@jungle/shared";
 import { OrchestrationEngine } from "./engine";
 import { logger } from "../util/logger";
 

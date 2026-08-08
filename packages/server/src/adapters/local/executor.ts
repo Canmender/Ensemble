@@ -10,7 +10,7 @@ function escapeShellArg(s: string): string {
   // POSIX：单引号包裹，内部引号转义
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
-import type { AgentConfig, AgentTaskInput, AgentEvent } from "@multiagent/shared";
+import type { AgentConfig, AgentTaskInput, AgentEvent } from "@jungle/shared";
 import type { AgentAdapter } from "../types";
 import { logger } from "../../util/logger";
 

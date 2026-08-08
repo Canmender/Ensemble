@@ -16,10 +16,10 @@
 
 ## 分层
 
-### shared（@multiagent/shared）
+### shared（@jungle/shared）
 类型基石：`AgentEvent`（归一化事件）、`AgentConfig`、`Task/Run/Job`、`WorkflowDef`，以及 zod schema。前后端共用。
 
-### server（@multiagent/server）
+### server（@jungle/server）
 
 | 模块 | 职责 |
 |---|---|
@@ -31,7 +31,7 @@
 | `orchestration/store.ts` | SQLite 持久化（node:sqlite DatabaseSync） |
 | `api/ws/hub.ts` | WebSocket 订阅/广播，心跳，cancel 转发 |
 
-### web（@multiagent/web）
+### web（@jungle/web）
 Vite + React + Tailwind + zustand。`wsClient`（`lib/ws.ts`）负责连接/重连/补拉，事件经 zustand store 分发到页面。
 
 ## 关键设计决策

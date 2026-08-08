@@ -1,4 +1,4 @@
-# MultiAgent · 桌面原生多 Agent 协作平台
+# 丛林系统 · 桌面原生多 Agent 协作平台
 
 在桌面应用内**自定义创建 Agent**（选择 LLM 提供商、定义角色、配置工具），并让多个 Agent 协作完成任务。支持单发、工作流 DAG、对话式群聊三种协作模式，实时流式输出。
 
@@ -24,16 +24,16 @@
 pnpm install
 
 # 2. 构建
-pnpm --filter @multiagent/shared build
-pnpm --filter @multiagent/server build
-pnpm --filter @multiagent/web build
-pnpm --filter @multiagent/desktop build
+pnpm --filter @jungle/shared build
+pnpm --filter @jungle/server build
+pnpm --filter @jungle/web build
+pnpm --filter @jungle/desktop build
 
 # 3. 启动桌面应用
-pnpm --filter @multiagent/desktop start
+pnpm --filter @jungle/desktop start
 ```
 
-> 开发模式（热更新）：终端 1 `pnpm dev:web`，终端 2 `pnpm --filter @multiagent/desktop dev`。
+> 开发模式（热更新）：终端 1 `pnpm dev:web`，终端 2 `pnpm --filter @jungle/desktop dev`。
 
 ### 首次使用三步
 
@@ -97,6 +97,6 @@ packages/
 ## 🧪 冒烟测试
 
 ```bash
-pnpm --filter @multiagent/cli smoke        # 检查健康
-pnpm --filter @multiagent/server smoke -- <agentId> "prompt"
+pnpm --filter @jungle/cli smoke        # 检查健康
+pnpm --filter @jungle/server smoke -- <agentId> "prompt"
 ```

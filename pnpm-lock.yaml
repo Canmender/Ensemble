@@ -26,10 +26,10 @@ importers:
 
   packages/desktop:
     dependencies:
-      '@multiagent/server':
+      '@jungle/server':
         specifier: workspace:*
         version: link:../server
-      '@multiagent/shared':
+      '@jungle/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
@@ -57,12 +57,12 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.226
         version: 0.3.226(@anthropic-ai/sdk@0.116.0(zod@3.25.76))(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(zod@3.25.76)
+      '@jungle/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@modelcontextprotocol/sdk':
         specifier: ^1.30.0
         version: 1.30.0(zod@3.25.76)
-      '@multiagent/shared':
-        specifier: workspace:*
-        version: link:../shared
       express:
         specifier: ^4.19.0
         version: 4.22.2

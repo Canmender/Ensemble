@@ -6,7 +6,7 @@ import type {
   Run,
   Task,
   WorkflowDef,
-} from "@multiagent/shared";
+} from "@jungle/shared";
 import { logger } from "../util/logger";
 
 /**

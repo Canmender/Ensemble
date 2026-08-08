@@ -1,5 +1,5 @@
 import type { LLMTool } from "../llm/types";
-import type { AppSettings } from "@multiagent/shared";
+import type { AppSettings } from "@jungle/shared";
 
 export interface ToolContext {
   cwd?: string;

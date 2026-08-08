@@ -1,4 +1,4 @@
-import type { AgentEvent, AppSettings } from "@multiagent/shared";
+import type { AgentEvent, AppSettings } from "@jungle/shared";
 import type { LLMMessage, LLMProvider, LLMRequest, LLMTool, LLMToolCall } from "../../llm/types";
 import type { AgentTool, ToolContext } from "../../tools/types";
 import type { ContextManager } from "../../context/manager";

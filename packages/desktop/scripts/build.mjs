@@ -11,8 +11,8 @@ const common = {
   platform: "node",
   external: ["electron"],
   alias: {
-    "@multiagent/server": serverSrc,
-    "@multiagent/shared": sharedSrc,
+    "@jungle/server": serverSrc,
+    "@jungle/shared": sharedSrc,
   },
   logLevel: "info",
 };

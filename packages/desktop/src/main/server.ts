@@ -1,7 +1,7 @@
 import { app } from "electron";
 import { join, resolve } from "node:path";
 import { mkdirSync, existsSync, writeFileSync } from "node:fs";
-import { createLocalServer, type LocalServer, logger } from "@multiagent/server";
+import { createLocalServer, type LocalServer, logger } from "@jungle/server";
 import { createElectronKeyStore } from "./keychain";
 
 /** 首次启动时写入的默认配置（builtin agent + 示例工作流） */
@@ -91,7 +91,7 @@ function bootstrap(configDir: string): void {
 export async function startLocalServer(opts?: { port?: number }): Promise<LocalServer> {
   const userData = app.getPath("userData");
   const configDir = join(userData, "config");
-  const dbPath = join(userData, "data", "multiagent.db");
+  const dbPath = join(userData, "data", "jungle-system.db");
   const secretsFile = join(userData, "secrets.json");
   mkdirSync(join(userData, "data"), { recursive: true });
   bootstrap(configDir);

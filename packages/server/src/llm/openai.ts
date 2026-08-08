@@ -8,7 +8,7 @@ import type {
   ProviderRuntimeConfig,
 } from "./types";
 import { parseSse, throwOnHttpError } from "./sse";
-import type { Usage } from "@multiagent/shared";
+import type { Usage } from "@jungle/shared";
 
 /**
  * OpenAI 兼容 Chat Completions provider（OpenRouter / DeepSeek / Ollama / 自定义端点）。

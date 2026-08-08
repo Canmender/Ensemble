@@ -1,8 +1,8 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import yaml from "js-yaml";
-import { agentConfigSchema, workflowDefSchema } from "@multiagent/shared";
-import type { AgentConfig, WorkflowDef } from "@multiagent/shared";
+import { agentConfigSchema, workflowDefSchema } from "@jungle/shared";
+import type { AgentConfig, WorkflowDef } from "@jungle/shared";
 import { logger } from "../util/logger";
 
 export interface LoadedConfig {

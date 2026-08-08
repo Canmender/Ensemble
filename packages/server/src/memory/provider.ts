@@ -1,4 +1,4 @@
-import type { AgentConfig, AgentMemoryConfig } from "@multiagent/shared";
+import type { AgentConfig, AgentMemoryConfig } from "@jungle/shared";
 import { MemoryStore } from "./store";
 import { MemoryLlm } from "./llm";
 import type { MemorySnapshot } from "./types";

@@ -1,7 +1,7 @@
 import { safeStorage } from "electron";
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { KeyStore } from "@multiagent/server";
+import type { KeyStore } from "@jungle/server";
 
 /** 基于 Electron safeStorage（Windows DPAPI）加密落盘的密钥存储 */
 export function createElectronKeyStore(secretsFile: string): KeyStore {

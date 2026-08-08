@@ -1,4 +1,4 @@
-import type { AgentConfig } from "@multiagent/shared";
+import type { AgentConfig } from "@jungle/shared";
 import type { AgentAdapter } from "./types";
 import { BuiltinAgentExecutor, type BuiltinAdapterDeps } from "./builtin/executor";
 import { LocalAgentExecutor } from "./local/executor";

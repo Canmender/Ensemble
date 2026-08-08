@@ -1,5 +1,5 @@
 {
-  "name": "multiagent",
+  "name": "jungle-system",
   "private": true,
   "version": "0.1.0",
   "description": "多 Agent 协作平台 —— 接入 Hermes Agent 与 Claude Code，提供前端编排与实时协作",
@@ -8,13 +8,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm --filter @multiagent/server dev",
-    "dev:web": "pnpm --filter @multiagent/web dev",
-    "dev:desktop": "pnpm --filter @multiagent/desktop dev",
+    "dev": "pnpm --filter @jungle/server dev",
+    "dev:web": "pnpm --filter @jungle/web dev",
+    "dev:desktop": "pnpm --filter @jungle/desktop dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "smoke": "pnpm --filter @multiagent/cli smoke",
-    "cli": "pnpm --filter @multiagent/cli run"
+    "smoke": "pnpm --filter @jungle/cli smoke",
+    "cli": "pnpm --filter @jungle/cli run"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
