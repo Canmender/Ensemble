@@ -77,8 +77,11 @@ export interface McpServerConfig {
 }
 
 export interface DetectedAgent {
-  type: "claude" | "hermes";
+  type: string;
   name: string;
+  headless: string;
+  promptMode: "arg" | "stdin";
+  cmd: string;
   version?: string;
   configPath?: string;
   memoryDbPath?: string;

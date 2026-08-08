@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bot, Brain, Pencil, Trash2, Zap } from "lucide-react";
 import { api } from "../lib/api";
-import type { Agent, LocalAgentConfig, MemorySnapshot, ProviderConfig, SkillDef } from "../types";
+import type { Agent, DetectedAgent, LocalAgentConfig, MemorySnapshot, ProviderConfig, SkillDef } from "../types";
 import {
   Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, Textarea, cls,
 } from "../components/ui";
@@ -34,19 +34,22 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
   const [allSkills, setAllSkills] = useState<SkillDef[]>([]);
   const [customModel, setCustomModel] = useState("");
   const [loadingModels, setLoadingModels] = useState(false);
+  const [detectedHarnesses, setDetectedHarnesses] = useState<DetectedAgent[]>([]);
 
   const set = (patch: Partial<Agent>) => setForm((f) => ({ ...f, ...patch }));
 
   useEffect(() => {
     void (async () => {
-      const [p, h, sk] = await Promise.all([
+      const [p, h, sk, disc] = await Promise.all([
         api.get<ProviderConfig[]>("/providers"),
         api.get<any>("/health"),
         api.get<SkillDef[]>("/skills").catch(() => []),
+        api.get<DetectedAgent[]>("/discovery").catch(() => []),
       ]);
       setProviders(p ?? []);
       setAllTools(h?.tools ?? []);
       setAllSkills(sk ?? []);
+      setDetectedHarnesses(disc ?? []);
       if (!initial) {
         const enabled = (p ?? []).find((x) => x.enabled);
         if (enabled) set({ providerId: enabled.id, model: enabled.defaultModel ?? "" });
@@ -280,7 +283,31 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
       ) : (
         <div className="space-y-3 rounded-lg border border-border p-3">
           <div>
-            <Label>命令（本地 agent CLI / 脚本，shell 执行）</Label>
+            <Label>选择本地 harness 作为母本（自动识别已安装）</Label>
+            {detectedHarnesses.length === 0 ? (
+              <span className="text-xs text-muted">未检测到本地 agent harness</span>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {detectedHarnesses.map((h) => (
+                  <button
+                    key={h.type}
+                    onClick={() => patchLocal({ command: h.headless, promptMode: h.promptMode })}
+                    title={`${h.headless}${h.skills.length ? ` · ${h.skills.length} 技能` : ""}${h.memoryCount ? ` · ${h.memoryCount} 记忆` : ""}`}
+                    className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+                      form.local?.command === h.headless
+                        ? "border-primary bg-primary/10 font-medium text-primary"
+                        : "border-border text-muted hover:border-primary/50"
+                    }`}
+                  >
+                    {h.name}
+                    {h.version ? ` · ${h.version.slice(0, 20)}` : ""}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div>
+            <Label>命令（本地 agent CLI / 脚本）</Label>
             <Input
               value={form.local?.command ?? ""}
               onChange={(e) => patchLocal({ command: e.target.value })}

@@ -4,8 +4,13 @@ export interface DetectedSkill {
 }
 
 export interface DetectedAgent {
-  type: "claude" | "hermes";
+  type: string;
   name: string;
+  /** headless 调用命令（如 claude -p / codex exec） */
+  headless: string;
+  /** prompt 传递方式 */
+  promptMode: "arg" | "stdin";
+  cmd: string;
   version?: string;
   configPath?: string;
   memoryDbPath?: string;

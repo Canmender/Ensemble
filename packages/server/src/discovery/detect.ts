@@ -5,6 +5,51 @@ import { execSync } from "node:child_process";
 import { DatabaseSync } from "node:sqlite";
 import type { DetectedAgent, DetectedSkill } from "./types";
 
+interface HarnessDef {
+  type: string;
+  name: string;
+  cmd: string;
+  headless: string;
+  promptMode: "arg" | "stdin";
+  configDir?: string;
+  /** hermes 特有：记忆库文件名 */
+  memoryDb?: string;
+}
+
+/** 常用 agent harness 注册表（自动识别） */
+const HARNESSES: HarnessDef[] = [
+  { type: "claude", name: "Claude Code", cmd: "claude", headless: "claude -p", promptMode: "arg", configDir: ".claude" },
+  { type: "codex", name: "Codex CLI", cmd: "codex", headless: "codex exec", promptMode: "arg", configDir: ".codex" },
+  { type: "opencode", name: "OpenCode", cmd: "opencode", headless: "opencode run", promptMode: "arg", configDir: ".opencode" },
+  { type: "aider", name: "Aider", cmd: "aider", headless: "aider --message", promptMode: "arg", configDir: ".aider" },
+  { type: "goose", name: "Goose", cmd: "goose", headless: "goose run", promptMode: "arg", configDir: ".goose" },
+  { type: "hermes", name: "Hermes Agent", cmd: "hermes", headless: "hermes -z", promptMode: "arg", configDir: ".hermes", memoryDb: "memory_store.db" },
+  { type: "qwen", name: "Qwen Code", cmd: "qwen", headless: "qwen -p", promptMode: "arg", configDir: ".qwen" },
+  { type: "gemini", name: "Gemini CLI", cmd: "gemini", headless: "gemini -p", promptMode: "arg", configDir: ".gemini" },
+  { type: "antigravity", name: "Antigravity", cmd: "antigravity", headless: "antigravity -p", promptMode: "arg", configDir: ".antigravity" },
+];
+
+function commandExists(cmd: string): boolean {
+  try {
+    execSync(process.platform === "win32" ? `where ${cmd}` : `command -v ${cmd}`, {
+      timeout: 2000,
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getVersion(cmd: string): string | undefined {
+  try {
+    const out = execSync(`${cmd} --version`, { encoding: "utf8", timeout: 2000 });
+    return out.trim().split("\n")[0].slice(0, 80);
+  } catch {
+    return undefined;
+  }
+}
+
 function readSkillDirs(dir: string): DetectedSkill[] {
   if (!existsSync(dir)) return [];
   return readdirSync(dir)
@@ -12,7 +57,7 @@ function readSkillDirs(dir: string): DetectedSkill[] {
     .map((n) => ({ name: n, sourcePath: join(dir, n, "SKILL.md") }));
 }
 
-function countHermesFacts(dbPath: string): number {
+function countFacts(dbPath: string): number {
   let db: DatabaseSync | undefined;
   try {
     db = new DatabaseSync(dbPath, { readOnly: true });
@@ -25,57 +70,43 @@ function countHermesFacts(dbPath: string): number {
   }
 }
 
-function getVersion(cmd: string): string | undefined {
-  try {
-    const out = execSync(cmd, { encoding: "utf8", timeout: 2000 });
-    return out.trim().split("\n")[0].slice(0, 80);
-  } catch {
-    return undefined;
+function detectHarness(def: HarnessDef): DetectedAgent | null {
+  if (!commandExists(def.cmd)) return null;
+  const home = join(homedir(), def.configDir ?? "");
+  const configPath = existsSync(home) ? home : undefined;
+  let memoryDbPath: string | undefined;
+  if (def.memoryDb && configPath) {
+    const db = join(configPath, def.memoryDb);
+    if (existsSync(db)) memoryDbPath = db;
   }
-}
-
-function detectClaude(): DetectedAgent | null {
-  const home = join(homedir(), ".claude");
-  if (!existsSync(home)) return null;
-  const configPath = join(home, "settings.json");
   return {
-    type: "claude",
-    name: "Claude Code",
-    version: getVersion("claude --version"),
-    configPath: existsSync(configPath) ? configPath : undefined,
-    skills: readSkillDirs(join(home, "skills")),
-    memoryCount: 0,
+    type: def.type,
+    name: def.name,
+    cmd: def.cmd,
+    headless: def.headless,
+    promptMode: def.promptMode,
+    version: getVersion(`${def.cmd} --version`),
+    configPath,
+    memoryDbPath,
+    skills: configPath ? readSkillDirs(join(configPath, "skills")) : [],
+    memoryCount: memoryDbPath ? countFacts(memoryDbPath) : 0,
   };
 }
 
-function detectHermes(): DetectedAgent | null {
-  const home = join(homedir(), ".hermes");
-  if (!existsSync(home)) return null;
-  const dbPath = join(home, "memory_store.db");
-  return {
-    type: "hermes",
-    name: "Hermes Agent",
-    version: getVersion("hermes --version"),
-    memoryDbPath: existsSync(dbPath) ? dbPath : undefined,
-    skills: readSkillDirs(join(home, "skills")),
-    memoryCount: existsSync(dbPath) ? countHermesFacts(dbPath) : 0,
-  };
-}
-
-// 缓存检测结果（30s TTL）：避免每次请求都同步执行 claude/hermes --version 阻塞事件循环
+// 缓存检测结果（30s TTL）：避免每次请求都同步执行命令阻塞事件循环
 let detectCache: { agents: DetectedAgent[]; at: number } | null = null;
 const CACHE_TTL = 30_000;
 
-/** 检测本地已安装的 agent（带缓存；force=true 强制刷新） */
+/** 检测本地已安装的 agent harness（带缓存；force=true 强制刷新） */
 export function detectAgents(force = false): DetectedAgent[] {
   if (!force && detectCache && Date.now() - detectCache.at < CACHE_TTL) {
     return detectCache.agents;
   }
   const out: DetectedAgent[] = [];
-  const c = detectClaude();
-  if (c) out.push(c);
-  const h = detectHermes();
-  if (h) out.push(h);
+  for (const def of HARNESSES) {
+    const a = detectHarness(def);
+    if (a) out.push(a);
+  }
   detectCache = { agents: out, at: Date.now() };
   return out;
 }

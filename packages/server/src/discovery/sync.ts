@@ -22,9 +22,9 @@ export function syncAgentSkills(agent: DetectedAgent, skillStore: SkillStore): s
   return imported;
 }
 
-/** 同步记忆：读取本地记忆（hermes facts 库）→ 导入平台记忆系统 */
+/** 同步记忆：读取本地记忆库（如 hermes facts）→ 导入平台记忆系统 */
 export async function syncAgentMemory(agent: DetectedAgent, memoryProvider: MemoryProvider): Promise<number> {
-  if (agent.type === "hermes" && agent.memoryDbPath) {
+  if (agent.memoryDbPath) {
     const facts = readHermesFacts(agent.memoryDbPath);
     if (!facts.length) return 0;
     return memoryProvider.importFacts(agent.type, facts);
@@ -32,18 +32,17 @@ export async function syncAgentMemory(agent: DetectedAgent, memoryProvider: Memo
   return 0;
 }
 
-/** 同步配置：为本地 agent 创建 local 类型实例（接入平台） */
+/** 同步配置：为本地 harness 创建 local 类型 agent 实例（用其 headless 命令） */
 export function syncAgentConfig(agent: DetectedAgent, configManager: ConfigManager): string | undefined {
-  const id = agent.type === "claude" ? "claude-local" : "hermes-local";
+  const id = `${agent.type}-local`;
   if (configManager.getAgent(id)) return undefined;
 
-  const command = agent.type === "claude" ? "claude -p" : "hermes -z";
   configManager.createAgent({
     id,
     name: agent.name + " (本地)",
     kind: "local",
     description: `通过本地命令接入的 ${agent.name}`,
-    local: { command, promptMode: "arg" },
+    local: { command: agent.headless, promptMode: agent.promptMode },
     tools: [],
     enabled: false,
   } as any);
