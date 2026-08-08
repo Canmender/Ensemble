@@ -15,8 +15,20 @@ export interface AgentCapabilities {
   notes?: string[];
 }
 
-/** 当前仅内置（LLM Provider + 工具循环）一种 agent 类型 */
-export type AgentKind = "builtin";
+/** agent 类型：builtin（内置 LLM+工具循环）/ local（本地命令 agent） */
+export type AgentKind = "builtin" | "local";
+
+/** 本地命令 agent 配置：快速接入本地已有的 agent CLI / 脚本 */
+export interface LocalAgentConfig {
+  /** 命令（如 claude -p、hermes -z、python agent.py） */
+  command: string;
+  /** 固定参数 */
+  args?: string[];
+  /** prompt 传递方式：stdin（写入 stdin）或 arg（作为最后参数，默认 arg） */
+  promptMode?: "stdin" | "arg";
+  cwd?: string;
+  timeoutMs?: number;
+}
 
 export interface AgentConfig {
   id: string;
@@ -38,6 +50,8 @@ export interface AgentConfig {
   /** 启用的 skill 名列表 */
   skills?: string[];
   cwd?: string;
+  /** 本地命令 agent 配置（kind=local 时） */
+  local?: LocalAgentConfig;
   /** 记忆配置（默认关闭） */
   memory?: AgentMemoryConfig;
   /** 上下文压缩配置 */

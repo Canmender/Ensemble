@@ -190,6 +190,31 @@ export const BUILTIN_SKILLS: Array<{ name: string; description: string; body: st
 - merge：保留合并记录（共享/长期分支）`,
   },
   {
+    name: "tdd-workflow",
+    description:
+      "测试驱动开发：先写测试 → 实现到通过 → 用 execute_command 验证。给 agent 客观完成信号",
+    body: `# 测试驱动开发（TDD）
+
+## 核心原则
+- 测试是完成的唯一标准，不是"看起来对"
+- 不要修改测试来适配实现
+
+## 流程
+1. 从输入/输出对写测试（不写实现）
+2. 用 execute_command 运行测试，确认**按预期失败**
+3. 实现代码，直到测试通过
+4. 运行完整测试套件 + 构建/typecheck 验证
+5. 若失败，读错误信息修复，**禁止声明完成直到测试通过**
+
+## 验证信号
+- \`npm test\` / \`pytest\` 全绿 = 完成
+- 构建/typecheck 非零退出码 = 未完成，继续修
+- 明确告知用户哪些测试通过、哪些未覆盖
+
+## 适用
+实现新功能、修 bug、重构（重构前后测试都应通过）。`,
+  },
+  {
     name: "regex-expert",
     description: "正则表达式编写与调试：明确需求、分解、转义、测试边界",
     body: `# 正则表达式

@@ -9,10 +9,18 @@ export interface AgentCapabilities {
   notes?: string[];
 }
 
+export interface LocalAgentConfig {
+  command: string;
+  args?: string[];
+  promptMode?: "stdin" | "arg";
+  cwd?: string;
+  timeoutMs?: number;
+}
+
 export interface Agent {
   id: string;
   name: string;
-  kind: "builtin";
+  kind: "builtin" | "local";
   description?: string;
   providerId: string;
   model: string;
@@ -23,6 +31,7 @@ export interface Agent {
   tools: string[];
   skills?: string[];
   cwd?: string;
+  local?: LocalAgentConfig;
   memory?: AgentMemoryConfig;
   context?: AgentContextConfig;
   capabilities: AgentCapabilities;

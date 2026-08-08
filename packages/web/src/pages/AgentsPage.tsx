@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bot, Brain, Pencil, Trash2, Zap } from "lucide-react";
 import { api } from "../lib/api";
-import type { Agent, MemorySnapshot, ProviderConfig, SkillDef } from "../types";
+import type { Agent, LocalAgentConfig, MemorySnapshot, ProviderConfig, SkillDef } from "../types";
 import {
   Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, Textarea, cls,
 } from "../components/ui";
@@ -21,6 +21,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
         maxIterations: 10,
         tools: [],
         skills: [],
+        local: { command: "", promptMode: "arg" },
         memory: { enabled: false },
         context: {},
         capabilities: { sessionResume: true, partialStreaming: true, toolUseEvents: false, concurrent: true, cwdConfigurable: true },
@@ -70,6 +71,15 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
     set({ tools: form.tools.includes(name) ? form.tools.filter((t) => t !== name) : [...form.tools, name] });
   }
 
+  const patchLocal = (patch: Partial<LocalAgentConfig>) =>
+    set({
+      local: {
+        command: form.local?.command ?? "",
+        promptMode: form.local?.promptMode ?? "arg",
+        ...patch,
+      },
+    });
+
   function toggleSkill(name: string) {
     const cur = form.skills ?? [];
     set({ skills: cur.includes(name) ? cur.filter((s) => s !== name) : [...cur, name] });
@@ -101,6 +111,16 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
         </div>
       </div>
 
+      <div>
+        <Label>类型</Label>
+        <Select value={form.kind} onChange={(e) => set({ kind: e.target.value as Agent["kind"] })}>
+          <option value="builtin">内置（LLM + 工具循环）</option>
+          <option value="local">本地命令 Agent（接入已有 agent CLI）</option>
+        </Select>
+      </div>
+
+      {form.kind === "builtin" ? (
+        <>
       <div>
         <Label>LLM Provider</Label>
         <Select value={form.providerId} onChange={(e) => set({ providerId: e.target.value })}>
@@ -256,6 +276,50 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
           </div>
         </div>
       </div>
+      </>
+      ) : (
+        <div className="space-y-3 rounded-lg border border-border p-3">
+          <div>
+            <Label>命令（本地 agent CLI / 脚本，shell 执行）</Label>
+            <Input
+              value={form.local?.command ?? ""}
+              onChange={(e) => patchLocal({ command: e.target.value })}
+              placeholder="claude -p / hermes -z / python agent.py …"
+            />
+          </div>
+          <div>
+            <Label>额外参数（空格分隔）</Label>
+            <Input
+              value={(form.local?.args ?? []).join(" ")}
+              onChange={(e) =>
+                patchLocal({ args: e.target.value.split(/\s+/).filter(Boolean) })
+              }
+              placeholder="--model sonnet --verbose"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Prompt 传递</Label>
+              <Select
+                value={form.local?.promptMode ?? "arg"}
+                onChange={(e) => patchLocal({ promptMode: e.target.value as any })}
+              >
+                <option value="arg">作为最后参数</option>
+                <option value="stdin">写入 stdin</option>
+              </Select>
+            </div>
+            <div>
+              <Label>超时（秒）</Label>
+              <Input
+                type="number"
+                value={(form.local?.timeoutMs ?? 120) / 1000}
+                onChange={(e) => patchLocal({ timeoutMs: Number(e.target.value) * 1000 })}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted">通过子进程调用本地命令，prompt 传给 agent，捕获 stdout 作为结果。适合接入已有的 agent CLI。</p>
+        </div>
+      )}
 
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
         <label className="flex items-center gap-2 text-sm text-muted">

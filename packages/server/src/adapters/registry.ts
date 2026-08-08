@@ -1,6 +1,7 @@
 import type { AgentConfig } from "@multiagent/shared";
 import type { AgentAdapter } from "./types";
 import { BuiltinAgentExecutor, type BuiltinAdapterDeps } from "./builtin/executor";
+import { LocalAgentExecutor } from "./local/executor";
 
 export interface AdapterRegistryDeps {
   providerRegistry: BuiltinAdapterDeps["providerRegistry"];
@@ -25,6 +26,8 @@ export function createAdapter(cfg: AgentConfig, deps: AdapterRegistryDeps): Agen
         memoryProvider: deps.memoryProvider,
         skillStore: deps.skillStore,
       });
+    case "local":
+      return new LocalAgentExecutor(cfg);
     default: {
       const _exhaustive: never = cfg.kind;
       throw new Error(`unknown agent kind: ${String(_exhaustive)}`);

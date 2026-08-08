@@ -80,7 +80,7 @@ export class ConfigManager {
       ...existing,
       ...patch,
       id: existing.id,
-      kind: "builtin",
+      kind: patch.kind ?? existing.kind,
       capabilities: patch.capabilities ?? existing.capabilities,
       updatedAt: now(),
     };

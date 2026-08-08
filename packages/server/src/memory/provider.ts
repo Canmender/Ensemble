@@ -57,10 +57,21 @@ export class MemoryProviderImpl implements MemoryProvider {
     const maxChars = this.cfg(agentId)?.injectMaxChars ?? 3000;
 
     const parts: string[] = [];
+
+    // semantic：精选长期记忆（MEMORY.md）
     const mem = this.store.readMemoryFile(agentId);
     if (mem?.content) parts.push(mem.content.slice(0, maxChars));
 
-    // 外部记忆（Mem0）：语义检索相关记忆追加
+    // episodic：近期日常日志（具体情境，分层记忆）
+    const recentDaily = this.store
+      .listDaily(agentId)
+      .slice(0, 3)
+      .map((d) => this.store.readDaily(agentId, d.date) ?? "")
+      .filter(Boolean)
+      .join("\n");
+    if (recentDaily) parts.push(`## 近期情境\n${recentDaily.slice(0, maxChars)}`);
+
+    // 相关记忆：外部后端语义/全文检索
     if (this.externalBackend?.enabled) {
       try {
         const related = await this.externalBackend.search(agentId, systemPrompt.slice(0, 200), 5);

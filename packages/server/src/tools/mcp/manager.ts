@@ -14,6 +14,7 @@ export class McpManager {
   ) {}
 
   async reload(): Promise<McpServerStatus[]> {
+    this.registerCatalogTool();
     const cfgs = this.cfgStore.list();
     const out: McpServerStatus[] = [];
     const seen = new Set<string>();
@@ -78,6 +79,36 @@ export class McpManager {
 
   async dispose(): Promise<void> {
     for (const id of [...this.clients.keys()]) await this.disconnect(id);
+  }
+
+  /** 目录元工具：列出所有已连接 MCP server 的工具（渐进加载/可发现性） */
+  private registerCatalogTool(): void {
+    this.toolRegistry.register(this.buildCatalogTool());
+  }
+
+  private buildCatalogTool(): AgentTool {
+    return {
+      name: "mcp_tool_catalog",
+      description:
+        "List all MCP tools across connected servers (serverId :: toolName — summary). Use to discover available MCP capabilities.",
+      parameters: {
+        type: "object",
+        properties: {
+          serverId: { type: "string", description: "optional: filter by server id" },
+        },
+      },
+      execute: async (input: unknown) => {
+        const filter = (input as { serverId?: string })?.serverId;
+        const lines: string[] = [];
+        for (const [id, client] of this.clients) {
+          if (filter && id !== filter) continue;
+          for (const t of client.listNativeTools()) {
+            lines.push(`${id} :: ${t.name} — ${(t.description ?? "").slice(0, 120)}`);
+          }
+        }
+        return lines.length ? lines.join("\n") : "(no MCP tools connected)";
+      },
+    };
   }
 
   private registerTools(cfg: McpServerConfig, client: McpToolClient): void {

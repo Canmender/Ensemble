@@ -1,6 +1,14 @@
 import { z } from "zod";
 
-export const agentKindSchema = z.literal("builtin");
+export const agentKindSchema = z.enum(["builtin", "local"]);
+
+export const localAgentConfigSchema = z.object({
+  command: z.string().min(1),
+  args: z.array(z.string()).optional(),
+  promptMode: z.enum(["stdin", "arg"]).default("arg"),
+  cwd: z.string().optional(),
+  timeoutMs: z.number().positive().optional(),
+});
 
 export const agentCapabilitiesSchema = z.object({
   sessionResume: z.boolean(),
@@ -25,6 +33,7 @@ export const agentConfigSchema = z.object({
   tools: z.array(z.string()).default([]),
   skills: z.array(z.string()).default([]),
   cwd: z.string().optional(),
+  local: localAgentConfigSchema.optional(),
   memory: z
     .object({
       enabled: z.boolean().optional(),
