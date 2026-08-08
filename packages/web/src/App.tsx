@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
-import { Bot, Brain, LayoutDashboard, ListTodo, Moon, Settings, Sun, Zap } from "lucide-react";
+import { Bot, Brain, LayoutDashboard, ListTodo, MessageSquare, Moon, Settings, Sun, Workflow, Zap } from "lucide-react";
 import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
 import { useTheme, type Theme } from "./lib/theme";
@@ -11,11 +11,15 @@ import TasksPage from "./pages/TasksPage";
 import RunPage from "./pages/RunPage";
 import SettingsPage from "./pages/SettingsPage";
 import MemoryPage from "./pages/MemoryPage";
+import WorkflowsPage from "./pages/WorkflowsPage";
+import ChatPage from "./pages/ChatPage";
 
 const NAV_ITEMS = [
   { to: "/", label: "概览", icon: LayoutDashboard },
   { to: "/agents", label: "Agents", icon: Bot },
+  { to: "/workflows", label: "工作流", icon: Workflow },
   { to: "/tasks", label: "任务", icon: ListTodo },
+  { to: "/chat", label: "群聊", icon: MessageSquare },
   { to: "/memory", label: "记忆", icon: Brain },
   { to: "/settings", label: "设置", icon: Settings },
 ];
@@ -126,6 +130,8 @@ export default function App() {
           <Route path="/runs/:id" element={<RunPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/memory" element={<MemoryPage />} />
+          <Route path="/workflows" element={<WorkflowsPage />} />
+          <Route path="/chat" element={<ChatPage />} />
         </Routes>
       </main>
     </div>
