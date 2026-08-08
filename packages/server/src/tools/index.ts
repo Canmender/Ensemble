@@ -13,7 +13,7 @@ export function registerBuiltinTools(
   for (const t of fileTools) registry.register(t);
   for (const t of webTools) registry.register(t);
   registry.register(
-    makeExecuteCommandTool({ defaultConfirm: settings.codeExecutionConfirm === "ask" }),
+    makeExecuteCommandTool({ confirm: settings.codeExecutionConfirm ?? "ask" }),
   );
 }
 

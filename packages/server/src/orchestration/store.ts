@@ -213,12 +213,18 @@ export class Store {
     return Number(r?.s ?? 0) + 1;
   }
 
-  appendRunEvent(runId: string, seq: number, jobId: string | undefined, event: AgentEvent): void {
+  /**
+   * 原子分配 seq 并落库（同步方法：JS 单线程下 MAX+1 与 INSERT 不可被打断）。
+   * 并行 job 各自调用不会拿到相同 seq（分配与写入在同一同步块内）。
+   */
+  appendRunEvent(runId: string, jobId: string | undefined, event: AgentEvent): number {
+    const seq = this.nextEventSeq(runId);
     this.db
       .prepare(
         "INSERT INTO run_events (run_id, seq, job_id, event_json, ts) VALUES (?, ?, ?, ?, ?)",
       )
       .run(runId, seq, jobId ?? null, JSON.stringify(event), new Date(event.ts).toISOString());
+    return seq;
   }
 
   getRunEvents(runId: string, afterSeq = 0): Array<{ seq: number; jobId?: string; event: AgentEvent }> {
@@ -301,10 +307,8 @@ function rowToRun(r: any): Run {
 }
 
 function rowToJob(r: any): Job {
-  const events = (() => {
-    // job 的事件在 run_events 表中按 job_id 查询；此处返回空，由 getJobEvents 填充
-    return [] as AgentEvent[];
-  })();
+  // events 恒为空：需经 getJobEvents / hydrateJobEvents 填充（run_events 表按 job_id 查询）
+  const events: AgentEvent[] = [];
   return {
     id: r.id,
     runId: r.run_id,

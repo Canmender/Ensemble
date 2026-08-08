@@ -36,6 +36,9 @@ export interface LiveRun {
   error?: string;
 }
 
+/** 每 run 已消费的 event seq（去重：catchUp 与 WS 推送可能重叠） */
+const seenSeqs = new Map<string, Set<number>>();
+
 interface RunStore {
   live: Record<string, LiveRun>;
   getOrCreate: (runId: string) => LiveRun;
@@ -91,6 +94,13 @@ export const useRunStore = create<RunStore>((set, get) => ({
     set((s) => {
       const run = s.live[runId];
       if (!run) return s;
+      let seen = seenSeqs.get(runId);
+      if (!seen) {
+        seen = new Set();
+        seenSeqs.set(runId, seen);
+      }
+      if (seen.has(item.seq)) return s;
+      seen.add(item.seq);
       const jobs = { ...run.jobs };
       if (item.jobId && jobs[item.jobId]) {
         jobs[item.jobId] = { ...jobs[item.jobId], events: [...jobs[item.jobId].events, item] };

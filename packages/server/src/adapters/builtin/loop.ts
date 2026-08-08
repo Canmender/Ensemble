@@ -189,11 +189,12 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
 
       const result = await runToolSafe(tool, call.input, toolCtx);
 
-      // 插入时 offload：大结果写盘 + 预览 + read_file 指针
+      // 插入时 offload：大结果写盘 + 预览 + read_file 指针（完整路径，工作区内可读）
       let clipped = result;
       if (offload && shouldOffload(call.name, result.length, offloadChars)) {
         const relPath = offload.store(opts.agentId, result);
-        clipped = previewWithPointer(result, relPath);
+        const readPath = opts.offloadDir ? `${opts.offloadDir}/${relPath}` : relPath;
+        clipped = previewWithPointer(result, readPath);
         yield { type: "status", status: "running", detail: `tool result offloaded (${call.name})`, ts: Date.now() };
       } else {
         clipped = result.slice(0, offloadChars);

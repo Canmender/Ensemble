@@ -69,15 +69,15 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
         server,
         close: () =>
           new Promise((res) => {
-            ctx.registry.disposeAll();
-            ctx.hub.close();
-            server.close(() => {
-              try {
-                db.close();
-              } catch {
-                /* already closed */
-              }
-              res();
+            void ctx.dispose().finally(() => {
+              server.close(() => {
+                try {
+                  db.close();
+                } catch {
+                  /* already closed */
+                }
+                res();
+              });
             });
           }),
       });

@@ -97,7 +97,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
     // tool call 累积：index → { id, name, argsJson }
     const toolBuf = new Map<number, { id: string; name: string; argsJson: string }>();
     let usage: Usage = {};
-    let emittedCalls = false;
 
     for await (const frame of parseSse(res.body, req.signal)) {
       if (frame.data === "[DONE]") break;
@@ -128,7 +127,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
       }
       if (choice?.finish_reason === "tool_calls") {
         for (const [, buf] of toolBuf) {
-          emittedCalls = true;
           yield {
             type: "tool_call",
             call: {
@@ -148,7 +146,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
     // 流结束但未通过 finish_reason 发出 tool_call（异常场景）
     if (toolBuf.size) {
       for (const [, buf] of toolBuf) {
-        emittedCalls = true;
         yield {
           type: "tool_call",
           call: {
@@ -159,7 +156,6 @@ export class OpenAICompatibleProvider implements LLMProvider {
         };
       }
     }
-    void emittedCalls;
     yield { type: "usage", usage };
     yield { type: "done" };
   }

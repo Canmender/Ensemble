@@ -65,16 +65,15 @@ export class OrchestrationEngine {
       taskTitle: task.title,
     };
     this.store.createRun(run);
-    let seq = this.store.nextEventSeq(run.id);
-    this.hub.broadcast(run.id, seq++, { type: "run.status", status: "queued" });
+    // 状态帧（run.status）不落库，seq 用 0（事件去重只依赖 agent.event 的原子 seq）
+    this.hub.broadcast(run.id, 0, { type: "run.status", status: "queued" });
     void this.runAsync(run, task);
     return run;
   }
 
   private async runAsync(run: Run, task: Task): Promise<void> {
     this.store.updateRun(run.id, { status: "running" });
-    let seq = this.store.nextEventSeq(run.id);
-    this.hub.broadcast(run.id, seq++, { type: "run.status", status: "running" });
+    this.hub.broadcast(run.id, 0, { type: "run.status", status: "running" });
 
     const aborts = new Set<AbortController>();
     this.runAborts.set(run.id, aborts);
@@ -88,9 +87,8 @@ export class OrchestrationEngine {
           : new ChatMode(this).run(run, task));
 
       this.store.updateRun(run.id, { status: "success", finalResult: result, endedAt: new Date().toISOString() });
-      seq = this.store.nextEventSeq(run.id);
-      this.hub.broadcast(run.id, seq++, { type: "run.status", status: "success" });
-      this.hub.broadcast(run.id, seq++, { type: "run.result", result: result ?? "" });
+      this.hub.broadcast(run.id, 0, { type: "run.status", status: "success" });
+      this.hub.broadcast(run.id, 0, { type: "run.result", result: result ?? "" });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const cancelled = [...aborts].some((a) => a.signal.aborted);
@@ -100,9 +98,8 @@ export class OrchestrationEngine {
         error: cancelled ? "cancelled by user" : message,
         endedAt: new Date().toISOString(),
       });
-      seq = this.store.nextEventSeq(run.id);
-      this.hub.broadcast(run.id, seq++, { type: "run.status", status });
-      this.hub.broadcast(run.id, seq++, {
+      this.hub.broadcast(run.id, 0, { type: "run.status", status });
+      this.hub.broadcast(run.id, 0, {
         type: "run.error",
         message: cancelled ? "cancelled by user" : message,
       });
@@ -139,7 +136,7 @@ export class OrchestrationEngine {
         startedAt: new Date().toISOString(),
       };
       this.store.createJob(job);
-      this.hub.broadcast(run.id, this.store.nextEventSeq(run.id), {
+      this.hub.broadcast(run.id, 0, {
         type: "job.status",
         jobId: job.id,
         agentId,
@@ -151,8 +148,7 @@ export class OrchestrationEngine {
       const cleanup = () => this.runAborts.get(run.id)?.delete(controller);
 
       this.store.updateJob(job.id, { status: "running" });
-      let evSeq = this.store.nextEventSeq(run.id);
-      this.hub.broadcast(run.id, evSeq++, {
+      this.hub.broadcast(run.id, 0, {
         type: "job.status",
         jobId: job.id,
         agentId,
@@ -166,14 +162,14 @@ export class OrchestrationEngine {
           prompt,
           signal: controller.signal,
         })) {
-          this.store.appendRunEvent(run.id, evSeq, job.id, ev);
+          // 原子分配 seq（MAX+1 与 INSERT 在同一同步块，并行 job 不冲突）
+          const seq = this.store.appendRunEvent(run.id, job.id, ev);
           this.hub.broadcast(
             run.id,
-            evSeq,
+            seq,
             { type: "agent.event", jobId: job.id, agentId, event: ev },
             job.id,
           );
-          evSeq++;
           job.events.push(ev);
           if (ev.type === "done") {
             job.status =
@@ -218,7 +214,7 @@ export class OrchestrationEngine {
         error: job.error,
         endedAt: job.endedAt,
       });
-      this.hub.broadcast(run.id, this.store.nextEventSeq(run.id), {
+      this.hub.broadcast(run.id, 0, {
         type: "job.status",
         jobId: job.id,
         agentId,
@@ -262,8 +258,7 @@ export class OrchestrationEngine {
       content,
       ts: new Date().toISOString(),
     });
-    const seq = this.store.nextEventSeq(runId);
-    this.hub.broadcast(runId, seq, {
+    this.hub.broadcast(runId, 0, {
       type: "chat.message",
       jobId: jobId ?? "",
       agentId,

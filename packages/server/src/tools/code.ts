@@ -3,11 +3,13 @@ import type { AgentTool, ToolContext } from "./types";
 
 const OUTPUT_LIMIT = 8000;
 
+export type CodeConfirm = "ask" | "always" | "never";
+
 /**
  * 执行命令。Windows 用 shell 执行（含 taskkill 递归杀进程树）。
- * 通过 settings.codeExecutionConfirm 决定是否需用户确认。
+ * 三态确认策略：always→放行 / ask→询问 / never→直接拒绝。
  */
-export function makeExecuteCommandTool(opts: { defaultConfirm?: boolean }): AgentTool {
+export function makeExecuteCommandTool(opts: { confirm: CodeConfirm }): AgentTool {
   return {
     name: "execute_command",
     description:
@@ -20,12 +22,13 @@ export function makeExecuteCommandTool(opts: { defaultConfirm?: boolean }): Agen
       },
       required: ["command"],
     },
-    requiresConfirmation: opts.defaultConfirm !== false,
+    requiresConfirmation: opts.confirm === "ask",
     async execute(input: unknown, ctx: ToolContext): Promise<string> {
       const { command, cwd } = (input ?? {}) as { command?: string; cwd?: string };
       if (!command) return "error: no command";
 
-      if (ctx.askConfirm && this.requiresConfirmation) {
+      if (opts.confirm === "never") return "[已配置：命令执行被拒绝]";
+      if (opts.confirm === "ask" && ctx.askConfirm) {
         const ok = await ctx.askConfirm(this.name, { command });
         if (!ok) return "[user cancelled execution]";
       }

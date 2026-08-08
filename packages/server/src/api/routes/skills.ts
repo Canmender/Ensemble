@@ -44,6 +44,7 @@ export function skillsRouter(ctx: AppContext): Router {
   });
 
   r.delete("/:name", (req, res) => {
+    if (!/^[a-z0-9-]+$/.test(req.params.name)) return fail(res, new Error("invalid skill name"), 400);
     ctx.skillStore.delete(req.params.name);
     ok(res, { deleted: req.params.name });
   });

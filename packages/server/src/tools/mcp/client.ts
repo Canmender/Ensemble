@@ -36,14 +36,20 @@ export class McpToolClient {
       });
     }
 
-    await withTimeout(this.client.connect(this.transport as any), timeoutMs);
+    try {
+      await withTimeout(this.client.connect(this.transport as any), timeoutMs);
 
-    const toolsRes = await this.client.listTools();
-    this.tools = (toolsRes.tools ?? []).map((t) => ({
-      name: t.name,
-      description: t.description ?? "",
-      inputSchema: (t.inputSchema ?? {}) as Record<string, unknown>,
-    }));
+      const toolsRes = await this.client.listTools();
+      this.tools = (toolsRes.tools ?? []).map((t) => ({
+        name: t.name,
+        description: t.description ?? "",
+        inputSchema: (t.inputSchema ?? {}) as Record<string, unknown>,
+      }));
+    } catch (err) {
+      // 连接失败/超时也要关闭 transport（避免 stdio 子进程残留）
+      await this.close().catch(() => {});
+      throw err;
+    }
   }
 
   listNativeTools(): NativeMcpTool[] {

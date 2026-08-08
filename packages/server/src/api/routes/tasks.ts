@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { taskInputSchema } from "@multiagent/shared";
 import type { AppContext } from "../../context";
 import { asyncH, fail, ok } from "./helpers";
 
@@ -21,10 +22,13 @@ export function tasksRouter(ctx: AppContext): Router {
     "/",
     asyncH(async (req, res) => {
       const { title, input } = req.body ?? {};
-      if (!title || !input?.mode) {
-        return fail(res, new Error("title and input.mode are required"));
+      if (!title) return fail(res, new Error("title required"));
+      // schema 校验并补默认值（如 chat 的 maxRounds=3）
+      const parsed = taskInputSchema.safeParse(input);
+      if (!parsed.success) {
+        return fail(res, new Error(parsed.error.issues[0]?.message ?? "invalid input"));
       }
-      const run = await ctx.engine.createAndExecuteTask(title, input);
+      const run = await ctx.engine.createAndExecuteTask(title, parsed.data);
       ok(res, run, 201);
     }),
   );

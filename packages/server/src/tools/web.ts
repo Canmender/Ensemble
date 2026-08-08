@@ -77,19 +77,35 @@ export const webFetchTool: AgentTool = {
     if (!/^https?:\/\//.test(url)) return "error: only http(s) URLs allowed";
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15_000);
-    ctx.signal?.addEventListener("abort", () => controller.abort(), { once: true });
+    const onAbort = () => controller.abort();
+    const timer = setTimeout(onAbort, 15_000);
+    ctx.signal?.addEventListener("abort", onAbort, { once: true });
     try {
       const res = await fetch(url, { signal: controller.signal });
       if (!res.ok) return `fetch failed: HTTP ${res.status}`;
-      const buf = Buffer.from(await res.arrayBuffer());
-      const text = htmlToText(buf.toString("utf8"));
+      // 流式读取并限制大小（防超大页面占满内存）
+      const reader = res.body?.getReader();
+      const chunks: Uint8Array[] = [];
+      let total = 0;
+      if (reader) {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          total += value.length;
+          if (total > MAX_FETCH_BYTES) {
+            chunks.push(value.slice(0, MAX_FETCH_BYTES - (total - value.length)));
+            break;
+          }
+          chunks.push(value);
+        }
+      }
+      const text = htmlToText(Buffer.concat(chunks).toString("utf8"));
       return text.slice(0, MAX_FETCH_BYTES) || "(empty page)";
     } catch (err) {
       return `fetch error: ${err instanceof Error ? err.message : String(err)}`;
     } finally {
       clearTimeout(timer);
-      ctx.signal?.removeEventListener("abort", () => controller.abort());
+      ctx.signal?.removeEventListener("abort", onAbort);
     }
   },
 };

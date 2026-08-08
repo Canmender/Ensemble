@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import type { AgentConfig, AgentTaskInput, AgentEvent } from "@multiagent/shared";
 import type { AgentAdapter } from "../types";
 import { runAgenticLoop } from "./loop";
@@ -67,6 +68,14 @@ export class BuiltinAgentExecutor implements AgentAdapter {
       }
     }
 
+    // offload 目录：优先工作区内（模型可用 read_file 读取全量），否则 dataDir 兜底
+    const wsRoot = this.deps.appSettings().workspaceRoot || this.cfg.cwd || undefined;
+    const offloadDir = wsRoot
+      ? join(wsRoot, ".multiagent-offload")
+      : this.deps.offloadBaseDir
+        ? `${this.deps.offloadBaseDir}/agents`
+        : undefined;
+
     // 上下文压缩器（主动压缩 + 大结果 offload + overflow 恢复）
     const ctxManager = new ContextManager({
       config: this.cfg.context ?? {},
@@ -78,7 +87,7 @@ export class BuiltinAgentExecutor implements AgentAdapter {
         });
         return r.text;
       },
-      offloadDir: this.deps.offloadBaseDir ? `${this.deps.offloadBaseDir}/agents` : undefined,
+      offloadDir,
     });
 
     // hooks：记忆注入（P2）
@@ -86,6 +95,13 @@ export class BuiltinAgentExecutor implements AgentAdapter {
     if (this.cfg.memory?.enabled && this.deps.memoryProvider) {
       const { MemoryHook } = await import("../../hooks/memory");
       hooks.push(new MemoryHook(this.deps.memoryProvider, this.cfg));
+    }
+
+    // 超时支持：组合外部 signal 与 timeout（超时 → aborted → cancelled）
+    let signal = input.signal;
+    if (input.timeoutMs) {
+      const base = signal ?? new AbortController().signal;
+      signal = AbortSignal.any([base, AbortSignal.timeout(input.timeoutMs)]);
     }
 
     yield* runAgenticLoop({
@@ -99,7 +115,7 @@ export class BuiltinAgentExecutor implements AgentAdapter {
       maxTokens: this.cfg.maxTokens,
       maxIterations: this.cfg.maxIterations ?? 10,
       ctxBudgetTokens: this.cfg.context?.budgetTokens ?? 80_000,
-      signal: input.signal,
+      signal,
       workspaceRoot: this.deps.appSettings().workspaceRoot || this.cfg.cwd || undefined,
       cwd: this.cfg.cwd,
       agentId: this.cfg.id,
@@ -107,7 +123,7 @@ export class BuiltinAgentExecutor implements AgentAdapter {
       askConfirm: this.deps.askConfirm,
       ctxManager,
       hooks,
-      offloadDir: this.deps.offloadBaseDir ? `${this.deps.offloadBaseDir}/agents` : undefined,
+      offloadDir,
       toolResultOffloadChars: this.cfg.context?.toolResultOffloadChars,
     });
   }

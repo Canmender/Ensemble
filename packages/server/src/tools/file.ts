@@ -1,5 +1,5 @@
-import { readFileSync, writeFileSync, readdirSync, statSync } from "node:fs";
-import { resolve, join, normalize, isAbsolute, basename } from "node:path";
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
+import { resolve, join, normalize, isAbsolute, dirname } from "node:path";
 import type { AgentTool, ToolContext } from "./types";
 
 /** 路径安全：归一化后必须落在 workspaceRoot 内（防 .. 逃逸） */
@@ -45,6 +45,7 @@ export const writeFileTool: AgentTool = {
   async execute(input: unknown, ctx: ToolContext): Promise<string> {
     const { path, content } = input as { path: string; content: string };
     const abs = safeResolve(ctx.workspaceRoot, path, ctx.cwd);
+    mkdirSync(dirname(abs), { recursive: true });
     writeFileSync(abs, content, "utf8");
     return `wrote ${abs} (${content.length} chars)`;
   },

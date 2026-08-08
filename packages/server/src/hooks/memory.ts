@@ -12,13 +12,15 @@ export class MemoryHook implements LoopHook {
   ) {}
 
   async preReasoning(ctx: LoopContext): Promise<void> {
-    // 只对首条 system 注入，避免多轮重复累积
+    // 仅首轮注入一次（用 vars 标记，避免多轮重复累积记忆）
+    if (ctx.vars.memoryInjected) return;
     if (ctx.msgs[0]?.role === "system") {
       const injected = await this.provider.inject(ctx.msgs[0].content, ctx.agentId);
       if (injected !== ctx.msgs[0].content) {
         ctx.msgs[0] = { ...ctx.msgs[0], content: injected };
       }
     }
+    ctx.vars.memoryInjected = true;
   }
 
   async postCall(ctx: LoopContext): Promise<void> {

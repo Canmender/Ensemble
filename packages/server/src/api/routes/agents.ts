@@ -5,16 +5,19 @@ import { asyncH, fail, ok } from "./helpers";
 /** Agent 记忆端点（两级记忆：snapshot / consolidate / clear） */
 function memoryRoutes(ctx: AppContext, r: Router): void {
   r.get("/:id/memory", asyncH(async (req, res) => {
+    if (!/^[a-z0-9-]+$/.test(req.params.id)) return fail(res, new Error("invalid agent id"), 400);
     const snap = await ctx.memoryProvider.snapshot(req.params.id);
     ok(res, snap);
   }));
 
   r.post("/:id/memory/consolidate", asyncH(async (req, res) => {
+    if (!/^[a-z0-9-]+$/.test(req.params.id)) return fail(res, new Error("invalid agent id"), 400);
     await ctx.memoryProvider.consolidate(req.params.id);
     ok(res, { ok: true });
   }));
 
   r.delete("/:id/memory", (req, res) => {
+    if (!/^[a-z0-9-]+$/.test(req.params.id)) return fail(res, new Error("invalid agent id"), 400);
     ctx.memoryProvider.clear(req.params.id);
     ok(res, { deleted: true });
   });

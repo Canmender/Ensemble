@@ -76,10 +76,18 @@ export function createAppContext(
 
   // 每日维护：记忆 consolidate/轮转 + offload 清理
   const offloadStore = new OffloadStore(join(dataDir, "offload", "agents"));
-  const maintenanceTimer = setInterval(() => {
+  const maintenanceTimer = setInterval(async () => {
     for (const a of config.listAgents()) {
       if (a.memory?.enabled) {
-        void memoryProvider.consolidate(a.id).catch(() => {});
+        // consolidate 按配置间隔判断（与 flushNow 内逻辑一致）
+        const minInterval = a.memory.consolidateMinIntervalMs ?? 12 * 3600_000;
+        const snap = await memoryProvider.snapshot(a.id);
+        if (
+          !snap.stats.lastConsolidateAt ||
+          Date.now() - new Date(snap.stats.lastConsolidateAt).getTime() >= minInterval
+        ) {
+          void memoryProvider.consolidate(a.id).catch(() => {});
+        }
         memoryProvider.rotate(a.id, 90);
       }
       offloadStore.cleanup(a.id, 7 * 86_400_000);

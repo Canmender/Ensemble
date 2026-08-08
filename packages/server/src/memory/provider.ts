@@ -82,9 +82,12 @@ export class MemoryProviderImpl implements MemoryProvider {
     const tokens = estimateTokens(transcript);
     const prev = this.lastTokens.get(agentId) ?? 0;
     if (tokens - prev < minNewTokens) return;
-    this.lastTokens.set(agentId, tokens);
 
-    return this.enqueue(agentId, () => this.flushNow(agentId, transcript, prompt));
+    // flush 成功后才推进 lastTokens（失败则下次可重试，避免记忆静默丢失）
+    return this.enqueue(agentId, async () => {
+      await this.flushNow(agentId, transcript, prompt);
+      this.lastTokens.set(agentId, tokens);
+    });
   }
 
   private enqueue(agentId: string, fn: () => Promise<void>): Promise<void> {
