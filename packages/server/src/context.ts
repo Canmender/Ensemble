@@ -12,10 +12,13 @@ import { ToolRegistry } from "./tools/types";
 import { registerBuiltinTools } from "./tools";
 import { MemoryProviderImpl, type MemoryProvider } from "./memory/provider";
 import { Mem0Backend } from "./memory/mem0";
+import { SqliteMemoryBackend } from "./memory/sql";
+import type { MemoryBackend } from "./memory/backend";
 import { McpConfigStore } from "./tools/mcp/config";
 import { McpManager } from "./tools/mcp/manager";
 import { OffloadStore } from "./context/offload";
 import { SkillStore, BUILTIN_SKILLS } from "./skills";
+import { makeMemoryTools } from "./tools/memory";
 import { logger } from "./util/logger";
 
 /** 应用服务容器：把所有模块组装起来，供 API 层使用 */
@@ -60,15 +63,21 @@ export function createAppContext(
   registerBuiltinTools(toolRegistry, () => config.getSettings());
 
   const dataDir = dirname(env.dbPath);
+  // 外部记忆后端：默认本地 SQL（SQLite + FTS5，免服务）；配置 Mem0 时切换到 Mem0
   const mem0Cfg = config.getSettings().mem0;
-  const mem0Backend =
-    mem0Cfg?.enabled && mem0Cfg?.endpoint ? new Mem0Backend(mem0Cfg) : undefined;
+  const externalBackend: MemoryBackend | undefined =
+    mem0Cfg?.enabled && mem0Cfg?.endpoint
+      ? new Mem0Backend(mem0Cfg)
+      : new SqliteMemoryBackend(db);
   const memoryProvider = new MemoryProviderImpl(
     join(dataDir, "memories"),
     (id) => config.getAgent(id),
     providerRegistry,
-    mem0Backend,
+    externalBackend,
   );
+
+  // 显式记忆工具（agent 自主 memory_write/read/list）
+  for (const t of makeMemoryTools(() => externalBackend)) toolRegistry.register(t);
 
   const mcpConfig = new McpConfigStore(join(env.configDir, "mcp.json"));
   const mcpManager = new McpManager(mcpConfig, toolRegistry);

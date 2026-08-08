@@ -12,6 +12,10 @@ export interface MemoryProvider {
   /** 调度一次 flush（节流 + per-agent 串行），返回可 await 的链尾 promise */
   scheduleFlush(agentId: string, transcript: string, prompt: string): Promise<void>;
   snapshot(agentId: string): Promise<MemorySnapshot>;
+  memoryForAgent(agentId: string): Promise<{
+    file: MemorySnapshot;
+    sqlEntries?: import("./backend").MemoryEntryLike[];
+  }>;
   consolidate(agentId: string): Promise<void>;
   clear(agentId: string): void;
   dispose(): void;
@@ -27,7 +31,7 @@ export class MemoryProviderImpl implements MemoryProvider {
     private memoryRoot: string,
     private getAgent: (id: string) => AgentConfig | undefined,
     private providerRegistry: ProviderRegistry,
-    private mem0Backend?: MemoryBackend,
+    private externalBackend?: MemoryBackend,
   ) {
     this.store = new MemoryStore(memoryRoot);
   }
@@ -50,16 +54,16 @@ export class MemoryProviderImpl implements MemoryProvider {
 
   async inject(systemPrompt: string, agentId: string): Promise<string> {
     if (!this.isEnabled(agentId)) return systemPrompt;
-    const maxChars = this.cfg(agentId)?.injectMaxChars ?? 4000;
+    const maxChars = this.cfg(agentId)?.injectMaxChars ?? 3000;
 
     const parts: string[] = [];
     const mem = this.store.readMemoryFile(agentId);
     if (mem?.content) parts.push(mem.content.slice(0, maxChars));
 
     // 外部记忆（Mem0）：语义检索相关记忆追加
-    if (this.mem0Backend?.enabled) {
+    if (this.externalBackend?.enabled) {
       try {
-        const related = await this.mem0Backend.search(agentId, systemPrompt.slice(0, 200), 5);
+        const related = await this.externalBackend.search(agentId, systemPrompt.slice(0, 200), 5);
         if (related.length) parts.push(`## 相关历史记忆\n${related.join("\n").slice(0, maxChars)}`);
       } catch {
         /* 外部记忆失败静默降级 */
@@ -109,8 +113,8 @@ export class MemoryProviderImpl implements MemoryProvider {
     this.recordUsage(agentId, out.usage);
 
     // 外部记忆（Mem0）：同步存储提取的事实
-    if (this.mem0Backend?.enabled) {
-      await this.mem0Backend.add(agentId, out.text).catch(() => {});
+    if (this.externalBackend?.enabled) {
+      await this.externalBackend.add(agentId, out.text).catch(() => {});
     }
 
     const meta = this.store.readMeta(agentId);
@@ -136,7 +140,7 @@ export class MemoryProviderImpl implements MemoryProvider {
       .map((d) => this.store.readDaily(agentId, d.date) ?? "")
       .join("\n");
     const old = this.store.readMemoryFile(agentId)?.content ?? "";
-    const maxChars = this.cfg(agentId)?.injectMaxChars ?? 4000;
+    const maxChars = this.cfg(agentId)?.injectMaxChars ?? 3000;
     const out = await llm.consolidate(agentId, old, logs, maxChars);
     this.store.writeMemoryFile(agentId, out.text);
     this.recordUsage(agentId, out.usage);
@@ -151,8 +155,21 @@ export class MemoryProviderImpl implements MemoryProvider {
     return this.store.snapshot(agentId);
   }
 
+  /** agent 完整记忆（文件 MEMORY.md/daily + SQL 条目），供导航记忆页 */
+  async memoryForAgent(agentId: string): Promise<{
+    file: MemorySnapshot;
+    sqlEntries?: import("./backend").MemoryEntryLike[];
+  }> {
+    const file = await this.store.snapshot(agentId);
+    const sqlEntries = this.externalBackend?.listByAgent
+      ? this.externalBackend.listByAgent(agentId, 100)
+      : undefined;
+    return { file, sqlEntries };
+  }
+
   clear(agentId: string): void {
     this.store.clear(agentId);
+    this.externalBackend?.clear?.(agentId);
     this.lastTokens.delete(agentId);
   }
 

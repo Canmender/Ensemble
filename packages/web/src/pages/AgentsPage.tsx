@@ -229,7 +229,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
           <div className="mt-3 grid grid-cols-2 gap-3">
             <div>
               <Label>注入上限（字符）</Label>
-              <Input type="number" value={form.memory.injectMaxChars ?? 4000} onChange={(e) => set({ memory: { ...form.memory, injectMaxChars: Number(e.target.value) } })} />
+              <Input type="number" value={form.memory.injectMaxChars ?? 3000} onChange={(e) => set({ memory: { ...form.memory, injectMaxChars: Number(e.target.value) } })} />
             </div>
             <div>
               <Label>记忆模型（留空用 Agent 模型）</Label>

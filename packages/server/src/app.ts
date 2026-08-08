@@ -10,6 +10,7 @@ import { providersRouter } from "./api/routes/providers";
 import { settingsRouter } from "./api/routes/settings";
 import { mcpRouter } from "./api/routes/mcp";
 import { skillsRouter } from "./api/routes/skills";
+import { memoryRouter } from "./api/routes/memory";
 
 export interface CreateAppOptions {
   /** 托管前端静态资源目录（桌面 prod 同源加载） */
@@ -29,6 +30,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/settings", settingsRouter(ctx));
   app.use("/api/mcp", mcpRouter(ctx));
   app.use("/api/skills", skillsRouter(ctx));
+  app.use("/api/memory", memoryRouter(ctx));
 
   // 托管前端静态资源 + SPA fallback（仅非 /api /ws 路径）
   const staticDir = opts.staticDir;
