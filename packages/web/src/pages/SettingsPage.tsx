@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { BookOpen, Cloud, Globe, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
+import { BookOpen, Cloud, Download, Globe, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
 import { api } from "../lib/api";
-import type { AppSettings, McpServerConfig, ProviderConfig, SkillDef } from "../types";
+import type { AppSettings, DetectedAgent, McpServerConfig, ProviderConfig, SkillDef, SyncResult } from "../types";
 import {
   Badge, Button, Card, Input, Label, Modal, Select, Spinner, Textarea, cls,
 } from "../components/ui";
@@ -411,8 +411,81 @@ function SkillSection() {
   );
 }
 
+// ---------- 本地 Agent 发现与同步 ----------
+function DiscoverySection() {
+  const [agents, setAgents] = useState<DetectedAgent[]>([]);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [result, setResult] = useState<SyncResult | null>(null);
+
+  async function refresh() {
+    setAgents(await api.get<DetectedAgent[]>("/discovery"));
+  }
+  useEffect(() => { void refresh(); }, []);
+
+  async function sync(type: string) {
+    setSyncing(type);
+    setResult(null);
+    try {
+      setResult(await api.post(`/discovery/${type}/sync`));
+      void refresh();
+    } finally {
+      setSyncing(null);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-muted">自动识别本机安装的 agent（Claude Code / Hermes），可同步其技能、记忆与配置到平台</p>
+
+      {agents.length === 0 && (
+        <Card className="p-8 text-center text-sm text-muted">未检测到本地 agent</Card>
+      )}
+
+      {agents.map((a) => (
+        <Card key={a.type} className="p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Download className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="font-semibold text-fg">{a.name}</div>
+                <div className="text-xs text-muted">
+                  {a.type} {a.version ? `· ${a.version}` : ""} · {a.skills.length} 技能 · {a.memoryCount} 条记忆
+                </div>
+              </div>
+            </div>
+            <Button variant="primary" onClick={() => sync(a.type)} disabled={syncing === a.type} className="px-3 py-1.5 text-xs">
+              {syncing === a.type ? "同步中…" : "同步"}
+            </Button>
+          </div>
+          {a.skills.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {a.skills.map((s) => (
+                <Badge key={s.name} color="brand">{s.name}</Badge>
+              ))}
+            </div>
+          )}
+        </Card>
+      ))}
+
+      {result && (
+        <Card className="p-4 text-sm">
+          <div className="text-success">
+            ✓ 导入 {result.importedSkills.length} 个技能 · {result.importedMemory} 条记忆
+            {result.createdAgent ? ` · 创建 agent「${result.createdAgent}」` : ""}
+          </div>
+          {result.errors.length > 0 && (
+            <div className="mt-1 text-xs text-destructive">{result.errors.join("；")}</div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "skills" | "general">("providers");
+  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "skills" | "local" | "general">("providers");
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -459,6 +532,7 @@ export default function SettingsPage() {
     { key: "tools" as const, label: "工具与安全", icon: <Wrench className="h-4 w-4" /> },
     { key: "mcp" as const, label: "MCP", icon: <Server className="h-4 w-4" /> },
     { key: "skills" as const, label: "Skill 池", icon: <BookOpen className="h-4 w-4" /> },
+    { key: "local" as const, label: "本地 Agent", icon: <Download className="h-4 w-4" /> },
     { key: "general" as const, label: "通用", icon: <Settings className="h-4 w-4" /> },
   ];
 
@@ -620,6 +694,8 @@ export default function SettingsPage() {
       {tab === "mcp" && <McpSection />}
 
       {tab === "skills" && <SkillSection />}
+
+      {tab === "local" && <DiscoverySection />}
 
       {tab === "general" && (
         <Card className="p-5">

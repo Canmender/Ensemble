@@ -17,6 +17,7 @@ export interface MemoryProvider {
     sqlEntries?: import("./backend").MemoryEntryLike[];
   }>;
   consolidate(agentId: string): Promise<void>;
+  importFacts(agentId: string, facts: Array<{ content: string; category?: string }>): Promise<number>;
   clear(agentId: string): void;
   dispose(): void;
 }
@@ -176,6 +177,19 @@ export class MemoryProviderImpl implements MemoryProvider {
       ? this.externalBackend.listByAgent(agentId, 100)
       : undefined;
     return { file, sqlEntries };
+  }
+
+  /** 批量导入外部记忆条目（本地 agent 同步用） */
+  async importFacts(agentId: string, facts: Array<{ content: string; category?: string }>): Promise<number> {
+    if (!this.externalBackend?.add) return 0;
+    let n = 0;
+    for (const f of facts) {
+      if (!f.content?.trim()) continue;
+      const tag = f.category ? `[${f.category}] ` : "";
+      await this.externalBackend.add(agentId, `[同步] ${tag}${f.content}`).catch(() => {});
+      n++;
+    }
+    return n;
   }
 
   clear(agentId: string): void {

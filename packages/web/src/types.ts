@@ -76,6 +76,24 @@ export interface McpServerConfig {
   status?: { id: string; connected: boolean; error?: string; toolCount: number };
 }
 
+export interface DetectedAgent {
+  type: "claude" | "hermes";
+  name: string;
+  version?: string;
+  configPath?: string;
+  memoryDbPath?: string;
+  skills: Array<{ name: string; sourcePath: string }>;
+  memoryCount: number;
+}
+
+export interface SyncResult {
+  type: string;
+  importedSkills: string[];
+  importedMemory: number;
+  createdAgent?: string;
+  errors: string[];
+}
+
 export interface SkillDef {
   name: string;
   description: string;
