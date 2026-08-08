@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { ListTodo, MessageSquare, Target, Workflow } from "lucide-react";
 import { api } from "../lib/api";
 import { relativeTime } from "../lib/events";
 import type { Agent, Run, Task, TaskMode, WorkflowDef } from "../types";
@@ -7,10 +8,10 @@ import {
   Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, StatusDot, Textarea, cls, statusLabel,
 } from "../components/ui";
 
-const MODES: Array<{ value: TaskMode; label: string; icon: string; desc: string }> = [
-  { value: "single", label: "单一分发", icon: "🎯", desc: "一个任务发给一个或多个 Agent 并行执行" },
-  { value: "workflow", label: "工作流", icon: "🛠️", desc: "DAG 编排：按依赖顺序在多个 Agent 间流转" },
-  { value: "chat", label: "群聊", icon: "💬", desc: "多个 Agent 围绕任务轮转对话、委派接力" },
+const MODES: Array<{ value: TaskMode; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }> = [
+  { value: "single", label: "单一分发", icon: Target, desc: "一个任务发给一个或多个 Agent 并行执行" },
+  { value: "workflow", label: "工作流", icon: Workflow, desc: "DAG 编排：按依赖顺序在多个 Agent 间流转" },
+  { value: "chat", label: "群聊", icon: MessageSquare, desc: "多个 Agent 围绕任务轮转对话、委派接力" },
 ];
 
 const modeLabel: Record<string, string> = { single: "单发", workflow: "工作流", chat: "群聊" };
@@ -79,13 +80,13 @@ function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; onCreat
               className={cls(
                 "rounded-xl border p-3 text-left transition-all",
                 mode === m.value
-                  ? "border-brand-500 bg-brand-50 ring-2 ring-brand-100"
-                  : "border-ink-200 hover:border-brand-300",
+                  ? "border-primary bg-primary/10 ring-2 ring-ring/30"
+                  : "border-border hover:border-primary/50",
               )}
             >
-              <div className="text-xl">{m.icon}</div>
-              <div className="mt-1 text-sm font-medium text-ink-800">{m.label}</div>
-              <div className="mt-0.5 text-[11px] leading-snug text-ink-400">{m.desc}</div>
+              <m.icon className="h-5 w-5 text-primary" />
+              <div className="mt-1 text-sm font-medium text-fg">{m.label}</div>
+              <div className="mt-0.5 text-[11px] leading-snug text-muted">{m.desc}</div>
             </button>
           ))}
         </div>
@@ -107,8 +108,8 @@ function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; onCreat
                 className={cls(
                   "rounded-lg border px-3 py-1.5 text-sm transition-colors",
                   agentIds.includes(a.id)
-                    ? "border-brand-500 bg-brand-50 font-medium text-brand-700"
-                    : "border-ink-200 text-ink-600 hover:border-brand-300",
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "border-border text-muted hover:border-primary/50",
                 )}
               >
                 {a.name}
@@ -144,7 +145,7 @@ function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; onCreat
                     "rounded-lg border px-3 py-1.5 text-sm transition-colors",
                     participantIds.includes(a.id)
                       ? "border-violet-500 bg-violet-50 font-medium text-violet-700"
-                      : "border-ink-200 text-ink-600 hover:border-violet-300",
+                      : "border-border text-muted hover:border-violet-300",
                   )}
                 >
                   {a.name}
@@ -164,7 +165,7 @@ function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; onCreat
         <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder="描述任务…（工作流中可用 {{task.prompt}} 注入）" />
       </div>
 
-      <div className="flex justify-end gap-3 border-t border-ink-100 pt-4">
+      <div className="flex justify-end gap-3 border-t border-border pt-4">
         <Button onClick={onClose} variant="ghost">
           取消
         </Button>
@@ -205,8 +206,8 @@ export default function TasksPage() {
     <div className="mx-auto max-w-5xl px-8 py-8">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-ink-900">任务</h1>
-          <p className="mt-1 text-sm text-ink-500">创建与管理多 Agent 协作任务</p>
+          <h1 className="text-2xl font-bold text-fg">任务</h1>
+          <p className="mt-1 text-sm text-muted">创建与管理多 Agent 协作任务</p>
         </div>
         <Button variant="primary" onClick={() => setShowCreate(true)}>
           + 新建任务
@@ -215,7 +216,7 @@ export default function TasksPage() {
 
       {tasks.length === 0 ? (
         <Card>
-          <EmptyState icon="📋" title="还没有任务" desc="创建一个任务，选择单一分发 / 工作流 / 群聊模式" />
+          <EmptyState icon={<ListTodo className="h-8 w-8" />} title="还没有任务" desc="创建一个任务，选择单一分发 / 工作流 / 群聊模式" />
         </Card>
       ) : (
         <div className="space-y-4">
@@ -227,12 +228,12 @@ export default function TasksPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-ink-900">{t.title}</span>
+                      <span className="font-semibold text-fg">{t.title}</span>
                       <Badge color={t.mode === "single" ? "brand" : t.mode === "workflow" ? "violet" : "amber"}>
                         {modeLabel[t.mode]}
                       </Badge>
                     </div>
-                    <div className="mt-0.5 text-xs text-ink-400">
+                    <div className="mt-0.5 text-xs text-muted">
                       创建于 {relativeTime(t.createdAt)} · {runs.length} 次运行
                     </div>
                   </div>
@@ -240,7 +241,7 @@ export default function TasksPage() {
                     {latest && (
                       <Link
                         to={`/runs/${latest.id}`}
-                        className="flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-600 hover:border-brand-400 hover:text-brand-700"
+                        className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted hover:border-primary/60 hover:text-primary"
                       >
                         <StatusDot status={latest.status} />
                         {statusLabel(latest.status)}
@@ -256,7 +257,7 @@ export default function TasksPage() {
                     <Link
                       key={r.id}
                       to={`/runs/${r.id}`}
-                      className="flex items-center gap-1.5 rounded-md bg-ink-50 px-2 py-1 text-xs text-ink-500 hover:bg-brand-50 hover:text-brand-700"
+                      className="flex items-center gap-1.5 rounded-md bg-bg px-2 py-1 text-xs text-muted hover:bg-primary/10 hover:text-primary"
                     >
                       <StatusDot status={r.status} />
                       {new Date(r.startedAt).toLocaleTimeString("zh-CN", { hour12: false })}

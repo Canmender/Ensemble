@@ -1,36 +1,29 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        brand: {
-          50: "#f0f7ff",
-          100: "#e0eefe",
-          200: "#baddfe",
-          300: "#7cc4fd",
-          400: "#36a6fa",
-          500: "#0c8ceb",
-          600: "#006ec9",
-          700: "#0157a3",
-          800: "#064a86",
-          900: "#0b3e6f",
+        // 语义化设计 token（浅色/深色两套，见 index.css 的 CSS 变量）
+        bg: "rgb(var(--c-bg) / <alpha-value>)",
+        surface: "rgb(var(--c-surface) / <alpha-value>)",
+        border: "rgb(var(--c-border) / <alpha-value>)",
+        fg: "rgb(var(--c-fg) / <alpha-value>)",
+        muted: "rgb(var(--c-muted) / <alpha-value>)",
+        primary: {
+          DEFAULT: "rgb(var(--c-primary) / <alpha-value>)",
+          fg: "rgb(var(--c-primary-fg) / <alpha-value>)",
         },
-        ink: {
-          50: "#f6f7f9",
-          100: "#eceef2",
-          200: "#d4d9e2",
-          300: "#aeb7c6",
-          400: "#828fa4",
-          500: "#647289",
-          600: "#4f5b70",
-          700: "#414b5c",
-          800: "#383f4d",
-          900: "#232731",
-        },
+        accent: "rgb(var(--c-accent) / <alpha-value>)",
+        destructive: "rgb(var(--c-destructive) / <alpha-value>)",
+        ring: "rgb(var(--c-ring) / <alpha-value>)",
+        success: "rgb(var(--c-success) / <alpha-value>)",
+        warning: "rgb(var(--c-warning) / <alpha-value>)",
       },
       fontFamily: {
         sans: [
+          "Inter",
           "ui-sans-serif",
           "system-ui",
           "-apple-system",
@@ -47,6 +40,11 @@ export default {
           "Liberation Mono",
           "monospace",
         ],
+      },
+      boxShadow: {
+        card: "0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 0 rgb(0 0 0 / 0.04)",
+        "card-hover": "0 4px 12px -2px rgb(0 0 0 / 0.12)",
+        pop: "0 10px 30px -5px rgb(0 0 0 / 0.25)",
       },
     },
   },

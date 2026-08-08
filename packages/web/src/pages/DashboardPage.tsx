@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { History, Zap } from "lucide-react";
 import { api } from "../lib/api";
 import { relativeTime } from "../lib/events";
 import type { Agent, Run } from "../types";
@@ -52,34 +53,34 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">
       <header className="mb-8">
-        <h1 className="text-2xl font-bold text-ink-900">概览</h1>
-        <p className="mt-1 text-sm text-ink-500">多 Agent 协作平台 · 调度 Hermes 与 Claude Code</p>
+        <h1 className="text-2xl font-bold text-fg">概览</h1>
+        <p className="mt-1 text-sm text-muted">多 Agent 协作平台 · 调度 Hermes 与 Claude Code</p>
       </header>
 
       {/* 统计卡片 */}
       <div className="mb-8 grid grid-cols-3 gap-4">
         <Card className="p-5">
-          <div className="text-xs font-medium text-ink-400">可用 Agent</div>
-          <div className="mt-1 text-3xl font-bold text-ink-900">{agents.length}</div>
+          <div className="text-xs font-medium text-muted">可用 Agent</div>
+          <div className="mt-1 text-3xl font-bold text-fg">{agents.length}</div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs font-medium text-ink-400">进行中</div>
-          <div className="mt-1 flex items-center gap-2 text-3xl font-bold text-ink-900">
+          <div className="text-xs font-medium text-muted">进行中</div>
+          <div className="mt-1 flex items-center gap-2 text-3xl font-bold text-fg">
             {active}
-            {active > 0 && <span className="mb-3 inline-block h-2 w-2 animate-pulse rounded-full bg-brand-500" />}
+            {active > 0 && <span className="mb-3 inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />}
           </div>
         </Card>
         <Card className="p-5">
-          <div className="text-xs font-medium text-ink-400">历史运行</div>
-          <div className="mt-1 text-3xl font-bold text-ink-900">{runs.length}</div>
+          <div className="text-xs font-medium text-muted">历史运行</div>
+          <div className="mt-1 text-3xl font-bold text-fg">{runs.length}</div>
         </Card>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-2">
         {/* 快捷创建 */}
         <Card className="p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-ink-900">
-            <span>⚡</span> 快捷创建任务
+          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-fg">
+            <Zap className="h-4 w-4 text-primary" /> 快捷创建任务
           </h2>
           <div className="space-y-4">
             <div>
@@ -102,7 +103,7 @@ export default function DashboardPage() {
             <Button variant="primary" onClick={quickCreate} disabled={submitting || !prompt.trim()}>
               {submitting ? <Spinner label="创建中" /> : "运行"}
             </Button>
-            <Link to="/tasks" className="ml-3 text-xs text-brand-600 hover:underline">
+            <Link to="/tasks" className="ml-3 text-xs text-primary hover:underline">
               更多模式（工作流 / 群聊）→
             </Link>
           </div>
@@ -111,31 +112,31 @@ export default function DashboardPage() {
         {/* 最近运行 */}
         <Card className="p-6">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-ink-900">
-              <span>🕘</span> 最近运行
+            <h2 className="flex items-center gap-2 text-base font-semibold text-fg">
+              <History className="h-4 w-4 text-primary" /> 最近运行
             </h2>
-            <Link to="/tasks" className="text-xs text-brand-600 hover:underline">
+            <Link to="/tasks" className="text-xs text-primary hover:underline">
               查看全部
             </Link>
           </div>
           {loading ? (
             <Spinner label="加载中" />
           ) : runs.length === 0 ? (
-            <div className="py-10 text-center text-sm text-ink-400">还没有运行记录</div>
+            <div className="py-10 text-center text-sm text-muted">还没有运行记录</div>
           ) : (
             <ul className="space-y-2">
               {runs.slice(0, 8).map((r) => (
                 <li key={r.id}>
                   <Link
                     to={`/runs/${r.id}`}
-                    className="flex items-center gap-3 rounded-lg border border-ink-100 px-3 py-2.5 hover:border-brand-300 hover:bg-brand-50/40"
+                    className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 hover:border-primary/50 hover:bg-primary/10/40"
                   >
                     <StatusDot status={r.status} />
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-ink-800">
+                      <div className="truncate text-sm font-medium text-fg">
                         {r.taskTitle ?? "未命名任务"}
                       </div>
-                      <div className="text-xs text-ink-400">
+                      <div className="text-xs text-muted">
                         {modeLabel[r.mode] ?? r.mode} · {relativeTime(r.startedAt)}
                       </div>
                     </div>

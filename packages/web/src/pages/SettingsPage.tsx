@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Cloud, Globe, Pencil, Plug, Settings, Trash2, Wrench } from "lucide-react";
 import { api } from "../lib/api";
 import type { AppSettings, ProviderConfig } from "../types";
 import {
@@ -91,15 +92,15 @@ function ProviderForm({ initial, onDone }: { initial?: ProviderConfig; onDone: (
         <Input value={form.defaultModel} onChange={(e) => set({ defaultModel: e.target.value })} placeholder="claude-sonnet-4-5 / deepseek-chat" />
       </div>
 
-      <div className="flex items-center justify-between border-t border-ink-100 pt-4">
+      <div className="flex items-center justify-between border-t border-border pt-4">
         <div className="flex items-center gap-3">
           <Button onClick={test} disabled={testing || !(initial?.apiKeySet || form.apiKey)} variant="secondary" className="px-3 py-1.5 text-xs">
             {testing ? <Spinner label="测试中" /> : "测试连接"}
           </Button>
-          {testResult && <span className="max-w-[240px] truncate text-xs text-ink-600">{testResult}</span>}
+          {testResult && <span className="max-w-[240px] truncate text-xs text-muted">{testResult}</span>}
         </div>
         <div className="flex items-center gap-2">
-          <label className="flex items-center gap-2 text-sm text-ink-600">
+          <label className="flex items-center gap-2 text-sm text-muted">
             <input type="checkbox" checked={!!form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
             启用
           </label>
@@ -155,26 +156,26 @@ export default function SettingsPage() {
   }
 
   const tabs = [
-    { key: "providers" as const, label: "LLM Providers", icon: "🔌" },
-    { key: "tools" as const, label: "工具与安全", icon: "🛠️" },
-    { key: "general" as const, label: "通用", icon: "⚙️" },
+    { key: "providers" as const, label: "LLM Providers", icon: <Plug className="h-4 w-4" /> },
+    { key: "tools" as const, label: "工具与安全", icon: <Wrench className="h-4 w-4" /> },
+    { key: "general" as const, label: "通用", icon: <Settings className="h-4 w-4" /> },
   ];
 
   return (
     <div className="mx-auto max-w-4xl px-8 py-8">
       <header className="mb-6">
-        <h1 className="text-2xl font-bold text-ink-900">设置</h1>
-        <p className="mt-1 text-sm text-ink-500">配置模型提供商、Agent 工具与工作区</p>
+        <h1 className="text-2xl font-bold text-fg">设置</h1>
+        <p className="mt-1 text-sm text-muted">配置模型提供商、Agent 工具与工作区</p>
       </header>
 
-      <div className="mb-6 flex gap-1 rounded-xl bg-ink-100 p-1">
+      <div className="mb-6 flex gap-1 rounded-xl bg-muted/10 p-1">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={cls(
               "flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
-              tab === t.key ? "bg-white text-ink-900 shadow-sm" : "text-ink-500 hover:text-ink-700",
+              tab === t.key ? "bg-surface text-fg shadow-sm" : "text-muted hover:text-fg",
             )}
           >
             {t.icon} {t.label}
@@ -185,29 +186,29 @@ export default function SettingsPage() {
       {tab === "providers" && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm text-ink-500">添加 Anthropic、OpenAI 兼容（OpenRouter/DeepSeek/Ollama）或自定义端点</p>
+            <p className="text-sm text-muted">添加 Anthropic、OpenAI 兼容（OpenRouter/DeepSeek/Ollama）或自定义端点</p>
             <Button variant="primary" onClick={() => { setEditing(undefined); setShowForm(true); }} className="px-3 py-1.5 text-sm">
               + 添加 Provider
             </Button>
           </div>
 
           {providers.length === 0 && (
-            <Card className="p-8 text-center text-sm text-ink-400">还没有 Provider，点击右上角添加</Card>
+            <Card className="p-8 text-center text-sm text-muted">还没有 Provider，点击右上角添加</Card>
           )}
 
           {providers.map((p) => (
             <Card key={p.id} className="p-5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-100 to-brand-100 text-lg">
-                    {p.type === "anthropic" ? "☁️" : "🌐"}
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-primary/10 text-primary">
+                    {p.type === "anthropic" ? <Cloud className="h-5 w-5" /> : <Globe className="h-5 w-5" />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-ink-900">{p.name}</span>
+                      <span className="font-semibold text-fg">{p.name}</span>
                       <Badge color={p.enabled ? "green" : "ink"}>{p.enabled ? "启用" : "停用"}</Badge>
                     </div>
-                    <div className="text-xs text-ink-400">
+                    <div className="text-xs text-muted">
                       {TYPE_LABEL[p.type] ?? p.type} · {p.id}
                     </div>
                   </div>
@@ -216,23 +217,27 @@ export default function SettingsPage() {
                   <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => fetchModels(p.id)} disabled={fetchingModels === p.id}>
                     {fetchingModels === p.id ? "拉取中…" : "拉取模型"}
                   </Button>
-                  <button onClick={() => { setEditing(p); setShowForm(true); }} className="rounded-md p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700">✏️</button>
-                  <button onClick={() => remove(p.id)} className="rounded-md p-1.5 text-ink-400 hover:bg-red-50 hover:text-red-500">🗑️</button>
+                  <button onClick={() => { setEditing(p); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" title="编辑">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => remove(p.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" title="删除">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-500">
-                {p.baseUrl && <span className="rounded bg-ink-50 px-2 py-0.5 font-mono">{p.baseUrl}</span>}
-                <span className={cls("rounded px-2 py-0.5", p.apiKeySet ? "bg-emerald-50 text-emerald-600" : "bg-ink-50 text-ink-400")}>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+                {p.baseUrl && <span className="rounded bg-bg px-2 py-0.5 font-mono">{p.baseUrl}</span>}
+                <span className={cls("rounded px-2 py-0.5", p.apiKeySet ? "bg-emerald-50 text-emerald-600" : "bg-bg text-muted")}>
                   {p.apiKeySet ? "● API Key 已配置" : "○ 未配置 Key"}
                 </span>
-                {p.defaultModel && <span className="rounded bg-brand-50 px-2 py-0.5 text-brand-700">{p.defaultModel}</span>}
+                {p.defaultModel && <span className="rounded bg-primary/10 px-2 py-0.5 text-primary">{p.defaultModel}</span>}
               </div>
               {p.models && p.models.length > 0 && (
-                <details className="mt-2 text-xs text-ink-500">
-                  <summary className="cursor-pointer hover:text-ink-700">已缓存的 {p.models.length} 个模型</summary>
+                <details className="mt-2 text-xs text-muted">
+                  <summary className="cursor-pointer hover:text-fg">已缓存的 {p.models.length} 个模型</summary>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {p.models.slice(0, 30).map((m) => (
-                      <span key={m} className="rounded bg-ink-50 px-1.5 py-0.5 font-mono">{m}</span>
+                      <span key={m} className="rounded bg-bg px-1.5 py-0.5 font-mono">{m}</span>
                     ))}
                   </div>
                 </details>
@@ -245,16 +250,16 @@ export default function SettingsPage() {
       {tab === "tools" && settings && (
         <div className="space-y-4">
           <Card className="p-5">
-            <h3 className="mb-1 text-sm font-semibold text-ink-900">工作区根目录（工具白名单）</h3>
-            <p className="mb-3 text-xs text-ink-400">Agent 的文件读写 / 命令执行默认只能访问此目录</p>
+            <h3 className="mb-1 text-sm font-semibold text-fg">工作区根目录（工具白名单）</h3>
+            <p className="mb-3 text-xs text-muted">Agent 的文件读写 / 命令执行默认只能访问此目录</p>
             <div className="flex gap-2">
               <Input value={settings.workspaceRoot} onChange={(e) => saveSettings({ workspaceRoot: e.target.value })} placeholder="留空则无文件访问" />
             </div>
           </Card>
 
           <Card className="p-5">
-            <h3 className="mb-1 text-sm font-semibold text-ink-900">命令执行确认策略</h3>
-            <p className="mb-3 text-xs text-ink-400">Agent 执行 shell 命令前是否需要弹窗确认</p>
+            <h3 className="mb-1 text-sm font-semibold text-fg">命令执行确认策略</h3>
+            <p className="mb-3 text-xs text-muted">Agent 执行 shell 命令前是否需要弹窗确认</p>
             <Select value={settings.codeExecutionConfirm} onChange={(e) => saveSettings({ codeExecutionConfirm: e.target.value as any })}>
               <option value="ask">每次询问（推荐）</option>
               <option value="always">总是自动允许</option>
@@ -263,8 +268,8 @@ export default function SettingsPage() {
           </Card>
 
           <Card className="p-5">
-            <h3 className="mb-1 text-sm font-semibold text-ink-900">联网搜索（可选）</h3>
-            <p className="mb-3 text-xs text-ink-400">不配置则使用 DuckDuckGo 免费接口</p>
+            <h3 className="mb-1 text-sm font-semibold text-fg">联网搜索（可选）</h3>
+            <p className="mb-3 text-xs text-muted">不配置则使用 DuckDuckGo 免费接口</p>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>搜索服务</Label>
@@ -284,12 +289,12 @@ export default function SettingsPage() {
 
       {tab === "general" && (
         <Card className="p-5">
-          <h3 className="mb-1 text-sm font-semibold text-ink-900">配置目录</h3>
-          <p className="mb-3 text-xs text-ink-400">Agent 配置、Provider 配置、数据库等存储位置</p>
+          <h3 className="mb-1 text-sm font-semibold text-fg">配置目录</h3>
+          <p className="mb-3 text-xs text-muted">Agent 配置、Provider 配置、数据库等存储位置</p>
           {(window as any).desktop?.openConfigDir ? (
             <Button variant="secondary" onClick={() => (window as any).desktop.openConfigDir()}>打开配置目录</Button>
           ) : (
-            <span className="text-xs text-ink-400">（浏览器模式下不可用）</span>
+            <span className="text-xs text-muted">（浏览器模式下不可用）</span>
           )}
         </Card>
       )}

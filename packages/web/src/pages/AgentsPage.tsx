@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Bot, Pencil, Trash2, Zap } from "lucide-react";
 import { api } from "../lib/api";
 import type { Agent, ProviderConfig } from "../types";
 import {
@@ -120,7 +121,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
                 {m}
               </option>
             ))}
-            <option value="__custom">✏️ 自定义模型名…</option>
+            <option value="__custom">自定义模型名…</option>
           </Select>
           <Input
             className="w-48"
@@ -154,7 +155,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
         <Label>启用的工具</Label>
         <div className="flex flex-wrap gap-2">
           {allTools.length === 0 ? (
-            <span className="text-xs text-ink-400">无可选工具</span>
+            <span className="text-xs text-muted">无可选工具</span>
           ) : (
             allTools.map((name) => (
               <button
@@ -162,8 +163,8 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
                 onClick={() => toggleTool(name)}
                 className={`rounded-lg border px-3 py-1.5 text-sm transition-colors ${
                   form.tools.includes(name)
-                    ? "border-brand-500 bg-brand-50 font-medium text-brand-700"
-                    : "border-ink-200 text-ink-600 hover:border-brand-300"
+                    ? "border-primary bg-primary/10 font-medium text-primary"
+                    : "border-border text-muted hover:border-primary/50"
                 }`}
               >
                 {name}
@@ -173,8 +174,8 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-3 border-t border-ink-100 pt-4">
-        <label className="flex items-center gap-2 text-sm text-ink-600">
+      <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
+        <label className="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={!!form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
           启用
         </label>
@@ -208,7 +209,7 @@ function TestButton({ agent }: { agent: Agent }) {
       <Button onClick={test} disabled={busy} variant="secondary" className="px-2.5 py-1.5 text-xs">
         {busy ? "测试中…" : "冒烟测试"}
       </Button>
-      {result && <span className="max-w-[220px] truncate text-xs text-ink-500">{result}</span>}
+      {result && <span className="max-w-[220px] truncate text-xs text-muted">{result}</span>}
     </div>
   );
 }
@@ -238,8 +239,8 @@ export default function AgentsPage() {
     <div className="mx-auto max-w-5xl px-8 py-8">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-ink-900">Agents</h1>
-          <p className="mt-1 text-sm text-ink-500">在应用内创建自定义 Agent（选择模型、配置角色与工具）</p>
+          <h1 className="text-2xl font-bold text-fg">Agents</h1>
+          <p className="mt-1 text-sm text-muted">在应用内创建自定义 Agent（选择模型、配置角色与工具）</p>
         </div>
         <Button variant="primary" onClick={() => { setEditing(undefined); setShowForm(true); }}>
           + 新建 Agent
@@ -250,7 +251,7 @@ export default function AgentsPage() {
         <Spinner label="加载中" />
       ) : agents.length === 0 ? (
         <Card>
-          <EmptyState icon="🤖" title="还没有 Agent" desc="点击右上角创建第一个自定义 Agent" />
+          <EmptyState icon={<Bot className="h-8 w-8" />} title="还没有 Agent" desc="点击右上角创建第一个自定义 Agent" />
         </Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
@@ -258,24 +259,28 @@ export default function AgentsPage() {
             <Card key={a.id} className="p-5">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-100 to-brand-200 text-lg">
-                    ⚡
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-primary/25 text-primary">
+                    <Zap className="h-5 w-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-ink-900">{a.name}</span>
+                      <span className="font-semibold text-fg">{a.name}</span>
                       <Badge color={a.enabled ? "green" : "ink"}>{a.enabled ? "启用" : "停用"}</Badge>
                     </div>
-                    <div className="text-xs text-ink-400">{a.id}</div>
+                    <div className="text-xs text-muted">{a.id}</div>
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing(a); setShowForm(true); }} className="rounded-md p-1.5 text-ink-400 hover:bg-ink-100 hover:text-ink-700" title="编辑">✏️</button>
-                  <button onClick={() => remove(a.id)} className="rounded-md p-1.5 text-ink-400 hover:bg-red-50 hover:text-red-500" title="删除">🗑️</button>
+                  <button onClick={() => { setEditing(a); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" title="编辑">
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button onClick={() => remove(a.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" title="删除">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
 
-              {a.description && <p className="mt-3 text-sm text-ink-500">{a.description}</p>}
+              {a.description && <p className="mt-3 text-sm text-muted">{a.description}</p>}
 
               <div className="mt-3 flex flex-wrap gap-1.5">
                 <Badge color="brand">{a.model || "未配置模型"}</Badge>
@@ -289,7 +294,7 @@ export default function AgentsPage() {
                 </div>
               )}
 
-              <div className="mt-4 border-t border-ink-100 pt-3">
+              <div className="mt-4 border-t border-border pt-3">
                 <TestButton agent={a} />
               </div>
             </Card>
