@@ -1,7 +1,7 @@
 import { app, dialog } from "electron";
 import { join, resolve } from "node:path";
 import { mkdirSync, existsSync, writeFileSync } from "node:fs";
-import { createLocalServer, type LocalServer, logger } from "@jungle/server";
+import { createLocalServer, type LocalServer, logger } from "@ensemble/server";
 import { createElectronKeyStore } from "./keychain";
 
 /** 首次启动时写入的默认配置（builtin agent + 示例工作流） */
@@ -91,7 +91,7 @@ function bootstrap(configDir: string): void {
 export async function startLocalServer(opts?: { port?: number }): Promise<LocalServer> {
   const userData = app.getPath("userData");
   const configDir = join(userData, "config");
-  const dbPath = join(userData, "data", "jungle-system.db");
+  const dbPath = join(userData, "data", "ensemble.db");
   const secretsFile = join(userData, "secrets.json");
   mkdirSync(join(userData, "data"), { recursive: true });
   bootstrap(configDir);
@@ -109,7 +109,7 @@ export async function startLocalServer(opts?: { port?: number }): Promise<LocalS
       buttons: ["允许", "取消"],
       defaultId: 1,
       cancelId: 1,
-      title: "丛林系统 · 确认执行工具",
+      title: "合鸣 · 确认执行工具",
       message: `Agent 请求执行工具：${tool}`,
       detail: JSON.stringify(args ?? {}).slice(0, 1000),
     });

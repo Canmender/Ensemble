@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { taskInputSchema } from "@jungle/shared";
+import { taskInputSchema } from "@ensemble/shared";
 import type { AppContext } from "../../context";
 import { asyncH, fail, ok } from "./helpers";
 

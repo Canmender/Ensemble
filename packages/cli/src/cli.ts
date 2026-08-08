@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 丛林系统 CLI —— 原生命令行接口（通过本地 HTTP API 驱动）
+ * 合鸣 CLI —— 原生命令行接口（通过本地 HTTP API 驱动）
  *
  * 用法：
  *   ma status                        查看健康与 Agent 概览
@@ -52,7 +52,7 @@ function table(rows: string[][]): string {
 
 async function cmdStatus(): Promise<void> {
   const d = await api<any>("GET", "/health");
-  console.log(`丛林系统 ${d.status}`);
+  console.log(`合鸣 ${d.status}`);
   console.log(`  agents: ${d.agents?.length ?? 0} | providers: ${d.providers ?? 0} | workflows: ${d.workflows ?? 0}`);
   console.log(`  tools: ${(d.tools ?? []).join(", ")}`);
 }
@@ -162,7 +162,7 @@ async function main(): Promise<void> {
       else console.error("create 子命令: agent | provider | skill");
       break;
     default:
-      console.log("丛林系统 CLI\n\n命令: status | agents | providers | skills | workflows | run | create agent|provider|skill");
+      console.log("合鸣 CLI\n\n命令: status | agents | providers | skills | workflows | run | create agent|provider|skill");
       process.exit(1);
   }
 }

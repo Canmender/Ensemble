@@ -41,7 +41,7 @@ export function getEnv(): ServerEnv {
   loadDotEnv();
   return {
     port: Number(process.env.PORT ?? 8787),
-    dbPath: resolve(serverRoot, process.env.DB_PATH ?? "data/jungle-system.db"),
+    dbPath: resolve(serverRoot, process.env.DB_PATH ?? "data/ensemble.db"),
     configDir: resolve(repoRoot, process.env.CONFIG_DIR ?? "config"),
     hermesExecutable: process.env.HERMES_EXECUTABLE || undefined,
     hermesUseWsl: process.env.HERMES_USE_WSL === "true",

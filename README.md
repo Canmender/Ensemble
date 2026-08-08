@@ -1,8 +1,8 @@
-# 🌴 丛林系统（Jungle System）
+# 🌴 合鸣（Ensemble）
 
 桌面原生多 Agent 协作平台 —— 在应用内自定义创建 Agent、管理记忆与技能，让多个 Agent 协作完成工作流与头脑风暴。
 
-![GitHub release](https://img.shields.io/github/v/release/Canmender/jungle-system)
+![GitHub release](https://img.shields.io/github/v/release/Canmender/ensemble)
 
 ## ✨ 核心能力
 
@@ -29,13 +29,13 @@
 pnpm install
 
 # 2. 构建
-pnpm --filter @jungle/shared build
-pnpm --filter @jungle/server build
-pnpm --filter @jungle/web build
-pnpm --filter @jungle/desktop build
+pnpm --filter @ensemble/shared build
+pnpm --filter @ensemble/server build
+pnpm --filter @ensemble/web build
+pnpm --filter @ensemble/desktop build
 
 # 3. 启动桌面应用
-pnpm --filter @jungle/desktop start
+pnpm --filter @ensemble/desktop start
 ```
 
 ### 首次使用
@@ -48,7 +48,7 @@ pnpm --filter @jungle/desktop start
 
 - 一键安装（含卸载程序），可自定义安装目录
 - **自动升级**：应用内检测 GitHub Releases 新版本，下载新安装包一键更新（electron-updater）
-- 手动下载最新版：GitHub [Releases](https://github.com/Canmender/jungle-system/releases)
+- 手动下载最新版：GitHub [Releases](https://github.com/Canmender/ensemble/releases)
 
 ## 🧩 项目结构
 
@@ -78,7 +78,7 @@ packages/
 ## 🧪 测试
 
 ```bash
-pnpm --filter @jungle/server test   # 单元测试
+pnpm --filter @ensemble/server test   # 单元测试
 pnpm -r typecheck                    # 全量类型检查
 ```
 

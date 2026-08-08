@@ -1,4 +1,4 @@
-import type { Run, Task, WorkflowDef, WorkflowEdge, WorkflowNode } from "@jungle/shared";
+import type { Run, Task, WorkflowDef, WorkflowEdge, WorkflowNode } from "@ensemble/shared";
 import { OrchestrationEngine } from "./engine";
 import { logger } from "../util/logger";
 

@@ -3,7 +3,7 @@ import { autoUpdater } from "electron-updater";
 import { join } from "node:path";
 import { startLocalServer } from "./server";
 import { createWindow, registerIpc } from "./window";
-import { logger } from "@jungle/server";
+import { logger } from "@ensemble/server";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -59,10 +59,10 @@ function createTray(): void {
     : join(__dirname, "../../build/icon.png");
   const icon = nativeImage.createFromPath(iconPath);
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
-  tray.setToolTip("丛林系统");
+  tray.setToolTip("合鸣");
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "显示丛林系统", click: () => showMainWindow() },
+      { label: "显示合鸣", click: () => showMainWindow() },
       { type: "separator" },
       {
         label: "退出",
@@ -84,7 +84,7 @@ function showMainWindow(): void {
 
 app.whenReady().then(async () => {
   // 原生窗口行为（Windows）
-  app.setAppUserModelId("com.jungle.system");
+  app.setAppUserModelId("com.ensemble.system");
 
   try {
     const url = await bootstrap();
@@ -101,7 +101,7 @@ app.whenReady().then(async () => {
       logger.error("renderer process gone", JSON.stringify(details));
       void dialog.showMessageBox({
         type: "error",
-        title: "丛林系统",
+        title: "合鸣",
         message: "界面进程异常退出",
         detail: `reason: ${details.reason}`,
       });
@@ -121,7 +121,7 @@ app.whenReady().then(async () => {
           type: "info",
           buttons: ["立即重启安装", "稍后"],
           defaultId: 0,
-          title: "丛林系统更新",
+          title: "合鸣更新",
           message: "新版本已下载完成",
           detail: "重启应用后将自动完成安装（后期下载新安装包可一键更新）。",
         });

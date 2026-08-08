@@ -1,5 +1,5 @@
 {
-  "name": "jungle-system",
+  "name": "ensemble",
   "private": true,
   "version": "0.1.0",
   "description": "多 Agent 协作平台 —— 接入 Hermes Agent 与 Claude Code，提供前端编排与实时协作",
@@ -8,13 +8,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm --filter @jungle/server dev",
-    "dev:web": "pnpm --filter @jungle/web dev",
-    "dev:desktop": "pnpm --filter @jungle/desktop dev",
+    "dev": "pnpm --filter @ensemble/server dev",
+    "dev:web": "pnpm --filter @ensemble/web dev",
+    "dev:desktop": "pnpm --filter @ensemble/desktop dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "smoke": "pnpm --filter @jungle/cli smoke",
-    "cli": "pnpm --filter @jungle/cli cli"
+    "smoke": "pnpm --filter @ensemble/cli smoke",
+    "cli": "pnpm --filter @ensemble/cli cli"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

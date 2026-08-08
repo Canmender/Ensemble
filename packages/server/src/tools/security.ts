@@ -1,4 +1,4 @@
-import type { AppSettings } from "@jungle/shared";
+import type { AppSettings } from "@ensemble/shared";
 
 /** 危险命令名（首词精确匹配，避免误判/漏判） */
 const DANGEROUS_COMMANDS = new Set([

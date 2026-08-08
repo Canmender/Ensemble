@@ -1,5 +1,5 @@
 {
-  "name": "@jungle/server",
+  "name": "@ensemble/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -21,7 +21,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.226",
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@jungle/shared": "workspace:*",
+    "@ensemble/shared": "workspace:*",
     "express": "^4.19.0",
     "js-yaml": "^4.1.0",
     "p-limit": "^5.0.0",

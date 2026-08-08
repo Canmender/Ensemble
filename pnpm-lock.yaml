@@ -26,10 +26,10 @@ importers:
 
   packages/desktop:
     dependencies:
-      '@jungle/server':
+      '@ensemble/server':
         specifier: workspace:*
         version: link:../server
-      '@jungle/shared':
+      '@ensemble/shared':
         specifier: workspace:*
         version: link:../shared
       electron-updater:
@@ -60,7 +60,7 @@ importers:
       '@anthropic-ai/claude-agent-sdk':
         specifier: ^0.3.226
         version: 0.3.226(@anthropic-ai/sdk@0.116.0(zod@3.25.76))(@modelcontextprotocol/sdk@1.30.0(zod@3.25.76))(zod@3.25.76)
-      '@jungle/shared':
+      '@ensemble/shared':
         specifier: workspace:*
         version: link:../shared
       '@modelcontextprotocol/sdk':

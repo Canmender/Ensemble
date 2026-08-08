@@ -8,7 +8,7 @@ import type {
   ProviderRuntimeConfig,
 } from "./types";
 import { parseSse, throwOnHttpError } from "./sse";
-import type { Usage } from "@jungle/shared";
+import type { Usage } from "@ensemble/shared";
 
 const ANTHROPIC_DEFAULT_MODELS = [
   "claude-opus-5",

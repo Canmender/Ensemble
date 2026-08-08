@@ -1,8 +1,8 @@
 {
-  "name": "@jungle/desktop",
+  "name": "@ensemble/desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "丛林系统 桌面应用（Electron 壳）",
+  "description": "合鸣 桌面应用（Electron 壳）",
   "main": "./dist/main/index.cjs",
   "scripts": {
     "build:main": "node scripts/build.mjs",
@@ -11,11 +11,11 @@
     "start": "electron .",
     "dev": "pnpm build && cross-env RENDERER_URL=http://localhost:5173 electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "package": "node scripts/gen-icon.mjs && pnpm build && pnpm --filter @jungle/web build && electron-builder --win --publish never"
+    "package": "node scripts/gen-icon.mjs && pnpm build && pnpm --filter @ensemble/web build && electron-builder --win --publish never"
   },
   "dependencies": {
-    "@jungle/server": "workspace:*",
-    "@jungle/shared": "workspace:*",
+    "@ensemble/server": "workspace:*",
+    "@ensemble/shared": "workspace:*",
     "electron-updater": "^6.8.9"
   },
   "devDependencies": {

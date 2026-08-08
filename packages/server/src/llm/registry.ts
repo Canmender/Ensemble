@@ -1,4 +1,4 @@
-import type { ProviderConfig } from "@jungle/shared";
+import type { ProviderConfig } from "@ensemble/shared";
 import type { KeyStore } from "../keychain";
 import type { LLMProvider, ProviderRuntimeConfig } from "./types";
 import { AnthropicProvider } from "./anthropic";

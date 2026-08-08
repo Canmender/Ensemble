@@ -1,7 +1,7 @@
-appId: com.jungle.system
-productName: 丛林系统
+appId: com.ensemble.system
+productName: 合鸣
 electronVersion: 43.3.0
-copyright: Copyright © 2026 丛林系统
+copyright: Copyright © 2026 合鸣
 directories:
   output: release
   buildResources: build
@@ -28,12 +28,12 @@ nsis:
   perMachine: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
-  shortcutName: 丛林系统
-  uninstallDisplayName: 丛林系统
+  shortcutName: 合鸣
+  uninstallDisplayName: 合鸣
   deleteAppDataOnUninstall: false
-  artifactName: jungle-system-${version}-setup.${ext}
+  artifactName: ensemble-${version}-setup.${ext}
 publish:
   provider: github
   owner: Canmender
-  repo: jungle-system
+  repo: ensemble
   releaseType: release

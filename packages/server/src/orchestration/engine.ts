@@ -5,7 +5,7 @@ import type {
   Run,
   Task,
   TaskInput,
-} from "@jungle/shared";
+} from "@ensemble/shared";
 import { Store } from "./store";
 import { AdapterRegistry } from "../adapters/registry";
 import { WsHub } from "../api/ws/hub";
@@ -30,7 +30,7 @@ export class OrchestrationEngine {
     private store: Store,
     private registry: AdapterRegistry,
     private hub: WsHub,
-    private getWorkflowDef?: (id: string) => import("@jungle/shared").WorkflowDef | undefined,
+    private getWorkflowDef?: (id: string) => import("@ensemble/shared").WorkflowDef | undefined,
   ) {}
 
   setAgents(agents: AgentConfig[]): void {

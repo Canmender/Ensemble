@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   };
 
   server.listen(env.port, () => {
-    logger.info(`丛林系统 server listening on http://localhost:${env.port}`);
+    logger.info(`合鸣 server listening on http://localhost:${env.port}`);
     logger.info(
       `agents loaded: ${ctx.config.listAgents().map((a) => a.id).join(", ") || "(none)"}`,
     );

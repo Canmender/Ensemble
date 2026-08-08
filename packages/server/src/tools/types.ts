@@ -1,5 +1,5 @@
 import type { LLMTool } from "../llm/types";
-import type { AppSettings } from "@jungle/shared";
+import type { AppSettings } from "@ensemble/shared";
 
 export interface ToolContext {
   cwd?: string;

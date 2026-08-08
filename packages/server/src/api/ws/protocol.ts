@@ -1,4 +1,4 @@
-import type { AgentEvent, JobStatus, RunStatus } from "@jungle/shared";
+import type { AgentEvent, JobStatus, RunStatus } from "@ensemble/shared";
 
 /** Server → Client 的每一帧（带 run 内单调 seq，用于重连去重/补拉） */
 export interface WsEnvelope {

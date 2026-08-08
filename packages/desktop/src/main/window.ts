@@ -8,7 +8,7 @@ export function createWindow(loadUrl: string): BrowserWindow {
     height: 860,
     minWidth: 960,
     minHeight: 600,
-    title: "丛林系统",
+    title: "合鸣",
     backgroundColor: "#f6f7f9",
     autoHideMenuBar: true,
     webPreferences: {

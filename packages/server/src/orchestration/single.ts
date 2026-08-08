@@ -1,4 +1,4 @@
-import type { Run, Task } from "@jungle/shared";
+import type { Run, Task } from "@ensemble/shared";
 import { OrchestrationEngine } from "./engine";
 import { logger } from "../util/logger";
 

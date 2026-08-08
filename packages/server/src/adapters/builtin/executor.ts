@@ -1,10 +1,10 @@
 import { join } from "node:path";
-import type { AgentConfig, AgentTaskInput, AgentEvent } from "@jungle/shared";
+import type { AgentConfig, AgentTaskInput, AgentEvent } from "@ensemble/shared";
 import type { AgentAdapter } from "../types";
 import { runAgenticLoop } from "./loop";
 import type { ProviderRegistry } from "../../llm/registry";
 import type { ToolRegistry } from "../../tools/types";
-import type { AppSettings } from "@jungle/shared";
+import type { AppSettings } from "@ensemble/shared";
 import { ContextManager } from "../../context/manager";
 import type { LoopHook } from "../../hooks/types";
 
@@ -71,7 +71,7 @@ export class BuiltinAgentExecutor implements AgentAdapter {
     // offload 目录：仅当工作区存在时写入工作区内（模型可用 read_file 读取全量）；
     // 无工作区时禁用 offload（避免写入模型不可读的目录，大结果直接截断）
     const wsRoot = this.deps.appSettings().workspaceRoot || this.cfg.cwd || undefined;
-    const offloadDir = wsRoot ? join(wsRoot, ".jungle-system-offload") : undefined;
+    const offloadDir = wsRoot ? join(wsRoot, ".ensemble-offload") : undefined;
 
     // 上下文压缩器（主动压缩 + 大结果 offload + overflow 恢复）
     const ctxManager = new ContextManager({

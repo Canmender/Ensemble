@@ -94,7 +94,7 @@ export default function App() {
             <Zap className="h-4 w-4" />
           </div>
           <div>
-            <div className="text-sm font-bold text-fg">丛林系统</div>
+            <div className="text-sm font-bold text-fg">合鸣</div>
             <div className="text-[10px] text-muted">多 Agent 协作平台</div>
           </div>
         </div>

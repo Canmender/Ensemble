@@ -1,4 +1,4 @@
-// 前端用到的轻量类型（与后端 @jungle/shared 对齐）
+// 前端用到的轻量类型（与后端 @ensemble/shared 对齐）
 
 export interface AgentCapabilities {
   sessionResume: boolean;

@@ -813,7 +813,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-sm font-semibold text-fg">开机自启</h3>
-                  <p className="mt-0.5 text-xs text-muted">Windows 登录时自动启动丛林系统</p>
+                  <p className="mt-0.5 text-xs text-muted">Windows 登录时自动启动合鸣</p>
                 </div>
                 <AutoLaunchToggle />
               </div>

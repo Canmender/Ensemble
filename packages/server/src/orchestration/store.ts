@@ -6,7 +6,7 @@ import type {
   Run,
   Task,
   WorkflowDef,
-} from "@jungle/shared";
+} from "@ensemble/shared";
 import { logger } from "../util/logger";
 
 /**

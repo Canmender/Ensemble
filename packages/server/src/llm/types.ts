@@ -1,4 +1,4 @@
-import type { ProviderType, Usage } from "@jungle/shared";
+import type { ProviderType, Usage } from "@ensemble/shared";
 
 /** 工具定义（JSON Schema 输入） */
 export interface LLMTool {
