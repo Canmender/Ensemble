@@ -189,9 +189,12 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
   const jobs = Object.values(live?.jobs ?? {});
   const agents = jobs.map((j) => j.agentName).filter((v, i, a) => a.indexOf(v) === i);
 
-  // AI Inbox：活跃 agent（正在工作的）高亮 + 状态色左边框
+  // AI Inbox：活跃 agent（正在工作的）高亮 + 状态色左边框 + HITL 等待输入
   const activeJobs = jobs.filter((j) => j.status === "running" || j.status === "thinking" || j.status === "starting");
   const activeAgents = [...new Set(activeJobs.map((j) => j.agentName))];
+  const waitingInput = live?.events.some(
+    (e) => e.event.type === "status" && String(e.event.detail ?? "").includes("等待用户确认"),
+  );
   const statusBorder =
     status === "success"
       ? "border-l-success"
@@ -243,13 +246,18 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
           </div>
         )}
 
-        {/* 活跃 agent（AI Inbox：显示正在工作的 agent） */}
-        {activeAgents.length > 0 && (
+        {/* 活跃 agent + HITL 等待输入（AI Inbox） */}
+        {waitingInput ? (
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-warning">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-warning" />
+            等待输入（需确认工具执行）
+          </div>
+        ) : activeAgents.length > 0 ? (
           <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-primary">
             <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
             活跃：{activeAgents.join("、")}
           </div>
-        )}
+        ) : null}
 
         {/* summary（结果优先，过程展开看） */}
         {(finalResult || status === "running" || status === "queued") && (

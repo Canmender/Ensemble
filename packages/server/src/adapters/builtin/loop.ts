@@ -171,6 +171,8 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
       }
 
       if (tool.requiresConfirmation && opts.askConfirm) {
+        // HITL：发出等待状态（前端 run/看板显示"等待输入"，对应 Claude Code Needs input）
+        yield { type: "status", status: "thinking", detail: `等待用户确认执行 ${tool.name}`, ts: Date.now() };
         const ok = await opts.askConfirm(tool.name, call.input);
         if (!ok) {
           ctx.msgs.push({ role: "tool", tool_call_id: call.id, content: "[user cancelled execution]" });
