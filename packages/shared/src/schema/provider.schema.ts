@@ -36,6 +36,16 @@ export const appSettingsSchema = z.object({
       enabled: z.boolean(),
     })
     .optional(),
+  security: z
+    .object({
+      allowNetwork: z.boolean().optional(),
+      allowFileRead: z.boolean().optional(),
+      allowFileWrite: z.boolean().optional(),
+      allowedCommands: z.array(z.string()).optional(),
+      blockedCommands: z.array(z.string()).optional(),
+      allowDangerousCommands: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export type AppSettingsInput = z.input<typeof appSettingsSchema>;

@@ -136,6 +136,14 @@ export interface AppSettings {
   codeExecutionConfirm: "ask" | "always" | "never";
   defaultProviderId?: string;
   mem0?: { endpoint: string; apiKey?: string; enabled: boolean };
+  security?: {
+    allowNetwork?: boolean;
+    allowFileRead?: boolean;
+    allowFileWrite?: boolean;
+    allowedCommands?: string[];
+    blockedCommands?: string[];
+    allowDangerousCommands?: boolean;
+  };
 }
 
 export type TaskMode = "single" | "workflow" | "chat";

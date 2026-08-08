@@ -14,7 +14,7 @@
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "smoke": "pnpm --filter @jungle/cli smoke",
-    "cli": "pnpm --filter @jungle/cli run"
+    "cli": "pnpm --filter @jungle/cli cli"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

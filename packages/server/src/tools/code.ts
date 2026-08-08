@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import type { AgentTool, ToolContext } from "./types";
+import { checkCommandAllowed } from "./security";
 
 const OUTPUT_LIMIT = 8000;
 
@@ -26,6 +27,10 @@ export function makeExecuteCommandTool(opts: { confirm: CodeConfirm }): AgentToo
     async execute(input: unknown, ctx: ToolContext): Promise<string> {
       const { command, cwd } = (input ?? {}) as { command?: string; cwd?: string };
       if (!command) return "error: no command";
+
+      // 安全围栏：命令黑白名单 / 危险命令检查
+      const denied = checkCommandAllowed(command, ctx.appSettings?.security);
+      if (denied) return `[${denied}]`;
 
       if (opts.confirm === "never") return "[已配置：命令执行被拒绝]";
       if (opts.confirm === "ask") {

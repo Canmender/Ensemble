@@ -1,4 +1,5 @@
 import type { AgentTool, ToolContext } from "./types";
+import { checkNetworkAllowed } from "./security";
 
 const MAX_FETCH_BYTES = 512 * 1024;
 
@@ -26,6 +27,8 @@ export const webSearchTool: AgentTool = {
     required: ["query"],
   },
   async execute(input: unknown, ctx: ToolContext): Promise<string> {
+    const denied = checkNetworkAllowed(ctx.appSettings?.security);
+    if (denied) return denied;
     const { query } = input as { query: string };
     const apiKey = ctx.appSettings?.searchApi?.apiKey;
     if (apiKey && ctx.appSettings?.searchApi?.provider === "serper") {
@@ -73,6 +76,8 @@ export const webFetchTool: AgentTool = {
     required: ["url"],
   },
   async execute(input: unknown, ctx: ToolContext): Promise<string> {
+    const denied = checkNetworkAllowed(ctx.appSettings?.security);
+    if (denied) return denied;
     const { url } = input as { url: string };
     if (!/^https?:\/\//.test(url)) return "error: only http(s) URLs allowed";
 

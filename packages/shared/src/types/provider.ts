@@ -26,4 +26,19 @@ export interface AppSettings {
   defaultProviderId?: string;
   /** 外部记忆（Mem0）可选配置 */
   mem0?: { endpoint: string; apiKey?: string; enabled: boolean };
+  /** 安全围栏：约束 Agent 的工具执行边界 */
+  security?: {
+    /** 是否允许联网（web_search/web_fetch） */
+    allowNetwork?: boolean;
+    /** 是否允许读文件 */
+    allowFileRead?: boolean;
+    /** 是否允许写文件 */
+    allowFileWrite?: boolean;
+    /** 命令白名单（前缀匹配；空 = 全允许） */
+    allowedCommands?: string[];
+    /** 命令黑名单（子串匹配） */
+    blockedCommands?: string[];
+    /** 危险命令开关（rm -rf / format / shutdown 等） */
+    allowDangerousCommands?: boolean;
+  };
 }

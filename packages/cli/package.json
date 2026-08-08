@@ -9,6 +9,7 @@
   "scripts": {
     "smoke": "tsx src/smoke.ts",
     "run": "tsx src/run.ts",
+    "cli": "tsx src/cli.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

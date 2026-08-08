@@ -12,4 +12,12 @@ contextBridge.exposeInMainWorld("desktop", {
   confirmTool: (tool: string, args: unknown): Promise<boolean> =>
     ipcRenderer.invoke(IPC.confirmTool, { tool, args }),
   openConfigDir: (): Promise<string> => ipcRenderer.invoke(IPC.openConfigDir),
+  /** 原生窗口控制 */
+  controls: {
+    minimize: (): Promise<void> => ipcRenderer.invoke(IPC.winMinimize),
+    maximize: (): Promise<void> => ipcRenderer.invoke(IPC.winMaximize),
+    close: (): Promise<void> => ipcRenderer.invoke(IPC.winClose),
+  },
+  /** 系统信息 */
+  systemInfo: (): Promise<Record<string, unknown>> => ipcRenderer.invoke(IPC.systemInfo),
 });

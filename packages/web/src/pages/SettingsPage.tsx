@@ -661,6 +661,67 @@ export default function SettingsPage() {
           </Card>
 
           <Card className="p-5">
+            <h3 className="mb-1 text-sm font-semibold text-fg">安全围栏</h3>
+            <p className="mb-3 text-xs text-muted">约束 Agent 的工具执行边界（命令 / 文件 / 网络）</p>
+            <div className="mb-3 grid grid-cols-3 gap-3">
+              <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={settings.security?.allowNetwork ?? true}
+                  onChange={(e) => saveSettings({ security: { ...settings.security, allowNetwork: e.target.checked } })}
+                />
+                允许联网
+              </label>
+              <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={settings.security?.allowFileRead ?? true}
+                  onChange={(e) => saveSettings({ security: { ...settings.security, allowFileRead: e.target.checked } })}
+                />
+                允许读文件
+              </label>
+              <label className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  checked={settings.security?.allowFileWrite ?? true}
+                  onChange={(e) => saveSettings({ security: { ...settings.security, allowFileWrite: e.target.checked } })}
+                />
+                允许写文件
+              </label>
+            </div>
+            <div className="mb-3 grid grid-cols-2 gap-3">
+              <div>
+                <Label>命令白名单（前缀匹配，留空=全允许，空格分隔）</Label>
+                <Input
+                  value={(settings.security?.allowedCommands ?? []).join(" ")}
+                  onChange={(e) =>
+                    saveSettings({ security: { ...settings.security, allowedCommands: e.target.value.split(/\s+/).filter(Boolean) } })
+                  }
+                  placeholder="npm git node python"
+                />
+              </div>
+              <div>
+                <Label>命令黑名单（子串匹配，空格分隔）</Label>
+                <Input
+                  value={(settings.security?.blockedCommands ?? []).join(" ")}
+                  onChange={(e) =>
+                    saveSettings({ security: { ...settings.security, blockedCommands: e.target.value.split(/\s+/).filter(Boolean) } })
+                  }
+                  placeholder="rm -rf format shutdown"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm text-fg">
+              <input
+                type="checkbox"
+                checked={settings.security?.allowDangerousCommands ?? false}
+                onChange={(e) => saveSettings({ security: { ...settings.security, allowDangerousCommands: e.target.checked } })}
+              />
+              允许危险命令（rm -rf / format / shutdown 等，默认禁止）
+            </label>
+          </Card>
+
+          <Card className="p-5">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-fg">外部记忆（Mem0）</h3>

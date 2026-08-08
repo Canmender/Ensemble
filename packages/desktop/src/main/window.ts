@@ -38,6 +38,22 @@ export function registerIpc(): void {
     return dir;
   });
 
+  // 原生窗口控制（renderer 通过 preload 调用）
+  ipcMain.handle(IPC.winMinimize, (e) => BrowserWindow.fromWebContents(e.sender)?.minimize());
+  ipcMain.handle(IPC.winMaximize, (e) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!w) return;
+    if (w.isMaximized()) w.unmaximize();
+    else w.maximize();
+  });
+  ipcMain.handle(IPC.winClose, (e) => BrowserWindow.fromWebContents(e.sender)?.close());
+  ipcMain.handle(IPC.systemInfo, () => ({
+    platform: process.platform,
+    arch: process.arch,
+    versions: { node: process.versions.node, electron: process.versions.electron },
+    uptime: process.uptime(),
+  }));
+
   // 工具执行确认对话框（P2 工具安全）
   ipcMain.handle(
     IPC.confirmTool,

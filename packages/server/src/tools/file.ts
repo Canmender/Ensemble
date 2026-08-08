@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
 import { resolve, join, normalize, isAbsolute, dirname } from "node:path";
 import type { AgentTool, ToolContext } from "./types";
+import { checkFileReadAllowed, checkFileWriteAllowed } from "./security";
 
 /** 路径安全：归一化后必须落在 workspaceRoot 内（防 .. 逃逸） */
 function safeResolve(workspaceRoot: string | undefined, userPath: string, cwd?: string): string {
@@ -24,6 +25,8 @@ export const readFileTool: AgentTool = {
     required: ["path"],
   },
   async execute(input: unknown, ctx: ToolContext): Promise<string> {
+    const denied = checkFileReadAllowed(ctx.appSettings?.security);
+    if (denied) return denied;
     const { path } = input as { path: string };
     const abs = safeResolve(ctx.workspaceRoot, path, ctx.cwd);
     const content = readFileSync(abs, "utf8");
@@ -44,6 +47,8 @@ export const writeFileTool: AgentTool = {
   },
   requiresConfirmation: true,
   async execute(input: unknown, ctx: ToolContext): Promise<string> {
+    const denied = checkFileWriteAllowed(ctx.appSettings?.security);
+    if (denied) return denied;
     const { path, content } = input as { path: string; content: string };
     const abs = safeResolve(ctx.workspaceRoot, path, ctx.cwd);
     mkdirSync(dirname(abs), { recursive: true });
@@ -60,6 +65,8 @@ export const listDirTool: AgentTool = {
     properties: { path: { type: "string", description: "directory path (default: workspace root)" } },
   },
   async execute(input: unknown, ctx: ToolContext): Promise<string> {
+    const denied = checkFileReadAllowed(ctx.appSettings?.security);
+    if (denied) return denied;
     const { path = "." } = (input ?? {}) as { path?: string };
     const abs = safeResolve(ctx.workspaceRoot, path, ctx.cwd);
     const entries = readdirSync(abs);

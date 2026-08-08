@@ -5,4 +5,8 @@ export const IPC = {
   openConfigDir: "app:open-config-dir",
   getSecret: "secrets:get",
   setSecret: "secrets:set",
+  winMinimize: "win:minimize",
+  winMaximize: "win:maximize",
+  winClose: "win:close",
+  systemInfo: "app:system-info",
 } as const;
