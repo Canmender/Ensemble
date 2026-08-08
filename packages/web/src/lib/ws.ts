@@ -67,6 +67,13 @@ class WsClient {
 
   subscribe(runId: string): void {
     this.subs.add(runId);
+    // wildcard（看板）：订阅所有运行，历史由 runs 列表/详情提供，不补拉
+    if (runId === "*") {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        this.ws.send(JSON.stringify({ type: "subscribe", runId }));
+      }
+      return;
+    }
     // 本地已消费的 seq 与远端对齐 → 补拉缺失事件
     const lastSeq = this.localSeq.get(runId) ?? 0;
     void this.catchUp(runId, lastSeq);

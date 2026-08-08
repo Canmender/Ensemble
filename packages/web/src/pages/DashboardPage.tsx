@@ -1,154 +1,336 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { History, Zap } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, Loader2,
+  MessageSquare, PlayCircle, Plus, Workflow, Zap,
+} from "lucide-react";
 import { api } from "../lib/api";
+import { wsClient } from "../lib/ws";
+import { useRunStore } from "../store/runs";
 import { relativeTime } from "../lib/events";
 import type { Agent, Run } from "../types";
-import { Badge, Button, Card, Input, Select, StatusDot, Spinner, Textarea, statusLabel } from "../components/ui";
+import {
+  Badge, Button, Card, Input, Modal, Select, Spinner, StatusDot, Textarea, cls, statusLabel,
+} from "../components/ui";
 
+const modeIcon: Record<string, React.ReactNode> = {
+  single: <PlayCircle className="h-3.5 w-3.5" />,
+  workflow: <Workflow className="h-3.5 w-3.5" />,
+  chat: <MessageSquare className="h-3.5 w-3.5" />,
+};
 const modeLabel: Record<string, string> = { single: "单发", workflow: "工作流", chat: "群聊" };
 
-export default function DashboardPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [runs, setRuns] = useState<Run[]>([]);
-  const [loading, setLoading] = useState(true);
-  const navigate = useNavigate();
-
-  // 快捷创建
+// ---------- 快速创建（单发） ----------
+function QuickCreate({ agents, onRun }: { agents: Agent[]; onRun: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
   const [agentId, setAgentId] = useState("");
   const [prompt, setPrompt] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void (async () => {
-      const [a, r] = await Promise.all([api.get<Agent[]>("/agents"), api.get<Run[]>("/runs?mode=single")]);
-      setAgents(a);
-      setRuns(r ?? []);
-      if (a.length && !agentId) setAgentId(a[0].id);
-      setLoading(false);
-    })();
-    // 周期刷新最近运行
-    const t = setInterval(() => {
-      api.get<Run[]>("/runs").then(setRuns).catch(() => {});
-    }, 8000);
-    return () => clearInterval(t);
-  }, []);
+    if (agents.length && !agentId) setAgentId(agents[0].id);
+  }, [agents]);
 
-  async function quickCreate() {
+  async function run() {
     if (!prompt.trim() || !agentId) return;
-    setSubmitting(true);
+    setBusy(true);
     try {
-      const run = await api.post<Run>("/tasks", {
+      const r = await api.post<Run>("/tasks", {
         title: prompt.slice(0, 40),
         input: { mode: "single", prompt, agentIds: [agentId] },
       });
-      navigate(`/runs/${run.id}`);
+      setOpen(false);
+      setPrompt("");
+      onRun(r.id);
     } finally {
-      setSubmitting(false);
+      setBusy(false);
     }
   }
 
-  const active = runs.filter((r) => r.status === "running" || r.status === "queued").length;
+  return (
+    <>
+      <Button variant="primary" onClick={() => setOpen(true)}>
+        <Zap className="h-4 w-4" /> 快速运行
+      </Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="快速创建任务">
+        <div className="space-y-4">
+          <div>
+            <Select value={agentId} onChange={(e) => setAgentId(e.target.value)} disabled={!agents.length}>
+              {agents.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}（{a.model || "未配模型"}）</option>
+              ))}
+            </Select>
+          </div>
+          <Textarea placeholder="给 Agent 的任务…" value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} />
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+            <Button variant="primary" onClick={run} disabled={busy || !prompt.trim()}>
+              {busy ? <Spinner label="创建中" /> : "运行"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+// ---------- 展开详情（协作细节） ----------
+function RunDetail({ runId }: { runId: string }) {
+  const live = useRunStore((s) => s.live[runId]);
+  const jobs = useMemo(() => Object.values(live?.jobs ?? {}), [live?.jobs]);
+  const events = useMemo(() => (live?.events ?? []).slice().sort((a, b) => a.seq - b.seq), [live?.events]);
+  const messages = live?.messages ?? [];
+
+  if (!live) return <Spinner label="加载中" />;
 
   return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
-      <header className="mb-8">
-        <h1 className="text-2xl font-bold text-fg">概览</h1>
-        <p className="mt-1 text-sm text-muted">多 Agent 协作平台 · 调度 Hermes 与 Claude Code</p>
-      </header>
+    <div className="space-y-3">
+      {/* Jobs */}
+      {jobs.length > 0 && (
+        <div className="space-y-1.5">
+          {jobs.map((j) => (
+            <div key={j.id} className="flex items-center gap-2.5 rounded-lg bg-bg px-3 py-2">
+              <StatusDot status={j.status} />
+              <Bot className="h-3.5 w-3.5 text-primary" />
+              <span className="text-xs font-medium text-fg">{j.agentName}</span>
+              <span className="text-[10px] text-muted">{statusLabel(j.status)}</span>
+              {j.result && (
+                <span className="ml-auto max-w-[45%] truncate font-mono text-[11px] text-muted">{j.result}</span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* 统计卡片 */}
-      <div className="mb-8 grid grid-cols-3 gap-4">
-        <Card className="p-5">
-          <div className="text-xs font-medium text-muted">可用 Agent</div>
-          <div className="mt-1 text-3xl font-bold text-fg">{agents.length}</div>
-        </Card>
-        <Card className="p-5">
-          <div className="text-xs font-medium text-muted">进行中</div>
-          <div className="mt-1 flex items-center gap-2 text-3xl font-bold text-fg">
-            {active}
-            {active > 0 && <span className="mb-3 inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />}
+      {/* Chat messages */}
+      {messages.length > 0 && (
+        <div className="space-y-1.5">
+          {messages.map((m, i) => (
+            <div key={i} className="flex gap-2 rounded-lg bg-bg px-3 py-2">
+              <span className={cls("shrink-0 text-[10px] font-semibold", m.agentId === "user" ? "text-muted" : "text-primary")}>
+                {m.agentId === "user" ? "你" : `@${m.agentId}`}
+              </span>
+              <span className="line-clamp-2 text-xs text-fg">{m.content}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Event tail */}
+      <div className="max-h-48 overflow-y-auto rounded-lg bg-bg p-3 font-mono text-[11px]">
+        {events.length === 0 ? (
+          <span className="text-muted">等待事件…</span>
+        ) : (
+          <div className="space-y-0.5">
+            {events.slice(-60).map((item, i) => {
+              const ev = item.event as any;
+              if (ev.type === "output") {
+                return <div key={i} className={cls(ev.kind === "thinking" ? "text-muted/70 italic" : "text-fg")}>{ev.text}</div>;
+              }
+              if (ev.type === "tool_use") {
+                return <div key={i} className="text-amber-600 dark:text-amber-400">🔧 {ev.tool} {JSON.stringify(ev.input ?? {}).slice(0, 60)}</div>;
+              }
+              if (ev.type === "status") {
+                return <div key={i} className="text-muted">· {statusLabel(ev.status)}</div>;
+              }
+              if (ev.type === "error") {
+                return <div key={i} className="text-destructive">✖ {ev.message}</div>;
+              }
+              return null;
+            })}
           </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- 运行卡片 ----------
+function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onToggle: () => void }) {
+  const live = useRunStore((s) => s.live[run.id]);
+  const status = live?.status ?? run.status;
+  const finalResult = live?.finalResult ?? run.finalResult;
+  const jobs = Object.values(live?.jobs ?? {});
+  const agents = jobs.map((j) => j.agentName).filter((v, i, a) => a.indexOf(v) === i);
+
+  return (
+    <Card className={cls("overflow-hidden transition-shadow", expanded ? "shadow-card-hover" : "hover:shadow-card-hover")}>
+      <button onClick={onToggle} className="w-full px-3.5 py-3 text-left">
+        <div className="flex items-center gap-2">
+          <StatusDot status={status} />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{run.taskTitle ?? "未命名"}</span>
+          <Badge color={run.mode === "single" ? "brand" : run.mode === "workflow" ? "violet" : "amber"}>
+            {modeLabel[run.mode]}
+          </Badge>
+          <ChevronDown className={cls("h-4 w-4 shrink-0 text-muted transition-transform", expanded && "rotate-180")} />
+        </div>
+
+        {/* agents */}
+        {(agents.length > 0 || run.mode !== "single") && (
+          <div className="mt-2 flex flex-wrap items-center gap-1">
+            {agents.length > 0 ? (
+              agents.map((name) => (
+                <span key={name} className="flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                  <Bot className="h-2.5 w-2.5" /> {name}
+                </span>
+              ))
+            ) : (
+              <span className="text-[10px] text-muted">{run.mode === "single" ? "1 个 Agent" : "等待执行"}</span>
+            )}
+            <span className="ml-auto text-[10px] text-muted">{relativeTime(run.startedAt)}</span>
+          </div>
+        )}
+
+        {/* summary */}
+        {(finalResult || status === "running" || status === "queued") && (
+          <div className={cls("mt-1.5 line-clamp-2 font-mono text-[11px]", status === "success" ? "text-success" : status === "error" ? "text-destructive" : "text-muted")}>
+            {finalResult ?? (status === "running" || status === "queued" ? "⏳ 运行中…" : "")}
+          </div>
+        )}
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border px-3.5 py-3">
+          <RunDetail runId={run.id} />
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ---------- 看板页 ----------
+export default function DashboardPage() {
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    const [r, a] = await Promise.all([api.get<Run[]>("/runs").catch(() => []), api.get<Agent[]>("/agents").catch(() => [])]);
+    setRuns(r);
+    setAgents(a);
+  }, []);
+
+  useEffect(() => {
+    wsClient.subscribe("*");
+    void refresh();
+    const t = setInterval(refresh, 6000);
+    return () => {
+      wsClient.unsubscribe("*");
+      clearInterval(t);
+    };
+  }, [refresh]);
+
+  /** 展开时加载该 run 的历史到 store（WS 只提供实时事件） */
+  const toggleDetail = useCallback(
+    async (runId: string) => {
+      setExpanded((prev) => (prev === runId ? null : runId));
+      const store = useRunStore.getState();
+      if (store.live[runId]) return;
+      try {
+        const d = await api.get<{ run: Run; jobs: any[]; chatMessages: any[] }>(`/runs/${runId}`);
+        store.getOrCreate(runId);
+        store.setStatus(runId, d.run.status);
+        if (d.run.finalResult) store.setFinal(runId, d.run.finalResult, d.run.error);
+        let evSeq = 0;
+        for (const job of d.jobs ?? []) {
+          store.upsertJob(runId, job.id, {
+            agentName: job.agentName,
+            status: job.status,
+            result: job.result,
+            sessionId: job.sessionId,
+          });
+          for (const ev of job.events ?? []) {
+            evSeq += 1;
+            store.appendEvent(runId, { seq: evSeq, jobId: job.id, event: ev });
+          }
+        }
+        for (const m of d.chatMessages ?? []) {
+          store.appendMessage(runId, { jobId: m.jobId, agentId: m.agentId, content: m.content });
+        }
+      } catch {
+        /* 加载失败不阻塞看板 */
+      }
+    },
+    [],
+  );
+
+  const columns = useMemo(
+    () => [
+      { key: "running", title: "进行中", color: "text-primary", runs: runs.filter((r) => r.status === "running" || r.status === "queued") },
+      { key: "success", title: "成功", color: "text-success", runs: runs.filter((r) => r.status === "success") },
+      { key: "failed", title: "失败", color: "text-destructive", runs: runs.filter((r) => r.status === "error" || r.status === "cancelled") },
+    ],
+    [runs],
+  );
+
+  const active = columns[0].runs.length;
+
+  return (
+    <div className="mx-auto max-w-6xl px-6 py-6">
+      {/* Header */}
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold text-fg">
+            <Activity className="h-6 w-6 text-primary" /> 协作看板
+          </h1>
+          <p className="mt-1 text-sm text-muted">实时监控多 Agent 协作 · 全部任务按状态分列</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <QuickCreate agents={agents} onRun={(id) => setExpanded(id)} />
+          <Link to="/tasks">
+            <Button variant="secondary">
+              <Plus className="h-4 w-4" /> 完整创建
+            </Button>
+          </Link>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="mb-5 grid grid-cols-4 gap-3">
+        <Card className="p-4">
+          <div className="text-xs text-muted">全部</div>
+          <div className="mt-1 text-2xl font-bold text-fg">{runs.length}</div>
         </Card>
-        <Card className="p-5">
-          <div className="text-xs font-medium text-muted">历史运行</div>
-          <div className="mt-1 text-3xl font-bold text-fg">{runs.length}</div>
+        <Card className="p-4">
+          <div className="flex items-center gap-1 text-xs text-muted"><Loader2 className="h-3 w-3 animate-spin" /> 进行中</div>
+          <div className="mt-1 text-2xl font-bold text-primary">{active}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-1 text-xs text-muted"><CheckCircle2 className="h-3 w-3" /> 成功</div>
+          <div className="mt-1 text-2xl font-bold text-success">{columns[1].runs.length}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="flex items-center gap-1 text-xs text-muted"><AlertCircle className="h-3 w-3" /> 失败</div>
+          <div className="mt-1 text-2xl font-bold text-destructive">{columns[2].runs.length}</div>
         </Card>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-2">
-        {/* 快捷创建 */}
-        <Card className="p-6">
-          <h2 className="mb-4 flex items-center gap-2 text-base font-semibold text-fg">
-            <Zap className="h-4 w-4 text-primary" /> 快捷创建任务
-          </h2>
-          <div className="space-y-4">
-            <div>
-              <Select value={agentId} onChange={(e) => setAgentId(e.target.value)} disabled={loading || !agents.length}>
-                {agents.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name} ({a.kind})
-                  </option>
-                ))}
-              </Select>
+      {/* Kanban columns */}
+      <div className="grid grid-cols-3 gap-4">
+        {columns.map((col) => (
+          <div key={col.key} className="min-h-[40vh]">
+            <div className="mb-2 flex items-center gap-2 px-1">
+              <span className={cls("text-sm font-semibold", col.color)}>{col.title}</span>
+              <span className="rounded-full bg-muted/10 px-2 py-0.5 text-xs text-muted">{col.runs.length}</span>
             </div>
-            <div>
-              <Textarea
-                placeholder="给 Agent 的任务描述…"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                rows={3}
-              />
+            <div className="space-y-2.5">
+              {col.runs.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted">
+                  {col.key === "running" ? "暂无进行中的任务" : "暂无"}
+                </div>
+              ) : (
+                col.runs.map((r) => (
+                  <RunCard
+                    key={r.id}
+                    run={r}
+                    expanded={expanded === r.id}
+                    onToggle={() => void toggleDetail(r.id)}
+                  />
+                ))
+              )}
             </div>
-            <Button variant="primary" onClick={quickCreate} disabled={submitting || !prompt.trim()}>
-              {submitting ? <Spinner label="创建中" /> : "运行"}
-            </Button>
-            <Link to="/tasks" className="ml-3 text-xs text-primary hover:underline">
-              更多模式（工作流 / 群聊）→
-            </Link>
           </div>
-        </Card>
-
-        {/* 最近运行 */}
-        <Card className="p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="flex items-center gap-2 text-base font-semibold text-fg">
-              <History className="h-4 w-4 text-primary" /> 最近运行
-            </h2>
-            <Link to="/tasks" className="text-xs text-primary hover:underline">
-              查看全部
-            </Link>
-          </div>
-          {loading ? (
-            <Spinner label="加载中" />
-          ) : runs.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted">还没有运行记录</div>
-          ) : (
-            <ul className="space-y-2">
-              {runs.slice(0, 8).map((r) => (
-                <li key={r.id}>
-                  <Link
-                    to={`/runs/${r.id}`}
-                    className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 hover:border-primary/50 hover:bg-primary/10/40"
-                  >
-                    <StatusDot status={r.status} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-fg">
-                        {r.taskTitle ?? "未命名任务"}
-                      </div>
-                      <div className="text-xs text-muted">
-                        {modeLabel[r.mode] ?? r.mode} · {relativeTime(r.startedAt)}
-                      </div>
-                    </div>
-                    <Badge color={r.status === "success" ? "green" : r.status === "error" ? "red" : r.status === "running" ? "brand" : "ink"}>
-                      {statusLabel(r.status)}
-                    </Badge>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+        ))}
       </div>
     </div>
   );
