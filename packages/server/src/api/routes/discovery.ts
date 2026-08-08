@@ -16,7 +16,7 @@ export function discoveryRouter(ctx: AppContext): Router {
     "/:type/sync",
     asyncH(async (req, res) => {
       const type = req.params.type as "claude" | "hermes";
-      const agent = detectAgents().find((a) => a.type === type);
+      const agent = detectAgents(true).find((a) => a.type === type);
       if (!agent) return fail(res, new Error(`local agent not found: ${type}`), 404);
 
       const result = await syncAgent(agent, {

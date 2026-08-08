@@ -13,19 +13,21 @@ function readSkillDirs(dir: string): DetectedSkill[] {
 }
 
 function countHermesFacts(dbPath: string): number {
+  let db: DatabaseSync | undefined;
   try {
-    const db = new DatabaseSync(dbPath, { readOnly: true });
+    db = new DatabaseSync(dbPath, { readOnly: true });
     const r = db.prepare("SELECT COUNT(*) AS c FROM facts").get() as { c: number };
-    db.close();
     return Number(r?.c ?? 0);
   } catch {
     return 0;
+  } finally {
+    db?.close();
   }
 }
 
 function getVersion(cmd: string): string | undefined {
   try {
-    const out = execSync(cmd, { encoding: "utf8", timeout: 5000 });
+    const out = execSync(cmd, { encoding: "utf8", timeout: 2000 });
     return out.trim().split("\n")[0].slice(0, 80);
   } catch {
     return undefined;
@@ -60,26 +62,36 @@ function detectHermes(): DetectedAgent | null {
   };
 }
 
-/** 检测本地已安装的 agent */
-export function detectAgents(): DetectedAgent[] {
+// 缓存检测结果（30s TTL）：避免每次请求都同步执行 claude/hermes --version 阻塞事件循环
+let detectCache: { agents: DetectedAgent[]; at: number } | null = null;
+const CACHE_TTL = 30_000;
+
+/** 检测本地已安装的 agent（带缓存；force=true 强制刷新） */
+export function detectAgents(force = false): DetectedAgent[] {
+  if (!force && detectCache && Date.now() - detectCache.at < CACHE_TTL) {
+    return detectCache.agents;
+  }
   const out: DetectedAgent[] = [];
   const c = detectClaude();
   if (c) out.push(c);
   const h = detectHermes();
   if (h) out.push(h);
+  detectCache = { agents: out, at: Date.now() };
   return out;
 }
 
 /** 读取 hermes 记忆库中的事实条目（按时间倒序） */
 export function readHermesFacts(dbPath: string, limit = 200): Array<{ content: string; category?: string; createdAt?: string }> {
+  let db: DatabaseSync | undefined;
   try {
-    const db = new DatabaseSync(dbPath, { readOnly: true });
+    db = new DatabaseSync(dbPath, { readOnly: true });
     const rows = db
       .prepare("SELECT content, category, created_at FROM facts ORDER BY created_at DESC LIMIT ?")
       .all(limit) as any[];
-    db.close();
     return rows.map((r) => ({ content: r.content, category: r.category, createdAt: r.created_at }));
   } catch {
     return [];
+  } finally {
+    db?.close();
   }
 }

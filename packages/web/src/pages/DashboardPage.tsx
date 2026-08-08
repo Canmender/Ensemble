@@ -13,6 +13,9 @@ import {
   Badge, Button, Card, Input, Modal, Select, Spinner, StatusDot, Textarea, cls, statusLabel,
 } from "../components/ui";
 
+// 已加载历史的 run（守卫：仅加载一次，避免 WS 预建 store 导致历史永不加载）
+const historyLoaded = new Set<string>();
+
 // 状态字形（Claude Code Agent View ✽/∙ 风格）
 const STATUS_GLYPH: Record<string, string> = {
   queued: "○",
@@ -323,7 +326,8 @@ export default function DashboardPage() {
     async (runId: string) => {
       setExpanded((prev) => (prev === runId ? null : runId));
       const store = useRunStore.getState();
-      if (store.live[runId]) return;
+      if (historyLoaded.has(runId)) return;
+      historyLoaded.add(runId);
       try {
         const d = await api.get<{ run: Run; jobs: any[]; chatMessages: any[] }>(`/runs/${runId}`);
         store.getOrCreate(runId);

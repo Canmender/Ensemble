@@ -68,13 +68,10 @@ export class BuiltinAgentExecutor implements AgentAdapter {
       }
     }
 
-    // offload 目录：优先工作区内（模型可用 read_file 读取全量），否则 dataDir 兜底
+    // offload 目录：仅当工作区存在时写入工作区内（模型可用 read_file 读取全量）；
+    // 无工作区时禁用 offload（避免写入模型不可读的目录，大结果直接截断）
     const wsRoot = this.deps.appSettings().workspaceRoot || this.cfg.cwd || undefined;
-    const offloadDir = wsRoot
-      ? join(wsRoot, ".multiagent-offload")
-      : this.deps.offloadBaseDir
-        ? `${this.deps.offloadBaseDir}/agents`
-        : undefined;
+    const offloadDir = wsRoot ? join(wsRoot, ".multiagent-offload") : undefined;
 
     // 上下文压缩器（主动压缩 + 大结果 offload + overflow 恢复）
     const ctxManager = new ContextManager({

@@ -28,7 +28,8 @@ export function makeExecuteCommandTool(opts: { confirm: CodeConfirm }): AgentToo
       if (!command) return "error: no command";
 
       if (opts.confirm === "never") return "[已配置：命令执行被拒绝]";
-      if (opts.confirm === "ask" && ctx.askConfirm) {
+      if (opts.confirm === "ask") {
+        if (!ctx.askConfirm) return "[命令执行需要确认，但当前环境无确认界面，已拒绝]";
         const ok = await ctx.askConfirm(this.name, { command });
         if (!ok) return "[user cancelled execution]";
       }

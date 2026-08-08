@@ -1,5 +1,15 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
+
+/** 转义 prompt 中的 shell 特殊字符（arg 模式防注入） */
+function escapeShellArg(s: string): string {
+  if (process.platform === "win32") {
+    // cmd：^ 转义特殊字符
+    return s.replace(/[&|<>^()%!"\r\n]/g, "^$&");
+  }
+  // POSIX：单引号包裹，内部引号转义
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
 import type { AgentConfig, AgentTaskInput, AgentEvent } from "@multiagent/shared";
 import type { AgentAdapter } from "../types";
 import { logger } from "../../util/logger";
@@ -33,11 +43,21 @@ export class LocalAgentExecutor implements AgentAdapter {
     yield { type: "status", status: "starting", detail: local.command, ts: Date.now() };
 
     const args = [...(local.args ?? [])];
-    if ((local.promptMode ?? "arg") === "arg") args.push(input.prompt);
+    const promptArg = escapeShellArg(input.prompt);
+    if ((local.promptMode ?? "arg") === "arg") args.push(promptArg);
 
-    const child = spawn(local.command, args, {
+    // 拆分命令为可执行 + 固定参数；shell:false 用 argv 数组传参（prompt 已转义防注入）
+    const parts = local.command.trim().split(/\s+/);
+    const bin = parts[0];
+    const fixedArgs = parts.slice(1);
+    const allArgs = [...fixedArgs, ...args];
+
+    // .cmd/.bat 需经 cmd.exe /c（仍传 argv，prompt 已转义）
+    const isBatch = /\.(cmd|bat)$/i.test(bin);
+    const argv = isBatch ? ["cmd.exe", "/c", bin, ...allArgs] : [bin, ...allArgs];
+    const child = spawn(argv[0], argv.slice(1), {
       cwd: local.cwd ?? input.cwd,
-      shell: true,
+      shell: false,
       windowsHide: true,
       stdio: ["pipe", "pipe", "pipe"],
     });
@@ -73,13 +93,16 @@ export class LocalAgentExecutor implements AgentAdapter {
         errText += line + "\n";
       }
 
-      const code = await new Promise<number | null>((resolve) => {
-        child.on("close", resolve);
-        child.on("error", (e) => {
-          logger.error(`local agent process error`, String(e));
-          resolve(null);
-        });
-      });
+      // 取消/abort 时不等待子进程 close（避免挂起），直接进入 cancelled 分支
+      const code = this.cancelled || input.signal?.aborted
+        ? null
+        : await new Promise<number | null>((resolve) => {
+            child.on("close", resolve);
+            child.on("error", (e) => {
+              logger.error(`local agent process error`, String(e));
+              resolve(null);
+            });
+          });
 
       if (this.cancelled || input.signal?.aborted) {
         yield { type: "status", status: "cancelled", ts: Date.now() };

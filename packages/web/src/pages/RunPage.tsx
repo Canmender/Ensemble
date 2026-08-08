@@ -169,7 +169,7 @@ function WorkflowCanvas({ jobs }: { jobs: any[] }) {
   );
 
   return (
-    <div className="flex-1">
+    <div className="min-h-0 flex-1" style={{ minHeight: 320 }}>
       <ReactFlow nodes={nodes} edges={edges} fitView proOptions={{ hideAttribution: true }}>
         <Background />
         <Controls />

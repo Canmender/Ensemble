@@ -170,13 +170,18 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
         if (tool?.requiresConfirmation && opts.askConfirm) {
           // HITL：发出等待状态（前端 run/看板显示"等待输入"）
           yield { type: "status", status: "thinking", detail: `等待用户确认执行 ${tool.name}`, ts: Date.now() };
-          confirmOk.set(call.id, await opts.askConfirm(tool.name, call.input));
+          // abort 时不再等待确认弹窗（避免取消被阻塞）
+          confirmOk.set(call.id, await Promise.race([
+            opts.askConfirm(tool.name, call.input),
+            abortPromise(opts.signal).then(() => false),
+          ]));
         }
       }
 
-      // 2) 并行执行独立工具
-      const results = await Promise.all(
-        calls.map(async (call) => {
+      // 2) 并行执行独立工具（abort 时不等待慢工具，回填为空 → 下轮取消）
+      const results = await Promise.race([
+        Promise.all(
+          calls.map(async (call) => {
           const tool = opts.tools.find((t) => t.name === call.name);
           if (!tool) {
             return { call, toolName: call.name, content: `unknown tool: ${call.name}`, offloaded: false };
@@ -204,7 +209,9 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
           }
           return { call, toolName: tool.name, content: result.slice(0, offloadChars), offloaded: false };
         }),
-      );
+        ),
+        abortPromise(opts.signal).then(() => [] as any[]),
+      ]);
 
       // 3) 按调用顺序回填 tool 消息 + 事件
       for (const r of results) {
@@ -245,6 +252,17 @@ async function runToolSafe(tool: AgentTool, input: unknown, ctx: ToolContext): P
   } catch (err) {
     return `tool error: ${err instanceof Error ? err.message : String(err)}`;
   }
+}
+
+/** abort 时 resolve（用于确认弹窗/慢工具的取消竞速） */
+function abortPromise(signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    if (signal?.aborted) {
+      resolve();
+      return;
+    }
+    signal?.addEventListener("abort", () => resolve(), { once: true });
+  });
 }
 
 function sleep(ms: number): Promise<void> {

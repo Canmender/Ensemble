@@ -65,7 +65,8 @@ function flushPending(): void {
           jobs[item.jobId] = { ...jobs[item.jobId], events: [...jobs[item.jobId].events, item] };
         }
       }
-      live[runId] = { ...run, jobs, events: [...run.events, ...fresh] };
+      // 裁剪事件（保留最近 2000 条，避免长会话无限增长）
+      live[runId] = { ...run, jobs, events: [...run.events, ...fresh].slice(-2000) };
     }
     pendingEvents.clear();
     return { live };
