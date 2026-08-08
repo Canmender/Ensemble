@@ -89,7 +89,7 @@ export class MemoryStore {
 
   writeMeta(agentId: string, patch: Partial<Meta>): void {
     const meta = { ...this.readMeta(agentId), ...patch };
-    writeFileSync(join(this.agentDir(agentId), "meta.json"), JSON.stringify(meta, null, 2), "utf8");
+    writeFileSync(join(this.ensureAgent(agentId), "meta.json"), JSON.stringify(meta, null, 2), "utf8");
   }
 
   snapshot(agentId: string): MemorySnapshot {
