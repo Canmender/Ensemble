@@ -82,6 +82,58 @@ function LogLine({ item }: { item: any }) {
   return null;
 }
 
+// ---------- 工具时间线（n8n/agenttrace 模式：工具调用链） ----------
+function ToolTimeline({ items }: { items: any[] }) {
+  const steps = items.filter(
+    (it) =>
+      it.event.type === "tool_use" ||
+      it.event.type === "tool_result" ||
+      it.event.type === "done",
+  );
+  if (steps.length === 0) {
+    return (
+      <div className="flex flex-1 items-center justify-center text-xs text-muted/70">
+        还没有工具调用
+      </div>
+    );
+  }
+  return (
+    <div className="flex-1 overflow-y-auto bg-bg/40 p-3 font-mono text-[12px]">
+      <div className="space-y-1.5">
+        {steps.map((it, i) => {
+          const ev = it.event as any;
+          if (ev.type === "tool_use") {
+            return (
+              <div key={i} className="flex gap-2">
+                <Wrench className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                <div className="min-w-0">
+                  <span className="font-semibold text-fg">{ev.tool}</span>
+                  <span className="ml-2 text-muted">{JSON.stringify(ev.input ?? {}).slice(0, 120)}</span>
+                </div>
+              </div>
+            );
+          }
+          if (ev.type === "tool_result") {
+            return (
+              <div key={i} className="line-clamp-2 pl-6 text-[11px] text-muted">
+                {String(ev.output ?? "").slice(0, 160)}
+              </div>
+            );
+          }
+          if (ev.type === "done") {
+            return (
+              <div key={i} className="pt-1 text-[11px] font-medium text-success">
+                ✓ 完成 · {ev.outcome}
+              </div>
+            );
+          }
+          return null;
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
   const runId = id!;
@@ -91,6 +143,7 @@ export default function RunPage() {
   const logRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [collapseLog, setCollapseLog] = useState(false);
+  const [view, setView] = useState<"log" | "timeline">("log");
 
   useEffect(() => {
     setRun(null);
@@ -227,21 +280,35 @@ export default function RunPage() {
             )}
           </Card>
 
-          {/* Log（ChatDB：结果优先，过程可折叠） */}
+          {/* Log / Timeline（ChatDB 结果优先 + n8n 工具时间线） */}
           <Card className="flex min-h-0 flex-col">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
-              <span className="text-xs font-semibold text-muted">过程日志</span>
-              <div className="flex items-center gap-2">
-                {!collapseLog && <span className="text-[11px] text-muted/70">{sortedEvents.length} 条事件</span>}
+              <span className="text-xs font-semibold text-muted">
+                {view === "log" ? "过程日志" : "工具时间线"}
+              </span>
+              <div className="flex items-center gap-1.5">
+                {view === "log" && !collapseLog && (
+                  <span className="text-[11px] text-muted/70">{sortedEvents.length} 条事件</span>
+                )}
                 <button
-                  onClick={() => setCollapseLog((v) => !v)}
+                  onClick={() => setView((v) => (v === "log" ? "timeline" : "log"))}
                   className="rounded-md px-1.5 py-0.5 text-[11px] text-muted hover:bg-muted/10 hover:text-fg"
                 >
-                  {collapseLog ? "展开过程" : "折叠过程"}
+                  {view === "log" ? "时间线" : "日志"}
                 </button>
+                {view === "log" && (
+                  <button
+                    onClick={() => setCollapseLog((v) => !v)}
+                    className="rounded-md px-1.5 py-0.5 text-[11px] text-muted hover:bg-muted/10 hover:text-fg"
+                  >
+                    {collapseLog ? "展开过程" : "折叠过程"}
+                  </button>
+                )}
               </div>
             </div>
-            {collapseLog ? (
+            {view === "timeline" ? (
+              <ToolTimeline items={sortedEvents} />
+            ) : collapseLog ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
                 <span className="text-xs text-muted">过程日志已折叠，聚焦结果</span>
                 {!live?.finalResult && <span className="text-[11px] text-muted/70">运行中，日志仍在记录</span>}
