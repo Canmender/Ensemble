@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Brain, CheckCircle2, Copy, Wrench, XCircle } from "lucide-react";
+import { Background, Controls, ReactFlow } from "reactflow";
+import "reactflow/dist/style.css";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
@@ -134,16 +136,82 @@ function ToolTimeline({ items }: { items: any[] }) {
   );
 }
 
+// ---------- 工作流画布（ReactFlow DAG：agent 协作图） ----------
+function WorkflowCanvas({ jobs }: { jobs: any[] }) {
+  const nodes = useMemo(
+    () =>
+      jobs.map((j, i) => ({
+        id: j.id,
+        position: { x: (i % 3) * 210, y: Math.floor(i / 3) * 110 },
+        data: { label: j.agentName },
+        className: cls(
+          "rounded-lg border-2 bg-surface px-3 py-2 font-medium text-fg",
+          j.status === "success"
+            ? "!border-success"
+            : j.status === "error"
+              ? "!border-destructive"
+              : j.status === "running" || j.status === "thinking"
+                ? "!border-primary"
+                : "!border-border",
+        ),
+      })),
+    [jobs],
+  );
+  const edges = useMemo(
+    () =>
+      jobs.slice(1).map((j, i) => ({
+        id: `e-${i}`,
+        source: jobs[i].id,
+        target: j.id,
+        animated: jobs[i].status === "running" || j.status === "running",
+      })),
+    [jobs],
+  );
+
+  return (
+    <div className="flex-1">
+      <ReactFlow nodes={nodes} edges={edges} fitView proOptions={{ hideAttribution: true }}>
+        <Background />
+        <Controls />
+      </ReactFlow>
+    </div>
+  );
+}
+
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
   const runId = id!;
+  const navigate = useNavigate();
   const live = useRunStore((s) => s.live[runId]);
   const [run, setRun] = useState<RunType | null>(null);
   const [loaded, setLoaded] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [collapseLog, setCollapseLog] = useState(false);
-  const [view, setView] = useState<"log" | "timeline">("log");
+  const [view, setView] = useState<"log" | "timeline" | "canvas">("log");
+
+  /** 会话续跑：用前次结果作为 context 创建新任务（single 模式） */
+  async function continueTask() {
+    if (!run) return;
+    try {
+      const task = await api.get<any>(`/tasks/${run.taskId}`);
+      const input = task.input;
+      const prevResult = live?.finalResult ?? run.finalResult;
+      if (input?.mode === "single") {
+        const newRun = await api.post<any>("/tasks", {
+          title: `${run.taskTitle ?? "任务"}（续）`,
+          input: {
+            mode: "single",
+            prompt: `继续上次任务。之前的结果：\n${prevResult ?? "(无)"}\n\n请基于以上继续处理或给出下一步。`,
+            agentIds: input.agentIds,
+          },
+        });
+        navigate(`/runs/${newRun.id}`);
+      }
+    } catch {
+      /* 忽略 */
+    }
+  }
 
   useEffect(() => {
     setRun(null);
@@ -223,7 +291,13 @@ export default function RunPage() {
             <Button variant="danger" onClick={() => wsClient.cancel(runId)}>
               取消
             </Button>
-          ) : null}
+          ) : (
+            (live?.finalResult || run?.finalResult) && (
+              <Button variant="secondary" onClick={() => void continueTask()} className="text-xs">
+                继续对话
+              </Button>
+            )
+          )}
           <Button
             variant="ghost"
             onClick={() => setAutoScroll((v) => !v)}
@@ -284,18 +358,26 @@ export default function RunPage() {
           <Card className="flex min-h-0 flex-col">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
               <span className="text-xs font-semibold text-muted">
-                {view === "log" ? "过程日志" : "工具时间线"}
+                {view === "log" ? "过程日志" : view === "timeline" ? "工具时间线" : "协作画布"}
               </span>
               <div className="flex items-center gap-1.5">
                 {view === "log" && !collapseLog && (
                   <span className="text-[11px] text-muted/70">{sortedEvents.length} 条事件</span>
                 )}
-                <button
-                  onClick={() => setView((v) => (v === "log" ? "timeline" : "log"))}
-                  className="rounded-md px-1.5 py-0.5 text-[11px] text-muted hover:bg-muted/10 hover:text-fg"
-                >
-                  {view === "log" ? "时间线" : "日志"}
-                </button>
+                <div className="flex overflow-hidden rounded-md border border-border text-[11px]">
+                  {(["log", "timeline", "canvas"] as const).map((v) => (
+                    <button
+                      key={v}
+                      onClick={() => setView(v)}
+                      className={cls(
+                        "px-1.5 py-0.5 transition-colors",
+                        view === v ? "bg-primary text-primary-fg" : "text-muted hover:bg-muted/10 hover:text-fg",
+                      )}
+                    >
+                      {v === "log" ? "日志" : v === "timeline" ? "时间线" : "画布"}
+                    </button>
+                  ))}
+                </div>
                 {view === "log" && (
                   <button
                     onClick={() => setCollapseLog((v) => !v)}
@@ -308,6 +390,8 @@ export default function RunPage() {
             </div>
             {view === "timeline" ? (
               <ToolTimeline items={sortedEvents} />
+            ) : view === "canvas" ? (
+              <WorkflowCanvas jobs={jobs} />
             ) : collapseLog ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
                 <span className="text-xs text-muted">过程日志已折叠，聚焦结果</span>

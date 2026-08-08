@@ -13,6 +13,16 @@ import {
   Badge, Button, Card, Input, Modal, Select, Spinner, StatusDot, Textarea, cls, statusLabel,
 } from "../components/ui";
 
+// 状态字形（Claude Code Agent View ✽/∙ 风格）
+const STATUS_GLYPH: Record<string, string> = {
+  queued: "○",
+  running: "✽",
+  thinking: "✽",
+  success: "✓",
+  error: "✗",
+  cancelled: "–",
+};
+
 const modeIcon: Record<string, React.ReactNode> = {
   single: <PlayCircle className="h-3.5 w-3.5" />,
   workflow: <Workflow className="h-3.5 w-3.5" />,
@@ -215,6 +225,7 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
       <button onClick={onToggle} className="w-full px-3.5 py-3 text-left">
         <div className="flex items-center gap-2">
           <StatusDot status={status} />
+          <span className="text-xs font-bold text-muted/70">{STATUS_GLYPH[status] ?? "·"}</span>
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{run.taskTitle ?? "未命名"}</span>
           <Badge color={run.mode === "single" ? "brand" : run.mode === "workflow" ? "violet" : "amber"}>
             {modeLabel[run.mode]}
@@ -341,16 +352,21 @@ export default function DashboardPage() {
     [],
   );
 
-  const columns = useMemo(
-    () => [
-      { key: "running", title: "进行中", color: "text-primary", runs: runs.filter((r) => r.status === "running" || r.status === "queued") },
-      { key: "success", title: "成功", color: "text-success", runs: runs.filter((r) => r.status === "success") },
-      { key: "failed", title: "失败", color: "text-destructive", runs: runs.filter((r) => r.status === "error" || r.status === "cancelled") },
-    ],
-    [runs],
-  );
+  const liveAll = useRunStore((s) => s.live);
+  const columns = useMemo(() => {
+    const waiting = (r: Run) =>
+      liveAll[r.id]?.events.some(
+        (e) => e.event.type === "status" && String(e.event.detail ?? "").includes("等待用户确认"),
+      );
+    return [
+      { key: "queued", title: "准备中", color: "text-muted", runs: runs.filter((r) => r.status === "queued") },
+      { key: "running", title: "进行中", color: "text-primary", runs: runs.filter((r) => r.status === "running" && !waiting(r)) },
+      { key: "review", title: "审核中", color: "text-warning", runs: runs.filter((r) => r.status === "running" && waiting(r)) },
+      { key: "done", title: "已完成", color: "text-success", runs: runs.filter((r) => ["success", "error", "cancelled"].includes(r.status)) },
+    ];
+  }, [runs, liveAll]);
 
-  const active = columns[0].runs.length;
+  const active = columns[1].runs.length + columns[2].runs.length;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -379,21 +395,21 @@ export default function DashboardPage() {
           <div className="mt-1 text-2xl font-bold text-fg">{runs.length}</div>
         </Card>
         <Card className="p-4">
+          <div className="flex items-center gap-1 text-xs text-muted">○ 准备中</div>
+          <div className="mt-1 text-2xl font-bold text-muted">{columns[0].runs.length}</div>
+        </Card>
+        <Card className="p-4">
           <div className="flex items-center gap-1 text-xs text-muted"><Loader2 className="h-3 w-3 animate-spin" /> 进行中</div>
           <div className="mt-1 text-2xl font-bold text-primary">{active}</div>
         </Card>
         <Card className="p-4">
-          <div className="flex items-center gap-1 text-xs text-muted"><CheckCircle2 className="h-3 w-3" /> 成功</div>
-          <div className="mt-1 text-2xl font-bold text-success">{columns[1].runs.length}</div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-1 text-xs text-muted"><AlertCircle className="h-3 w-3" /> 失败</div>
-          <div className="mt-1 text-2xl font-bold text-destructive">{columns[2].runs.length}</div>
+          <div className="flex items-center gap-1 text-xs text-muted"><CheckCircle2 className="h-3 w-3" /> 已完成</div>
+          <div className="mt-1 text-2xl font-bold text-success">{columns[3].runs.length}</div>
         </Card>
       </div>
 
       {/* Kanban columns */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-4 gap-3">
         {columns.map((col) => (
           <div key={col.key} className="min-h-[40vh]">
             <div className="mb-2 flex items-center gap-2 px-1">
@@ -403,7 +419,7 @@ export default function DashboardPage() {
             <div className="space-y-2.5">
               {col.runs.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted">
-                  {col.key === "running" ? "暂无进行中的任务" : "暂无"}
+                  {col.key === "queued" ? "暂无准备中的任务" : col.key === "review" ? "暂无待审核的任务" : "暂无"}
                 </div>
               ) : (
                 col.runs.map((r) => (
