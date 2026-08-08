@@ -1,0 +1,9 @@
+{
+  "id": "research-then-summary",
+  "name": "调研 → 摘要",
+  "nodes": [
+    { "id": "research", "agentId": "builtin-researcher", "prompt": "Research: {{task.prompt}}" },
+    { "id": "summary", "agentId": "builtin-assistant", "prompt": "Summarize in 5 bullets: {{job.research.result}}" }
+  ],
+  "edges": [{ "from": "research", "to": "summary", "when": "on_success" }]
+}

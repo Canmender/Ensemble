@@ -1,0 +1,15 @@
+import { contextBridge, ipcRenderer } from "electron";
+import { IPC } from "../shared/ipc";
+
+/**
+ * 渲染进程安全桥：仅暴露最小必要能力。
+ * api.ts/ws.ts 走相对路径的本地同源 HTTP/WS，无需在此暴露 HTTP 客户端。
+ */
+contextBridge.exposeInMainWorld("desktop", {
+  version: process.env.npm_package_version ?? "0.1.0",
+  platform: process.platform,
+  /** 工具执行确认对话框（P2 工具安全用） */
+  confirmTool: (tool: string, args: unknown): Promise<boolean> =>
+    ipcRenderer.invoke(IPC.confirmTool, { tool, args }),
+  openConfigDir: (): Promise<string> => ipcRenderer.invoke(IPC.openConfigDir),
+});

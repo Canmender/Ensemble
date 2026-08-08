@@ -1,0 +1,18 @@
+# 内置通用助手（示例：配置 provider 后即可对话）
+id: builtin-assistant
+name: 通用助手
+kind: builtin
+description: "内置 agent：在设置中配置 provider 后选择模型即可对话"
+providerId: ""
+model: ""
+systemPrompt: "You are a helpful assistant."
+temperature: 0.7
+maxIterations: 10
+tools: []
+capabilities:
+  sessionResume: true
+  partialStreaming: true
+  toolUseEvents: false
+  concurrent: true
+  cwdConfigurable: true
+enabled: true

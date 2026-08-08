@@ -1,0 +1,27 @@
+# 统一文本编码为 UTF-8、行尾为 LF，防止跨平台乱码
+* text=auto eol=lf
+
+# 显式声明文本文件（即使含中文等非 ASCII 也按 UTF-8 处理）
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.css text eol=lf
+*.md text eol=lf
+*.html text eol=lf
+*.sql text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+
+# 二进制文件不转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.exe binary
+*.db binary
+*.sqlite binary
