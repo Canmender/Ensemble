@@ -13,7 +13,7 @@ export function makeExecuteCommandTool(opts: { confirm: CodeConfirm }): AgentToo
   return {
     name: "execute_command",
     description:
-      "Execute a shell command in the workspace. Returns stdout+stderr (truncated to 8KB). Timeout 60s.",
+      "Execute a shell command in the workspace. Use to run tests, builds, or inspect the environment (e.g. 'npm test', 'git status'). Timeout 60s. Returns combined stdout+stderr truncated to 8KB, plus exit code on failure. The command runs with shell semantics on the current OS.",
     parameters: {
       type: "object",
       properties: {

@@ -19,7 +19,7 @@ function htmlToText(html: string): string {
 export const webSearchTool: AgentTool = {
   name: "web_search",
   description:
-    "Search the web for a query. Returns a list of results (title + url + snippet).",
+    "Search the web for current or time-sensitive information (news, prices, latest docs, facts outside your knowledge). Do NOT use for general knowledge you can answer from training data. Returns title + url + snippet for up to 8 results.",
   parameters: {
     type: "object",
     properties: { query: { type: "string", description: "search query" } },

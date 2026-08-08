@@ -161,50 +161,61 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
       break;
     }
 
-    // 执行工具调用
-    for (const call of calls) {
-      if (opts.signal?.aborted) break;
-      const tool = opts.tools.find((t) => t.name === call.name);
-      if (!tool) {
-        ctx.msgs.push({ role: "tool", tool_call_id: call.id, content: `unknown tool: ${call.name}` });
-        continue;
-      }
-
-      if (tool.requiresConfirmation && opts.askConfirm) {
-        // HITL：发出等待状态（前端 run/看板显示"等待输入"，对应 Claude Code Needs input）
-        yield { type: "status", status: "thinking", detail: `等待用户确认执行 ${tool.name}`, ts: Date.now() };
-        const ok = await opts.askConfirm(tool.name, call.input);
-        if (!ok) {
-          ctx.msgs.push({ role: "tool", tool_call_id: call.id, content: "[user cancelled execution]" });
-          continue;
+    // 执行工具调用（并行：独立工具同时执行，3-5× 加速；结果按调用顺序回填）
+    if (calls.length > 0 && !opts.signal?.aborted) {
+      // 1) 确认（串行，yield 等待状态）
+      const confirmOk = new Map<string, boolean>();
+      for (const call of calls) {
+        const tool = opts.tools.find((t) => t.name === call.name);
+        if (tool?.requiresConfirmation && opts.askConfirm) {
+          // HITL：发出等待状态（前端 run/看板显示"等待输入"）
+          yield { type: "status", status: "thinking", detail: `等待用户确认执行 ${tool.name}`, ts: Date.now() };
+          confirmOk.set(call.id, await opts.askConfirm(tool.name, call.input));
         }
       }
 
-      const toolCtx: ToolContext = {
-        cwd: opts.cwd,
-        workspaceRoot: opts.workspaceRoot,
-        signal: opts.signal,
-        agentId: opts.agentId,
-        appSettings: opts.appSettings,
-        askConfirm: opts.askConfirm,
-      };
+      // 2) 并行执行独立工具
+      const results = await Promise.all(
+        calls.map(async (call) => {
+          const tool = opts.tools.find((t) => t.name === call.name);
+          if (!tool) {
+            return { call, toolName: call.name, content: `unknown tool: ${call.name}`, offloaded: false };
+          }
+          if (confirmOk.get(call.id) === false) {
+            return { call, toolName: tool.name, content: "[user cancelled execution]", offloaded: false };
+          }
 
-      const result = await runToolSafe(tool, call.input, toolCtx);
+          const toolCtx: ToolContext = {
+            cwd: opts.cwd,
+            workspaceRoot: opts.workspaceRoot,
+            signal: opts.signal,
+            agentId: opts.agentId,
+            appSettings: opts.appSettings,
+            askConfirm: opts.askConfirm,
+          };
 
-      // 插入时 offload：大结果写盘 + 预览 + read_file 指针（完整路径，工作区内可读）
-      let clipped = result;
-      if (offload && shouldOffload(call.name, result.length, offloadChars)) {
-        const relPath = offload.store(opts.agentId, result);
-        const readPath = opts.offloadDir ? `${opts.offloadDir}/${relPath}` : relPath;
-        clipped = previewWithPointer(result, readPath);
-        yield { type: "status", status: "running", detail: `tool result offloaded (${call.name})`, ts: Date.now() };
-      } else {
-        clipped = result.slice(0, offloadChars);
+          const result = await runToolSafe(tool, call.input, toolCtx);
+
+          // 插入时 offload：大结果写盘 + 预览 + read_file 指针（完整路径，工作区内可读）
+          if (offload && shouldOffload(tool.name, result.length, offloadChars)) {
+            const relPath = offload.store(opts.agentId, result);
+            const readPath = opts.offloadDir ? `${opts.offloadDir}/${relPath}` : relPath;
+            return { call, toolName: tool.name, content: previewWithPointer(result, readPath), offloaded: true };
+          }
+          return { call, toolName: tool.name, content: result.slice(0, offloadChars), offloaded: false };
+        }),
+      );
+
+      // 3) 按调用顺序回填 tool 消息 + 事件
+      for (const r of results) {
+        if (opts.signal?.aborted) break;
+        if (r.offloaded) {
+          yield { type: "status", status: "running", detail: `tool result offloaded (${r.toolName})`, ts: Date.now() };
+        }
+        ctx.msgs.push({ role: "tool", tool_call_id: r.call.id, content: r.content });
+        yield { type: "tool_result", tool: r.toolName, output: r.content, ts: Date.now() };
+        await hooks.run("postToolResult", ctx, r.toolName, r.content);
       }
-
-      ctx.msgs.push({ role: "tool", tool_call_id: call.id, content: clipped });
-      yield { type: "tool_result", tool: call.name, output: clipped, ts: Date.now() };
-      await hooks.run("postToolResult", ctx, call.name, clipped);
     }
 
     await hooks.run("postCall", ctx);

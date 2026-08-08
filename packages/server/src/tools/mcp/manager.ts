@@ -82,7 +82,8 @@ export class McpManager {
 
   private registerTools(cfg: McpServerConfig, client: McpToolClient): void {
     const maxTools = cfg.maxTools ?? 25;
-    const cap = cfg.toolDescriptionCap ?? 300;
+    // 描述是 agent 选择工具的依据，保留足够信息（默认 500 字符）
+    const cap = cfg.toolDescriptionCap ?? 500;
     const native = client.listNativeTools().sort((a, b) => a.name.localeCompare(b.name)).slice(0, maxTools);
 
     for (const t of native) {

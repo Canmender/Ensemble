@@ -16,7 +16,8 @@ function safeResolve(workspaceRoot: string | undefined, userPath: string, cwd?: 
 
 export const readFileTool: AgentTool = {
   name: "read_file",
-  description: "Read the content of a text file. Returns raw content.",
+  description:
+    "Read a text file (path relative to workspace, or absolute within workspace). Use to inspect code/config before editing. Returns raw content up to ~12KB; larger files are truncated.",
   parameters: {
     type: "object",
     properties: { path: { type: "string", description: "file path (relative to workspace)" } },
