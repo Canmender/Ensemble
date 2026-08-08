@@ -1,13 +1,37 @@
-import { app, BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog, Menu, nativeImage, Tray } from "electron";
 import { autoUpdater } from "electron-updater";
+import { join } from "node:path";
 import { startLocalServer } from "./server";
 import { createWindow, registerIpc } from "./window";
 import { logger } from "@jungle/server";
 
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
 let closeServer: (() => Promise<void>) | undefined;
+let isQuitting = false;
 
 const isDev = !app.isPackaged || !!process.env.RENDERER_URL;
+
+// ---------- 单实例锁（防多开，激活已运行窗口） ----------
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+// ---------- 崩溃/异常处理 ----------
+process.on("uncaughtException", (err) => {
+  logger.error("uncaughtException", err instanceof Error ? `${err.message}\n${err.stack}` : String(err));
+});
+process.on("unhandledRejection", (reason) => {
+  logger.error("unhandledRejection", reason instanceof Error ? reason.message : String(reason));
+});
 
 async function bootstrap(): Promise<string> {
   registerIpc();
@@ -26,10 +50,62 @@ async function bootstrap(): Promise<string> {
   return local.url;
 }
 
+// ---------- 系统托盘 ----------
+function createTray(): void {
+  const iconPath = app.isPackaged
+    ? join(process.resourcesPath, "icon.png")
+    : join(__dirname, "../../build/icon.png");
+  const icon = nativeImage.createFromPath(iconPath);
+  tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
+  tray.setToolTip("丛林系统");
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: "显示丛林系统", click: () => showMainWindow() },
+      { type: "separator" },
+      {
+        label: "退出",
+        click: () => {
+          isQuitting = true;
+          app.quit();
+        },
+      },
+    ]),
+  );
+  tray.on("click", () => showMainWindow());
+}
+
+function showMainWindow(): void {
+  if (!mainWindow) return;
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 app.whenReady().then(async () => {
+  // 原生窗口行为（Windows）
+  app.setAppUserModelId("com.jungle.system");
+
   try {
     const url = await bootstrap();
     mainWindow = createWindow(url);
+    mainWindow.on("close", (e) => {
+      // 关闭窗口即退出（不残留后台）；若托盘退出则直接关
+      if (!isQuitting) isQuitting = true;
+      void e;
+    });
+    mainWindow.on("closed", () => {
+      mainWindow = null;
+    });
+    mainWindow.webContents.on("render-process-gone", (_e, details) => {
+      logger.error("renderer process gone", JSON.stringify(details));
+      void dialog.showMessageBox({
+        type: "error",
+        title: "丛林系统",
+        message: "界面进程异常退出",
+        detail: `reason: ${details.reason}`,
+      });
+    });
+
+    createTray();
     logger.info(`window loading: ${url}`);
 
     // 自动更新：检测 GitHub Releases 新版本，下载后一键升级
@@ -47,7 +123,10 @@ app.whenReady().then(async () => {
           message: "新版本已下载完成",
           detail: "重启应用后将自动完成安装（后期下载新安装包可一键更新）。",
         });
-        if (response === 0) autoUpdater.quitAndInstall();
+        if (response === 0) {
+          isQuitting = true;
+          autoUpdater.quitAndInstall();
+        }
       });
     }
   } catch (err) {
@@ -58,15 +137,21 @@ app.whenReady().then(async () => {
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0 && !isDev) {
-      void bootstrap().then((url) => (mainWindow = createWindow(url)));
+      void bootstrap().then((url) => {
+        mainWindow = createWindow(url);
+      });
     }
   });
 });
 
 app.on("window-all-closed", () => {
+  // Windows：全部窗口关闭即退出（托盘已提供入口）
   if (process.platform !== "darwin") app.quit();
 });
 
-app.on("before-quit", async () => {
-  if (closeServer) await closeServer();
+app.on("before-quit", () => {
+  isQuitting = true;
+  void (async () => {
+    if (closeServer) await closeServer();
+  })();
 });

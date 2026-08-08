@@ -12,6 +12,9 @@ extraResources:
   # 前端静态资源 → resources/dist（server.ts prod 加载该路径）
   - from: ../web/dist
     to: dist
+  # 托盘/系统图标 → resources/icon.png
+  - from: build/icon.png
+    to: icon.png
 asar: true
 win:
   target:

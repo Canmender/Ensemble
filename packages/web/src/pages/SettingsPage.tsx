@@ -411,6 +411,44 @@ function SkillSection() {
   );
 }
 
+// ---------- 开机自启（Windows 原生） ----------
+function AutoLaunchToggle() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    void (window as any).desktop?.isAutoLaunch().then(setOn).catch(() => {});
+  }, []);
+  return (
+    <label className="flex items-center gap-2 text-sm text-fg">
+      <input
+        type="checkbox"
+        checked={on}
+        onChange={async (e) => {
+          const v = await (window as any).desktop?.setAutoLaunch(e.target.checked);
+          setOn(!!v);
+        }}
+      />
+      开机自启
+    </label>
+  );
+}
+
+// ---------- 系统信息（Windows 原生） ----------
+function SystemInfo() {
+  const [info, setInfo] = useState<Record<string, any> | null>(null);
+  useEffect(() => {
+    void (window as any).desktop?.systemInfo().then(setInfo).catch(() => {});
+  }, []);
+  if (!info) return <span className="text-xs text-muted">加载中…</span>;
+  const uptimeMin = Math.round((Number(info.uptime) || 0) / 60);
+  return (
+    <div className="space-y-1 text-xs text-muted">
+      <div>平台：{String(info.platform)} · {String(info.arch)}</div>
+      <div>Electron {String(info.versions?.electron)} · Node {String(info.versions?.node)}</div>
+      <div>运行时长：{uptimeMin > 0 ? `${uptimeMin} 分钟` : "刚刚启动"}</div>
+    </div>
+  );
+}
+
 // ---------- 本地 Agent 发现与同步 ----------
 function DiscoverySection() {
   const [agents, setAgents] = useState<DetectedAgent[]>([]);
@@ -759,15 +797,36 @@ export default function SettingsPage() {
       {tab === "local" && <DiscoverySection />}
 
       {tab === "general" && (
-        <Card className="p-5">
-          <h3 className="mb-1 text-sm font-semibold text-fg">配置目录</h3>
-          <p className="mb-3 text-xs text-muted">Agent 配置、Provider 配置、数据库等存储位置</p>
-          {(window as any).desktop?.openConfigDir ? (
-            <Button variant="secondary" onClick={() => (window as any).desktop.openConfigDir()}>打开配置目录</Button>
-          ) : (
-            <span className="text-xs text-muted">（浏览器模式下不可用）</span>
+        <div className="space-y-4">
+          <Card className="p-5">
+            <h3 className="mb-1 text-sm font-semibold text-fg">配置目录</h3>
+            <p className="mb-3 text-xs text-muted">Agent 配置、Provider 配置、数据库等存储位置</p>
+            {(window as any).desktop?.openConfigDir ? (
+              <Button variant="secondary" onClick={() => (window as any).desktop.openConfigDir()}>打开配置目录</Button>
+            ) : (
+              <span className="text-xs text-muted">（浏览器模式下不可用）</span>
+            )}
+          </Card>
+
+          {(window as any).desktop?.isAutoLaunch && (
+            <Card className="p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-semibold text-fg">开机自启</h3>
+                  <p className="mt-0.5 text-xs text-muted">Windows 登录时自动启动丛林系统</p>
+                </div>
+                <AutoLaunchToggle />
+              </div>
+            </Card>
           )}
-        </Card>
+
+          {(window as any).desktop?.systemInfo && (
+            <Card className="p-5">
+              <h3 className="mb-2 text-sm font-semibold text-fg">系统信息</h3>
+              <SystemInfo />
+            </Card>
+          )}
+        </div>
       )}
 
       <Modal open={showForm} onClose={() => setShowForm(false)} title={editing ? "编辑 Provider" : "添加 Provider"} wide>

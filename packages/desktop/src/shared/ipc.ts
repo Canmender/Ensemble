@@ -9,4 +9,6 @@ export const IPC = {
   winMaximize: "win:maximize",
   winClose: "win:close",
   systemInfo: "app:system-info",
+  setAutoLaunch: "app:set-auto-launch",
+  isAutoLaunch: "app:is-auto-launch",
 } as const;

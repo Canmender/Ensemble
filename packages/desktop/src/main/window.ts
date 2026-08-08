@@ -54,6 +54,13 @@ export function registerIpc(): void {
     uptime: process.uptime(),
   }));
 
+  // 开机自启（Windows 登录时启动）
+  ipcMain.handle(IPC.setAutoLaunch, (_e, enabled: boolean) => {
+    app.setLoginItemSettings({ openAtLogin: !!enabled });
+    return app.getLoginItemSettings().openAtLogin;
+  });
+  ipcMain.handle(IPC.isAutoLaunch, () => app.getLoginItemSettings().openAtLogin);
+
   // 工具执行确认对话框（P2 工具安全）
   ipcMain.handle(
     IPC.confirmTool,

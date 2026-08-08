@@ -20,4 +20,7 @@ contextBridge.exposeInMainWorld("desktop", {
   },
   /** 系统信息 */
   systemInfo: (): Promise<Record<string, unknown>> => ipcRenderer.invoke(IPC.systemInfo),
+  /** 开机自启 */
+  setAutoLaunch: (enabled: boolean): Promise<boolean> => ipcRenderer.invoke(IPC.setAutoLaunch, enabled),
+  isAutoLaunch: (): Promise<boolean> => ipcRenderer.invoke(IPC.isAutoLaunch),
 });
