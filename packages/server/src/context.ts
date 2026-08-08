@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { resolve } from "node:path";
+import { resolve, join, dirname } from "node:path";
 import type { ServerEnv } from "./config/env";
 import { ConfigManager } from "./appContext";
 import { Store } from "./orchestration/store";
@@ -10,6 +10,9 @@ import { ProviderRegistry } from "./llm/registry";
 import { FileKeyStore, type KeyStore } from "./keychain";
 import { ToolRegistry } from "./tools/types";
 import { registerBuiltinTools } from "./tools";
+import { MemoryProviderImpl, type MemoryProvider } from "./memory/provider";
+import { McpConfigStore } from "./tools/mcp/config";
+import { McpManager } from "./tools/mcp/manager";
 
 /** 应用服务容器：把所有模块组装起来，供 API 层使用 */
 export interface AppContext {
@@ -23,8 +26,12 @@ export interface AppContext {
   keyStore: KeyStore;
   providerRegistry: ProviderRegistry;
   toolRegistry: ToolRegistry;
+  memoryProvider: MemoryProvider;
+  mcpConfig: McpConfigStore;
+  mcpManager: McpManager;
   reloadAgents: () => void;
   reloadProviders: () => void;
+  dispose: () => Promise<void>;
 }
 
 export interface CreateContextDeps {
@@ -46,11 +53,25 @@ export function createAppContext(
   const providerRegistry = new ProviderRegistry(keyStore);
   const toolRegistry = new ToolRegistry();
   registerBuiltinTools(toolRegistry, () => config.getSettings());
+
+  const dataDir = dirname(env.dbPath);
+  const memoryProvider = new MemoryProviderImpl(
+    join(dataDir, "memories"),
+    (id) => config.getAgent(id),
+    providerRegistry,
+  );
+
+  const mcpConfig = new McpConfigStore(join(env.configDir, "mcp.json"));
+  const mcpManager = new McpManager(mcpConfig, toolRegistry);
+  void mcpManager.reload();
+
   const registry = new AdapterRegistry({
     providerRegistry,
     toolRegistry,
     appSettings: () => config.getSettings(),
     askConfirm: deps.askConfirm,
+    offloadBaseDir: join(dataDir, "offload"),
+    memoryProvider,
   });
   const engine = new OrchestrationEngine(store, registry, hub, (id) => config.getWorkflow(id));
 
@@ -79,7 +100,16 @@ export function createAppContext(
     keyStore,
     providerRegistry,
     toolRegistry,
+    memoryProvider,
+    mcpConfig,
+    mcpManager,
     reloadAgents,
     reloadProviders,
+    dispose: async () => {
+      registry.disposeAll();
+      memoryProvider.dispose();
+      await mcpManager.dispose();
+      hub.close();
+    },
   };
 }

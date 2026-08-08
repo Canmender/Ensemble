@@ -7,6 +7,8 @@ export interface AdapterRegistryDeps {
   toolRegistry: BuiltinAdapterDeps["toolRegistry"];
   appSettings: BuiltinAdapterDeps["appSettings"];
   askConfirm?: BuiltinAdapterDeps["askConfirm"];
+  offloadBaseDir?: BuiltinAdapterDeps["offloadBaseDir"];
+  memoryProvider?: BuiltinAdapterDeps["memoryProvider"];
 }
 
 /** 按 kind 创建适配器实例。未来新增 agent 类型在此扩展。 */
@@ -18,6 +20,8 @@ export function createAdapter(cfg: AgentConfig, deps: AdapterRegistryDeps): Agen
         toolRegistry: deps.toolRegistry,
         appSettings: deps.appSettings,
         askConfirm: deps.askConfirm,
+        offloadBaseDir: deps.offloadBaseDir,
+        memoryProvider: deps.memoryProvider,
       });
     default: {
       const _exhaustive: never = cfg.kind;

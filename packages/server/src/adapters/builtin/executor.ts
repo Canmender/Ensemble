@@ -4,6 +4,8 @@ import { runAgenticLoop } from "./loop";
 import type { ProviderRegistry } from "../../llm/registry";
 import type { ToolRegistry } from "../../tools/types";
 import type { AppSettings } from "@multiagent/shared";
+import { ContextManager } from "../../context/manager";
+import type { LoopHook } from "../../hooks/types";
 
 export interface BuiltinAdapterDeps {
   providerRegistry: ProviderRegistry;
@@ -11,6 +13,10 @@ export interface BuiltinAdapterDeps {
   appSettings: () => AppSettings;
   /** 工具确认回调（桌面 IPC 弹窗；缺省自动允许） */
   askConfirm?: (tool: string, args: unknown) => Promise<boolean>;
+  /** 大工具结果 offload 基础目录（<dataDir>/offload） */
+  offloadBaseDir?: string;
+  /** 记忆 provider（P2；未注入则跳过记忆 hook） */
+  memoryProvider?: import("../../memory/provider").MemoryProvider;
 }
 
 /**
@@ -47,6 +53,27 @@ export class BuiltinAgentExecutor implements AgentAdapter {
 
     const tools = this.deps.toolRegistry.forNames(this.cfg.tools);
 
+    // 上下文压缩器（主动压缩 + 大结果 offload + overflow 恢复）
+    const ctxManager = new ContextManager({
+      config: this.cfg.context ?? {},
+      summarize: async (msgs) => {
+        const r = await provider.chat({
+          model: this.cfg.memory?.model ?? this.cfg.model,
+          messages: msgs,
+          maxTokens: 1024,
+        });
+        return r.text;
+      },
+      offloadDir: this.deps.offloadBaseDir ? `${this.deps.offloadBaseDir}/agents` : undefined,
+    });
+
+    // hooks：记忆注入（P2）
+    const hooks: LoopHook[] = [];
+    if (this.cfg.memory?.enabled && this.deps.memoryProvider) {
+      const { MemoryHook } = await import("../../hooks/memory");
+      hooks.push(new MemoryHook(this.deps.memoryProvider, this.cfg));
+    }
+
     yield* runAgenticLoop({
       provider,
       model: this.cfg.model,
@@ -57,13 +84,17 @@ export class BuiltinAgentExecutor implements AgentAdapter {
       temperature: this.cfg.temperature,
       maxTokens: this.cfg.maxTokens,
       maxIterations: this.cfg.maxIterations ?? 10,
-      ctxBudgetTokens: 80_000,
+      ctxBudgetTokens: this.cfg.context?.budgetTokens ?? 80_000,
       signal: input.signal,
       workspaceRoot: this.deps.appSettings().workspaceRoot || this.cfg.cwd || undefined,
       cwd: this.cfg.cwd,
       agentId: this.cfg.id,
       appSettings: this.deps.appSettings(),
       askConfirm: this.deps.askConfirm,
+      ctxManager,
+      hooks,
+      offloadDir: this.deps.offloadBaseDir ? `${this.deps.offloadBaseDir}/agents` : undefined,
+      toolResultOffloadChars: this.cfg.context?.toolResultOffloadChars,
     });
   }
 

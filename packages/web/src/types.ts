@@ -22,10 +22,55 @@ export interface Agent {
   maxIterations?: number;
   tools: string[];
   cwd?: string;
+  memory?: AgentMemoryConfig;
+  context?: AgentContextConfig;
   capabilities: AgentCapabilities;
   enabled: boolean;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface AgentMemoryConfig {
+  enabled?: boolean;
+  model?: string;
+  flushMinIntervalMs?: number;
+  flushMinNewTokens?: number;
+  consolidateMinIntervalMs?: number;
+  injectMaxChars?: number;
+}
+
+export interface AgentContextConfig {
+  budgetTokens?: number;
+  compactionThreshold?: number;
+  keepRecentRawGroups?: number;
+  toolResultOffloadChars?: number;
+}
+
+export interface McpServerConfig {
+  id: string;
+  name: string;
+  enabled: boolean;
+  transport: "stdio" | "http";
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+  url?: string;
+  headers?: Record<string, string>;
+  maxTools?: number;
+  toolDescriptionCap?: number;
+  autoApprove?: string[];
+  connectTimeoutMs?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  status?: { id: string; connected: boolean; error?: string; toolCount: number };
+}
+
+export interface MemorySnapshot {
+  agentId: string;
+  memoryFile?: { content: string; updatedAt: string; sizeBytes: number };
+  dailyLogs: Array<{ date: string; sizeBytes: number; lineCount: number; updatedAt: string }>;
+  stats: { lastFlushAt?: string; lastConsolidateAt?: string; flushCount: number; consolidateCount: number };
 }
 
 export type ProviderType = "anthropic" | "openai" | "custom";

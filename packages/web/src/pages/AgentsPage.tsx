@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Bot, Pencil, Trash2, Zap } from "lucide-react";
+import { Bot, Brain, Pencil, Trash2, Zap } from "lucide-react";
 import { api } from "../lib/api";
-import type { Agent, ProviderConfig } from "../types";
+import type { Agent, MemorySnapshot, ProviderConfig } from "../types";
 import {
   Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, Textarea,
 } from "../components/ui";
@@ -20,6 +20,8 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
         temperature: 0.7,
         maxIterations: 10,
         tools: [],
+        memory: { enabled: false },
+        context: {},
         capabilities: { sessionResume: true, partialStreaming: true, toolUseEvents: false, concurrent: true, cwdConfigurable: true },
         enabled: true,
       } as Agent),
@@ -174,6 +176,49 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
         </div>
       </div>
 
+      {/* 记忆 + 上下文配置 */}
+      <div className="rounded-lg border border-border p-3">
+        <label className="flex items-center gap-2 text-sm text-fg">
+          <input
+            type="checkbox"
+            checked={!!form.memory?.enabled}
+            onChange={(e) => set({ memory: { ...form.memory, enabled: e.target.checked } })}
+          />
+          <span className="font-medium">启用长期记忆</span>
+          <span className="text-xs text-muted">Agent 跨任务积累记忆（需 LLM 做记忆提取，消耗少量 token）</span>
+        </label>
+        {form.memory?.enabled && (
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div>
+              <Label>注入上限（字符）</Label>
+              <Input type="number" value={form.memory.injectMaxChars ?? 4000} onChange={(e) => set({ memory: { ...form.memory, injectMaxChars: Number(e.target.value) } })} />
+            </div>
+            <div>
+              <Label>记忆模型（留空用 Agent 模型）</Label>
+              <Input value={form.memory.model ?? ""} onChange={(e) => set({ memory: { ...form.memory, model: e.target.value } })} placeholder="可指定廉价模型" />
+            </div>
+          </div>
+        )}
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <Label>上下文压缩阈值（0-1）</Label>
+            <Input
+              type="number" step="0.1" min={0} max={1}
+              value={form.context?.compactionThreshold ?? 0.5}
+              onChange={(e) => set({ context: { ...form.context, compactionThreshold: Number(e.target.value) } })}
+            />
+          </div>
+          <div>
+            <Label>上下文预算（tokens）</Label>
+            <Input
+              type="number"
+              value={form.context?.budgetTokens ?? 80000}
+              onChange={(e) => set({ context: { ...form.context, budgetTokens: Number(e.target.value) } })}
+            />
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center justify-end gap-3 border-t border-border pt-4">
         <label className="flex items-center gap-2 text-sm text-muted">
           <input type="checkbox" checked={!!form.enabled} onChange={(e) => set({ enabled: e.target.checked })} />
@@ -214,11 +259,78 @@ function TestButton({ agent }: { agent: Agent }) {
   );
 }
 
+// ---------- 记忆查看 ----------
+function MemoryModal({ agent, onClose }: { agent: Agent; onClose: () => void }) {
+  const [snap, setSnap] = useState<MemorySnapshot | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function refresh() {
+    setSnap(await api.get<MemorySnapshot>(`/agents/${agent.id}/memory`));
+  }
+  useEffect(() => { void refresh(); }, []);
+
+  async function consolidate() {
+    setBusy(true);
+    try {
+      await api.post(`/agents/${agent.id}/memory/consolidate`);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title={`记忆 · ${agent.name}`} wide>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted">
+            {snap ? `${snap.dailyLogs.length} 天日志 · flush ${snap.stats.flushCount} 次` : "加载中…"}
+          </span>
+          <div className="flex gap-2">
+            <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={consolidate} disabled={busy}>
+              {busy ? "整理中…" : "立即整理"}
+            </Button>
+            <Button variant="ghost" className="px-2.5 py-1.5 text-xs" onClick={onClose}>关闭</Button>
+          </div>
+        </div>
+
+        {snap?.memoryFile ? (
+          <div>
+            <div className="mb-1 text-xs font-semibold text-muted">长期记忆 MEMORY.md</div>
+            <pre className="max-h-56 overflow-y-auto rounded-lg bg-bg p-3 font-mono text-xs leading-relaxed text-fg">
+              {snap.memoryFile.content}
+            </pre>
+          </div>
+        ) : (
+          <div className="rounded-lg bg-bg p-3 text-xs text-muted">
+            还没有长期记忆。启用"长期记忆"并运行任务后，Agent 会在这里积累跨任务记忆。
+          </div>
+        )}
+
+        {snap && snap.dailyLogs.length > 0 && (
+          <details className="text-xs text-muted">
+            <summary className="cursor-pointer hover:text-fg">日常日志（{snap.dailyLogs.length} 天）</summary>
+            <ul className="mt-2 space-y-1">
+              {snap.dailyLogs.slice(0, 7).map((d) => (
+                <li key={d.date} className="flex justify-between rounded bg-bg px-2 py-1">
+                  <span className="font-mono">{d.date}</span>
+                  <span>{d.lineCount} 行 · {Math.round(d.sizeBytes / 1024 * 10) / 10} KB</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Agent | undefined>();
+  const [memoryAgent, setMemoryAgent] = useState<Agent | null>(null);
 
   async function refresh() {
     setAgents(await api.get<Agent[]>("/agents"));
@@ -294,8 +406,16 @@ export default function AgentsPage() {
                 </div>
               )}
 
-              <div className="mt-4 border-t border-border pt-3">
+              <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
                 <TestButton agent={a} />
+                <button
+                  onClick={() => setMemoryAgent(a)}
+                  className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted hover:bg-muted/10 hover:text-fg"
+                  title="查看记忆"
+                >
+                  <Brain className="h-3.5 w-3.5" />
+                  {a.memory?.enabled ? "记忆" : "记忆(关)"}
+                </button>
               </div>
             </Card>
           ))}
@@ -311,6 +431,8 @@ export default function AgentsPage() {
           }}
         />
       </Modal>
+
+      {memoryAgent && <MemoryModal agent={memoryAgent} onClose={() => setMemoryAgent(null)} />}
     </div>
   );
 }

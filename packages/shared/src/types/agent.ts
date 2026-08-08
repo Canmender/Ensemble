@@ -36,10 +36,30 @@ export interface AgentConfig {
   /** 启用的工具名列表 */
   tools: string[];
   cwd?: string;
+  /** 记忆配置（默认关闭） */
+  memory?: AgentMemoryConfig;
+  /** 上下文压缩配置 */
+  context?: AgentContextConfig;
   capabilities: AgentCapabilities;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AgentMemoryConfig {
+  enabled?: boolean;
+  model?: string;
+  flushMinIntervalMs?: number;
+  flushMinNewTokens?: number;
+  consolidateMinIntervalMs?: number;
+  injectMaxChars?: number;
+}
+
+export interface AgentContextConfig {
+  budgetTokens?: number;
+  compactionThreshold?: number;
+  keepRecentRawGroups?: number;
+  toolResultOffloadChars?: number;
 }
 
 /** 提供给适配器的一次任务输入 */

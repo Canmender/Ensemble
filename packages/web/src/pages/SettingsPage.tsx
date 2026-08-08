@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Cloud, Globe, Pencil, Plug, Settings, Trash2, Wrench } from "lucide-react";
+import { Cloud, Globe, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
 import { api } from "../lib/api";
-import type { AppSettings, ProviderConfig } from "../types";
+import type { AppSettings, McpServerConfig, ProviderConfig } from "../types";
 import {
   Badge, Button, Card, Input, Label, Modal, Select, Spinner, cls,
 } from "../components/ui";
@@ -112,8 +112,199 @@ function ProviderForm({ initial, onDone }: { initial?: ProviderConfig; onDone: (
   );
 }
 
+// ---------- MCP Server 表单 ----------
+function McpForm({ initial, onDone }: { initial?: McpServerConfig; onDone: () => void }) {
+  const [form, setForm] = useState({
+    id: initial?.id ?? "",
+    name: initial?.name ?? "",
+    transport: (initial?.transport ?? "stdio") as McpServerConfig["transport"],
+    command: initial?.command ?? "",
+    args: (initial?.args ?? []).join(" "),
+    url: initial?.url ?? "",
+    headers: initial?.headers ? JSON.stringify(initial.headers) : "",
+    maxTools: initial?.maxTools ?? 25,
+  });
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+
+  async function save() {
+    if (!form.id.trim() || !form.name.trim()) return;
+    const body: any = {
+      id: form.id,
+      name: form.name,
+      transport: form.transport,
+      maxTools: Number(form.maxTools) || 25,
+      enabled: true,
+    };
+    if (form.transport === "stdio") {
+      body.command = form.command;
+      body.args = form.args.split(/\s+/).filter(Boolean);
+    } else {
+      body.url = form.url;
+      if (form.headers.trim()) {
+        try {
+          body.headers = JSON.parse(form.headers);
+        } catch {
+          setTestResult("headers JSON 解析失败");
+          return;
+        }
+      }
+    }
+    if (initial) await api.put(`/mcp/${initial.id}`, body);
+    else await api.post("/mcp", body);
+    onDone();
+  }
+
+  async function test() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const r = await api.post<{ ok: boolean; message: string }>(`/mcp/${initial?.id ?? form.id}/test`);
+      setTestResult(r.ok ? `✅ ${r.message}` : `❌ ${r.message}`);
+    } catch (e) {
+      setTestResult(`❌ ${(e as Error).message}`);
+    } finally {
+      setTesting(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div><Label>ID</Label><Input value={form.id} onChange={(e) => set({ id: e.target.value })} placeholder="my-tools" disabled={!!initial} /></div>
+        <div><Label>名称</Label><Input value={form.name} onChange={(e) => set({ name: e.target.value })} placeholder="我的工具集" /></div>
+      </div>
+      <div>
+        <Label>传输方式</Label>
+        <Select value={form.transport} onChange={(e) => set({ transport: e.target.value as any })}>
+          <option value="stdio">stdio（本地进程）</option>
+          <option value="http">HTTP（Streamable）</option>
+        </Select>
+      </div>
+      {form.transport === "stdio" ? (
+        <>
+          <div>
+            <Label>命令</Label>
+            <Input value={form.command} onChange={(e) => set({ command: e.target.value })} placeholder="node / npx / python …" />
+          </div>
+          <div>
+            <Label>参数（空格分隔）</Label>
+            <Input value={form.args} onChange={(e) => set({ args: e.target.value })} placeholder="server.js 或 npx -y @xxx/mcp" />
+          </div>
+        </>
+      ) : (
+        <>
+          <div>
+            <Label>URL</Label>
+            <Input value={form.url} onChange={(e) => set({ url: e.target.value })} placeholder="https://mcp.example.com/mcp" />
+          </div>
+          <div>
+            <Label>Headers（JSON）</Label>
+            <Input value={form.headers} onChange={(e) => set({ headers: e.target.value })} placeholder='{"Authorization": "Bearer …"}' />
+          </div>
+        </>
+      )}
+      <div>
+        <Label>最多加载工具数</Label>
+        <Input type="number" value={form.maxTools} onChange={(e) => set({ maxTools: Number(e.target.value) })} />
+      </div>
+      <div className="flex items-center justify-between border-t border-border pt-4">
+        <Button onClick={test} disabled={testing} variant="secondary" className="px-3 py-1.5 text-xs">
+          {testing ? <Spinner label="测试中" /> : "测试连接"}
+        </Button>
+        {testResult && <span className="max-w-[240px] truncate text-xs text-muted">{testResult}</span>}
+        <div className="flex gap-2">
+          <Button onClick={onDone} variant="ghost">取消</Button>
+          <Button variant="primary" onClick={save}>保存</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- MCP 列表 ----------
+function McpSection() {
+  const [servers, setServers] = useState<McpServerConfig[]>([]);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<McpServerConfig | undefined>();
+
+  async function refresh() {
+    setServers(await api.get<McpServerConfig[]>("/mcp"));
+  }
+
+  useEffect(() => { void refresh(); }, []);
+
+  async function remove(id: string) {
+    if (!confirm(`确定删除 MCP server ${id}？`)) return;
+    await api.del(`/mcp/${id}`);
+    void refresh();
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted">接入 MCP 工具服务器（stdio / HTTP）</p>
+        <Button variant="primary" onClick={() => { setEditing(undefined); setShowForm(true); }} className="px-3 py-1.5 text-sm">
+          + 添加 MCP Server
+        </Button>
+      </div>
+
+      {servers.length === 0 && (
+        <Card className="p-8 text-center text-sm text-muted">还没有 MCP server，点击右上角添加</Card>
+      )}
+
+      {servers.map((s) => (
+        <Card key={s.id} className="p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                <Server className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-fg">{s.name}</span>
+                  <Badge color={s.transport === "stdio" ? "brand" : "violet"}>{s.transport}</Badge>
+                </div>
+                <div className="text-xs text-muted">
+                  {s.transport === "stdio" ? s.command : s.url} · {s.id}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1.5 text-xs">
+                <span className={cls("h-2 w-2 rounded-full", s.status?.connected ? "bg-success" : "bg-destructive")} />
+                <span className={cls("font-medium", s.status?.connected ? "text-success" : "text-destructive")}>
+                  {s.status?.connected ? `${s.status.toolCount} tools` : s.status?.error?.slice(0, 30) ?? "未连接"}
+                </span>
+              </span>
+              <button onClick={() => { setEditing(s); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" title="编辑">
+                <Pencil className="h-4 w-4" />
+              </button>
+              <button onClick={() => remove(s.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" title="删除">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </Card>
+      ))}
+
+      <Modal open={showForm} onClose={() => setShowForm(false)} title={editing ? "编辑 MCP Server" : "添加 MCP Server"} wide>
+        <McpForm
+          initial={editing}
+          onDone={() => {
+            setShowForm(false);
+            void refresh();
+          }}
+        />
+      </Modal>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const [tab, setTab] = useState<"providers" | "tools" | "general">("providers");
+  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "general">("providers");
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -158,6 +349,7 @@ export default function SettingsPage() {
   const tabs = [
     { key: "providers" as const, label: "LLM Providers", icon: <Plug className="h-4 w-4" /> },
     { key: "tools" as const, label: "工具与安全", icon: <Wrench className="h-4 w-4" /> },
+    { key: "mcp" as const, label: "MCP", icon: <Server className="h-4 w-4" /> },
     { key: "general" as const, label: "通用", icon: <Settings className="h-4 w-4" /> },
   ];
 
@@ -286,6 +478,8 @@ export default function SettingsPage() {
           </Card>
         </div>
       )}
+
+      {tab === "mcp" && <McpSection />}
 
       {tab === "general" && (
         <Card className="p-5">
