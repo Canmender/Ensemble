@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { Brain, CheckCircle2, Wrench, XCircle } from "lucide-react";
+import { Brain, CheckCircle2, Copy, Wrench, XCircle } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
@@ -90,6 +90,7 @@ export default function RunPage() {
   const [loaded, setLoaded] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
+  const [collapseLog, setCollapseLog] = useState(false);
 
   useEffect(() => {
     setRun(null);
@@ -226,32 +227,58 @@ export default function RunPage() {
             )}
           </Card>
 
-          {/* Log */}
+          {/* Log（ChatDB：结果优先，过程可折叠） */}
           <Card className="flex min-h-0 flex-col">
             <div className="flex items-center justify-between border-b border-border px-3 py-2">
-              <span className="text-xs font-semibold text-muted">实时日志</span>
-              <span className="text-[11px] text-muted/70">{sortedEvents.length} 条事件</span>
+              <span className="text-xs font-semibold text-muted">过程日志</span>
+              <div className="flex items-center gap-2">
+                {!collapseLog && <span className="text-[11px] text-muted/70">{sortedEvents.length} 条事件</span>}
+                <button
+                  onClick={() => setCollapseLog((v) => !v)}
+                  className="rounded-md px-1.5 py-0.5 text-[11px] text-muted hover:bg-muted/10 hover:text-fg"
+                >
+                  {collapseLog ? "展开过程" : "折叠过程"}
+                </button>
+              </div>
             </div>
-            <div ref={logRef} className="flex-1 overflow-y-auto bg-bg/40 p-3 font-mono text-[13px]">
-              {sortedEvents.length === 0 ? (
-                <div className="text-xs text-muted/70">等待事件…</div>
-              ) : (
-                <>
-                  {hiddenCount > 0 && (
-                    <div className="py-1 text-[11px] text-muted/70">… 前面 {hiddenCount} 条事件已折叠</div>
-                  )}
-                  {visibleEvents.map((item, i) => <LogLine key={i} item={item} />)}
-                </>
-              )}
-            </div>
+            {collapseLog ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
+                <span className="text-xs text-muted">过程日志已折叠，聚焦结果</span>
+                {!live?.finalResult && <span className="text-[11px] text-muted/70">运行中，日志仍在记录</span>}
+              </div>
+            ) : (
+              <div ref={logRef} className="flex-1 overflow-y-auto bg-bg/40 p-3 font-mono text-[13px]">
+                {sortedEvents.length === 0 ? (
+                  <div className="text-xs text-muted/70">等待事件…</div>
+                ) : (
+                  <>
+                    {hiddenCount > 0 && (
+                      <div className="py-1 text-[11px] text-muted/70">… 前面 {hiddenCount} 条事件已折叠</div>
+                    )}
+                    {visibleEvents.map((item, i) => <LogLine key={i} item={item} />)}
+                  </>
+                )}
+              </div>
+            )}
           </Card>
 
           {/* Result */}
           <Card className="flex flex-col overflow-hidden">
-            <div className="border-b border-border px-3 py-2 text-xs font-semibold text-muted">结果</div>
+            <div className="flex items-center justify-between border-b border-border px-3 py-2">
+              <span className="text-xs font-semibold text-muted">结果</span>
+              {live?.finalResult && (
+                <button
+                  onClick={() => void navigator.clipboard.writeText(live.finalResult ?? "")}
+                  className="rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-muted/10 hover:text-fg"
+                  title="复制结果"
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              )}
+            </div>
             <div className="flex-1 overflow-y-auto p-3">
               {live?.error ? (
-                <div className="whitespace-pre-wrap text-sm text-red-600">{live.error}</div>
+                <div className="whitespace-pre-wrap text-sm text-destructive">{live.error}</div>
               ) : live?.finalResult ? (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">{live.finalResult}</div>
               ) : (

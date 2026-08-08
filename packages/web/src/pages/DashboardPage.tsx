@@ -94,20 +94,30 @@ function RunDetail({ runId }: { runId: string }) {
 
   return (
     <div className="space-y-3">
-      {/* 协作链：按执行顺序的 agent 流转 */}
+      {/* 协作链：按执行顺序的 agent 流转（状态色节点） */}
       {orderedJobs.length > 1 && (
         <div className="flex items-center gap-1.5 overflow-x-auto rounded-lg bg-bg p-2">
-          {orderedJobs.map((j, i) => (
-            <Fragment key={j.id}>
-              {i > 0 && <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted" />}
-              <span className="flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1 text-xs">
-                <StatusDot status={j.status} />
-                <Bot className="h-3 w-3 text-primary" />
-                <span className="font-medium text-fg">{j.agentName}</span>
-                <span className="text-[10px] text-muted">{statusLabel(j.status)}</span>
-              </span>
-            </Fragment>
-          ))}
+          {orderedJobs.map((j, i) => {
+            const nodeColor =
+              j.status === "success"
+                ? "border-success/40 bg-success/5"
+                : j.status === "error"
+                  ? "border-destructive/40 bg-destructive/5"
+                  : j.status === "running" || j.status === "thinking"
+                    ? "border-primary/50 bg-primary/5"
+                    : "border-border bg-surface";
+            return (
+              <Fragment key={j.id}>
+                {i > 0 && <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted" />}
+                <span className={cls("flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-xs", nodeColor)}>
+                  <StatusDot status={j.status} />
+                  <Bot className={cls("h-3 w-3", j.status === "error" ? "text-destructive" : "text-primary")} />
+                  <span className="font-medium text-fg">{j.agentName}</span>
+                  <span className="text-[10px] text-muted">{statusLabel(j.status)}</span>
+                </span>
+              </Fragment>
+            );
+          })}
         </div>
       )}
 
@@ -179,8 +189,26 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
   const jobs = Object.values(live?.jobs ?? {});
   const agents = jobs.map((j) => j.agentName).filter((v, i, a) => a.indexOf(v) === i);
 
+  // AI Inbox：活跃 agent（正在工作的）高亮 + 状态色左边框
+  const activeJobs = jobs.filter((j) => j.status === "running" || j.status === "thinking" || j.status === "starting");
+  const activeAgents = [...new Set(activeJobs.map((j) => j.agentName))];
+  const statusBorder =
+    status === "success"
+      ? "border-l-success"
+      : status === "error" || status === "cancelled"
+        ? "border-l-destructive"
+        : status === "running" || status === "queued"
+          ? "border-l-primary"
+          : "border-l-transparent";
+
   return (
-    <Card className={cls("overflow-hidden transition-shadow", expanded ? "shadow-card-hover" : "hover:shadow-card-hover")}>
+    <Card
+      className={cls(
+        "overflow-hidden border-l-2 transition-all",
+        statusBorder,
+        expanded ? "shadow-card-hover" : "hover:-translate-y-0.5 hover:shadow-card-hover",
+      )}
+    >
       <button onClick={onToggle} className="w-full px-3.5 py-3 text-left">
         <div className="flex items-center gap-2">
           <StatusDot status={status} />
@@ -196,7 +224,15 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
           <div className="mt-2 flex flex-wrap items-center gap-1">
             {agents.length > 0 ? (
               agents.map((name) => (
-                <span key={name} className="flex items-center gap-1 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                <span
+                  key={name}
+                  className={cls(
+                    "flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium",
+                    activeAgents.includes(name)
+                      ? "bg-primary text-primary-fg"
+                      : "bg-primary/10 text-primary",
+                  )}
+                >
                   <Bot className="h-2.5 w-2.5" /> {name}
                 </span>
               ))
@@ -207,10 +243,27 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
           </div>
         )}
 
-        {/* summary */}
+        {/* 活跃 agent（AI Inbox：显示正在工作的 agent） */}
+        {activeAgents.length > 0 && (
+          <div className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-primary">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
+            活跃：{activeAgents.join("、")}
+          </div>
+        )}
+
+        {/* summary（结果优先，过程展开看） */}
         {(finalResult || status === "running" || status === "queued") && (
-          <div className={cls("mt-1.5 line-clamp-2 font-mono text-[11px]", status === "success" ? "text-success" : status === "error" ? "text-destructive" : "text-muted")}>
-            {finalResult ?? (status === "running" || status === "queued" ? "⏳ 运行中…" : "")}
+          <div
+            className={cls(
+              "mt-1.5 line-clamp-2 font-mono text-[11px]",
+              status === "success"
+                ? "text-success"
+                : status === "error"
+                  ? "text-destructive"
+                  : "text-muted",
+            )}
+          >
+            {finalResult ?? (status === "running" || status === "queued" ? "运行中…" : "")}
           </div>
         )}
       </button>
