@@ -97,7 +97,7 @@ export async function startLocalServer(opts?: { port?: number }): Promise<LocalS
   bootstrap(configDir);
 
   const staticDir = app.isPackaged
-    ? join(process.resourcesPath, "app", "dist")
+    ? join(process.resourcesPath, "dist")
     : resolve(__dirname, "../../../web/dist");
   const keyStore = createElectronKeyStore(secretsFile);
 

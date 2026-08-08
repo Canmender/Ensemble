@@ -1,0 +1,35 @@
+appId: com.jungle.system
+productName: 丛林系统
+copyright: Copyright © 2026 丛林系统
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+extraResources:
+  # 前端静态资源 → resources/dist（server.ts prod 加载该路径）
+  - from: ../web/dist
+    to: dist
+asar: true
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: build/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 丛林系统
+  uninstallDisplayName: 丛林系统
+  deleteAppDataOnUninstall: false
+  artifactName: ${productName}-${version}-Setup.${ext}
+publish:
+  provider: github
+  owner: Canmender
+  repo: jungle-system
+  releaseType: release

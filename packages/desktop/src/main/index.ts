@@ -1,4 +1,5 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, dialog } from "electron";
+import { autoUpdater } from "electron-updater";
 import { startLocalServer } from "./server";
 import { createWindow, registerIpc } from "./window";
 import { logger } from "@jungle/server";
@@ -30,6 +31,25 @@ app.whenReady().then(async () => {
     const url = await bootstrap();
     mainWindow = createWindow(url);
     logger.info(`window loading: ${url}`);
+
+    // 自动更新：检测 GitHub Releases 新版本，下载后一键升级
+    if (app.isPackaged) {
+      autoUpdater.logger = logger as any;
+      autoUpdater.autoDownload = true;
+      autoUpdater.autoInstallOnAppQuit = true;
+      void autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+      autoUpdater.on("update-downloaded", async () => {
+        const { response } = await dialog.showMessageBox({
+          type: "info",
+          buttons: ["立即重启安装", "稍后"],
+          defaultId: 0,
+          title: "丛林系统更新",
+          message: "新版本已下载完成",
+          detail: "重启应用后将自动完成安装（后期下载新安装包可一键更新）。",
+        });
+        if (response === 0) autoUpdater.quitAndInstall();
+      });
+    }
   } catch (err) {
     console.error("startup failed:", err);
     logger.error("startup failed", err instanceof Error ? `${err.message}\n${err.stack}` : String(err));
