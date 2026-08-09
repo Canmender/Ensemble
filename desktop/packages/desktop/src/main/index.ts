@@ -1,5 +1,4 @@
 import { app, BrowserWindow, dialog, Menu, nativeImage, Tray } from "electron";
-import { autoUpdater } from "electron-updater";
 import { join } from "node:path";
 import { startLocalServer } from "./server";
 import { createWindow, registerIpc } from "./window";
@@ -115,28 +114,6 @@ app.whenReady().then(async () => {
 
     createTray();
     logger.info(`window loading: ${url}`);
-
-    // 自动更新：检测 GitHub Releases 新版本，下载后一键升级
-    if (app.isPackaged) {
-      autoUpdater.logger = logger as any;
-      autoUpdater.autoDownload = true;
-      autoUpdater.autoInstallOnAppQuit = true;
-      void autoUpdater.checkForUpdatesAndNotify().catch(() => {});
-      autoUpdater.on("update-downloaded", async () => {
-        const { response } = await dialog.showMessageBox({
-          type: "info",
-          buttons: ["立即重启安装", "稍后"],
-          defaultId: 0,
-          title: "合鸣更新",
-          message: "新版本已下载完成",
-          detail: "重启应用后将自动完成安装（后期下载新安装包可一键更新）。",
-        });
-        if (response === 0) {
-          isQuitting = true;
-          autoUpdater.quitAndInstall();
-        }
-      });
-    }
   } catch (err) {
     console.error("startup failed:", err);
     logger.error("startup failed", err instanceof Error ? `${err.message}\n${err.stack}` : String(err));

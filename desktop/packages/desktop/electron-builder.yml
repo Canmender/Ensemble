@@ -32,8 +32,3 @@ nsis:
   uninstallDisplayName: 合鸣
   deleteAppDataOnUninstall: false
   artifactName: ensemble-${version}-setup.${ext}
-publish:
-  provider: github
-  owner: Canmender
-  repo: Ensemble
-  releaseType: release
