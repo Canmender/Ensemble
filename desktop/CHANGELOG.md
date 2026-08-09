@@ -2,6 +2,39 @@
 
 本项目采用语义化版本（SemVer）。所有值得注意的变更记录于此。
 
+## [0.2.0] - 2026-08-09
+
+性能优化大版本。参考 OpenCode (Go) 和 OpenClaw (TypeScript) 的架构模式。
+
+### ⚡ 性能优化
+
+**前端**
+- React.lazy 路由懒加载：首屏 JS 426KB → 190KB（↓55%）
+- reactflow 动态加载：RunPage 153KB → 13KB（↓92%），仅画布视图按需加载
+- Vite vendor-react/vendor-flow chunk 拆分，长期缓存命中率↑
+- 移除死依赖（@anthropic-ai/claude-agent-sdk, uuid）：-94 个包
+
+**Electron**
+- GPU 光栅化 + 零拷贝渲染标志，减少 CPU 占用
+- 后台渲染节流（setBackgroundThrottling），窗口最小化时降频
+
+**引擎**
+- Auto-Compact 阈值 0.5 → 0.95（参考 OpenCode），避免过早压缩浪费 LLM 调用
+- 工具循环恢复（参考 OpenClaw）：相同工具+参数窗口内重复 3 次 → 自动终止
+- Steering 消息注入（参考 OpenClaw）：用户在 agent 运行中可通过 WS 发送消息
+- 预编译 SQL 语句（参考 OpenCode sqlc）：启动时一次性 prepare，减少重复解析
+
+### 📚 文档
+
+- 新增 docs/PERFORMANCE.md：性能优化措施、设计决策、维护指南
+- 新增 docs/WIKI.md：完整 Wiki（架构/模块/开发/部署/故障排查）
+- 更新 docs/ARCHITECTURE.md：Harness 部分（Auto-Compact/循环恢复/Steering）
+- 更新 docs/event-protocol.md：Steering 消息协议
+
+### 🔧 修复
+
+- 代码审查修复：工具循环检测改进（滑动窗口）、offload 目录统一、类型定义统一
+
 ## [0.1.0] - 2026-08-08
 
 合鸣首个发布版。基于完整的 MultiAgent 平台演进，更名并打包发行。
