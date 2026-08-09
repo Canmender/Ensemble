@@ -63,11 +63,14 @@ packages/
 `adapters/builtin/loop.ts` 是 hook 驱动的 agentic 循环：
 
 ```
-preReasoning（记忆注入/压缩）→ LLM 流式 → postReasoning → 并行执行工具 → postToolResult → postCall
+preReasoning（记忆注入/压缩）→ Steering 消息检查 → 工具循环检测 → LLM 流式 → postReasoning → 并行执行工具 → postToolResult → postCall
 ```
 
 - **Hook 系统**：`preReasoning / postReasoning / postToolResult / postCall / onError` 可插拔事件点
 - **上下文压缩**：原子组配对保护 + LLM 结构化摘要 + overflow 恢复 + 大结果 offload
+- **Auto-Compact**：token 使用达 95% 时自动触发压缩（参考 OpenCode）
+- **工具循环恢复**：相同工具+参数连续调用 3 次 → 自动终止并引导 LLM 换策略（参考 OpenClaw）
+- **Steering 消息**：用户在 agent 运行中可通过 WS 发送消息注入上下文（参考 OpenClaw）
 - **并行工具调用**：独立工具同时执行，确认串行（HITL）
 - **安全围栏**：命令黑白名单/危险命令、网络/文件读/写开关、SSRF 防护
 
