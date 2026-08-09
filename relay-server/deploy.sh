@@ -5,7 +5,7 @@
 
 set -e
 
-SERVER_IP="${1:-47.92.39.184}"
+SERVER_IP="${1:-YOUR_SERVER_IP}"
 SERVER_USER="root"
 DEPLOY_DIR="/opt/ensemble/relay-server"
 

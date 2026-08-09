@@ -531,7 +531,7 @@ export default function SettingsPage() {
   const [fetchingModels, setFetchingModels] = useState<string | null>(null);
 
   // 中继服务器状态
-  const [relayUrl, setRelayUrl] = useState("http://47.92.39.184:8888");
+  const [relayUrl, setRelayUrl] = useState("");
   const [relayStatus, setRelayStatus] = useState<{ connected: boolean; status: string }>({ connected: false, status: "disconnected" });
   const [relayConnecting, setRelayConnecting] = useState(false);
 

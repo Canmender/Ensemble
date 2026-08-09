@@ -1,7 +1,7 @@
 # 合鸣中继服务器部署脚本 (PowerShell)
 # 用法: .\deploy.ps1
 
-$SERVER_IP = "47.92.39.184"
+$SERVER_IP = "YOUR_SERVER_IP"
 $SERVER_USER = "root"
 $DEPLOY_DIR = "/opt/ensemble/relay-server"
 

@@ -2,8 +2,8 @@
 
 ## 服务器信息
 
-- **公网 IP**: 47.92.39.184
-- **私有 IP**: 172.17.22.100
+- **公网 IP**: `<YOUR_SERVER_IP>`
+- **私有 IP**: `<YOUR_PRIVATE_IP>`
 - **系统**: Ubuntu
 - **端口**: 8888
 
@@ -21,10 +21,10 @@ npm run build
 
 ```bash
 # 使用 scp 上传
-scp -r dist/ package.json package-lock.json root@47.92.39.184:/opt/ensemble/relay-server/
+scp -r dist/ package.json package-lock.json root@<YOUR_SERVER_IP>:/opt/ensemble/relay-server/
 
 # 或者使用 sftp
-sftp root@47.92.39.184
+sftp root@<YOUR_SERVER_IP>
 mkdir -p /opt/ensemble/relay-server
 put -r dist/
 put package.json
@@ -35,7 +35,7 @@ exit
 ### 3. SSH 连接服务器
 
 ```bash
-ssh root@47.92.39.184
+ssh root@<YOUR_SERVER_IP>
 ```
 
 ### 4. 在服务器上安装和启动
@@ -73,7 +73,7 @@ pm2 logs ensemble-relay
 curl http://localhost:8888/health
 
 # 从外部测试
-curl http://47.92.39.184:8888/health
+curl http://<YOUR_SERVER_IP>:8888/health
 ```
 
 ## 防火墙配置
