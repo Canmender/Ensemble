@@ -1,24 +1,187 @@
 /**
- * Agent 列表页面
+ * Agent 管理页面
+ * 支持查看、创建、编辑、删除 Agent
  */
 
-import React from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  Modal,
+  TextInput,
+  ScrollView,
+  Alert,
+  ActivityIndicator,
+  Switch,
 } from "react-native";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
+import { api } from "../services/api";
 import type { AgentConfig } from "@ensemble/shared-protocol";
 
-export default function AgentsPage() {
-  const { agents } = useTaskStore();
-  const { connectionState } = useDeviceStore();
+// Agent 表单数据
+interface AgentFormData {
+  name: string;
+  kind: "builtin" | "local";
+  description: string;
+  providerId: string;
+  model: string;
+  systemPrompt: string;
+  temperature: number;
+  maxIterations: number;
+  tools: string[];
+  enabled: boolean;
+}
 
+const defaultFormData: AgentFormData = {
+  name: "",
+  kind: "builtin",
+  description: "",
+  providerId: "",
+  model: "",
+  systemPrompt: "You are a helpful assistant.",
+  temperature: 0.7,
+  maxIterations: 10,
+  tools: [],
+  enabled: true,
+};
+
+// 可用工具列表
+const AVAILABLE_TOOLS = [
+  "read_file",
+  "write_file",
+  "execute_command",
+  "web_search",
+  "web_fetch",
+  "memory_write",
+  "memory_read",
+  "memory_list",
+];
+
+export default function AgentsPage() {
+  const { agents, setAgents } = useTaskStore();
+  const { connectionState } = useDeviceStore();
   const isConnected = connectionState === "connected";
+
+  const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [editingAgent, setEditingAgent] = useState<AgentConfig | null>(null);
+  const [formData, setFormData] = useState<AgentFormData>(defaultFormData);
+  const [providers, setProviders] = useState<any[]>([]);
+
+  // 加载 Agent 列表
+  const loadAgents = useCallback(async () => {
+    if (!isConnected) return;
+    setLoading(true);
+    const result = await api.getAgents();
+    if (result.data) {
+      setAgents(result.data);
+    }
+    setLoading(false);
+  }, [isConnected, setAgents]);
+
+  // 加载 Provider 列表
+  const loadProviders = useCallback(async () => {
+    if (!isConnected) return;
+    const result = await api.getProviders();
+    if (result.data) {
+      setProviders(result.data);
+    }
+  }, [isConnected]);
+
+  useEffect(() => {
+    loadAgents();
+    loadProviders();
+  }, [loadAgents, loadProviders]);
+
+  // 打开创建模态框
+  const handleCreate = () => {
+    setEditingAgent(null);
+    setFormData(defaultFormData);
+    setShowModal(true);
+  };
+
+  // 打开编辑模态框
+  const handleEdit = (agent: AgentConfig) => {
+    setEditingAgent(agent);
+    setFormData({
+      name: agent.name,
+      kind: agent.kind,
+      description: agent.description || "",
+      providerId: agent.providerId || "",
+      model: agent.model || "",
+      systemPrompt: agent.systemPrompt || "",
+      temperature: agent.temperature || 0.7,
+      maxIterations: agent.maxIterations || 10,
+      tools: agent.tools || [],
+      enabled: agent.enabled,
+    });
+    setShowModal(true);
+  };
+
+  // 保存 Agent
+  const handleSave = async () => {
+    if (!formData.name.trim()) {
+      Alert.alert("错误", "请输入 Agent 名称");
+      return;
+    }
+
+    setLoading(true);
+    let result;
+
+    if (editingAgent) {
+      // 更新
+      result = await api.updateAgent(editingAgent.id, formData);
+    } else {
+      // 创建
+      result = await api.createAgent({
+        ...formData,
+        id: `agent-${Date.now()}`,
+      });
+    }
+
+    if (result.error) {
+      Alert.alert("错误", result.error);
+    } else {
+      setShowModal(false);
+      loadAgents();
+    }
+    setLoading(false);
+  };
+
+  // 删除 Agent
+  const handleDelete = (agent: AgentConfig) => {
+    Alert.alert("确认删除", `确定要删除 Agent "${agent.name}" 吗？`, [
+      { text: "取消", style: "cancel" },
+      {
+        text: "删除",
+        style: "destructive",
+        onPress: async () => {
+          setLoading(true);
+          const result = await api.deleteAgent(agent.id);
+          if (result.error) {
+            Alert.alert("错误", result.error);
+          } else {
+            loadAgents();
+          }
+          setLoading(false);
+        },
+      },
+    ]);
+  };
+
+  // 切换工具选择
+  const toggleTool = (tool: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      tools: prev.tools.includes(tool)
+        ? prev.tools.filter((t) => t !== tool)
+        : [...prev.tools, tool],
+    }));
+  };
 
   // Agent 类型图标
   const getAgentIcon = (kind: string) => {
@@ -33,76 +196,314 @@ export default function AgentsPage() {
   };
 
   // 渲染 Agent 项
-  const renderAgentItem = ({ item }: { item: AgentConfig }) => {
-    return (
-      <TouchableOpacity style={styles.agentItem}>
-        <View style={styles.agentHeader}>
-          <Text style={styles.agentIcon}>{getAgentIcon(item.kind)}</Text>
-          <View style={styles.agentInfo}>
-            <Text style={styles.agentName}>{item.name}</Text>
-            <Text style={styles.agentKind}>
-              {item.kind === "builtin" ? "内置 Agent" : "本地 Agent"}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: item.enabled ? "#10b981" : "#6b7280" },
-            ]}
-          />
-        </View>
-
-        {item.description && (
-          <Text style={styles.agentDescription} numberOfLines={2}>
-            {item.description}
+  const renderAgentItem = ({ item }: { item: AgentConfig }) => (
+    <TouchableOpacity
+      style={styles.agentItem}
+      onPress={() => handleEdit(item)}
+      onLongPress={() => handleDelete(item)}
+    >
+      <View style={styles.agentHeader}>
+        <Text style={styles.agentIcon}>{getAgentIcon(item.kind)}</Text>
+        <View style={styles.agentInfo}>
+          <Text style={styles.agentName}>{item.name}</Text>
+          <Text style={styles.agentKind}>
+            {item.kind === "builtin" ? "内置 Agent" : "本地 Agent"}
           </Text>
+        </View>
+        <View
+          style={[
+            styles.statusDot,
+            { backgroundColor: item.enabled ? "#10b981" : "#6b7280" },
+          ]}
+        />
+      </View>
+
+      {item.description && (
+        <Text style={styles.agentDescription} numberOfLines={2}>
+          {item.description}
+        </Text>
+      )}
+
+      <View style={styles.agentMeta}>
+        <Text style={styles.agentModel}>{item.model || "未配置模型"}</Text>
+        <Text style={styles.agentProvider}>{item.providerId || "未配置提供商"}</Text>
+      </View>
+
+      <View style={styles.agentTools}>
+        {item.tools.slice(0, 3).map((tool, index) => (
+          <View key={index} style={styles.toolBadge}>
+            <Text style={styles.toolText}>{tool}</Text>
+          </View>
+        ))}
+        {item.tools.length > 3 && (
+          <Text style={styles.moreTools}>+{item.tools.length - 3}</Text>
         )}
+      </View>
+    </TouchableOpacity>
+  );
 
-        <View style={styles.agentMeta}>
-          <Text style={styles.agentModel}>{item.model}</Text>
-          <Text style={styles.agentProvider}>{item.providerId}</Text>
+  // 渲染表单模态框
+  const renderFormModal = () => (
+    <Modal
+      visible={showModal}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowModal(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <TouchableOpacity onPress={() => setShowModal(false)}>
+            <Text style={styles.modalCancel}>取消</Text>
+          </TouchableOpacity>
+          <Text style={styles.modalTitle}>
+            {editingAgent ? "编辑 Agent" : "创建 Agent"}
+          </Text>
+          <TouchableOpacity onPress={handleSave} disabled={loading}>
+            <Text style={[styles.modalSave, loading && styles.modalSaveDisabled]}>
+              保存
+            </Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.agentTools}>
-          {item.tools.slice(0, 3).map((tool, index) => (
-            <View key={index} style={styles.toolBadge}>
-              <Text style={styles.toolText}>{tool}</Text>
+        <ScrollView style={styles.modalContent}>
+          {/* 名称 */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>名称 *</Text>
+            <TextInput
+              style={styles.formInput}
+              value={formData.name}
+              onChangeText={(text) => setFormData({ ...formData, name: text })}
+              placeholder="输入 Agent 名称"
+              placeholderTextColor="#6b7280"
+            />
+          </View>
+
+          {/* 类型 */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>类型</Text>
+            <View style={styles.kindSelector}>
+              <TouchableOpacity
+                style={[
+                  styles.kindOption,
+                  formData.kind === "builtin" && styles.kindOptionActive,
+                ]}
+                onPress={() => setFormData({ ...formData, kind: "builtin" })}
+              >
+                <Text
+                  style={[
+                    styles.kindText,
+                    formData.kind === "builtin" && styles.kindTextActive,
+                  ]}
+                >
+                  🤖 内置
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.kindOption,
+                  formData.kind === "local" && styles.kindOptionActive,
+                ]}
+                onPress={() => setFormData({ ...formData, kind: "local" })}
+              >
+                <Text
+                  style={[
+                    styles.kindText,
+                    formData.kind === "local" && styles.kindTextActive,
+                  ]}
+                >
+                  💻 本地
+                </Text>
+              </TouchableOpacity>
             </View>
-          ))}
-          {item.tools.length > 3 && (
-            <Text style={styles.moreTools}>+{item.tools.length - 3}</Text>
+          </View>
+
+          {/* 描述 */}
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>描述</Text>
+            <TextInput
+              style={[styles.formInput, styles.formTextarea]}
+              value={formData.description}
+              onChangeText={(text) =>
+                setFormData({ ...formData, description: text })
+              }
+              placeholder="Agent 描述"
+              placeholderTextColor="#6b7280"
+              multiline
+              numberOfLines={3}
+            />
+          </View>
+
+          {/* Provider */}
+          {formData.kind === "builtin" && (
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>Provider</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {providers.map((p) => (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[
+                      styles.providerOption,
+                      formData.providerId === p.id &&
+                        styles.providerOptionActive,
+                    ]}
+                    onPress={() =>
+                      setFormData({ ...formData, providerId: p.id })
+                    }
+                  >
+                    <Text
+                      style={[
+                        styles.providerText,
+                        formData.providerId === p.id &&
+                          styles.providerTextActive,
+                      ]}
+                    >
+                      {p.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
           )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+
+          {/* 模型 */}
+          {formData.kind === "builtin" && (
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>模型</Text>
+              <TextInput
+                style={styles.formInput}
+                value={formData.model}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, model: text })
+                }
+                placeholder="例如: claude-sonnet-4-20250514"
+                placeholderTextColor="#6b7280"
+              />
+            </View>
+          )}
+
+          {/* System Prompt */}
+          {formData.kind === "builtin" && (
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>System Prompt</Text>
+              <TextInput
+                style={[styles.formInput, styles.formTextarea]}
+                value={formData.systemPrompt}
+                onChangeText={(text) =>
+                  setFormData({ ...formData, systemPrompt: text })
+                }
+                placeholder="系统提示词"
+                placeholderTextColor="#6b7280"
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+          )}
+
+          {/* Temperature */}
+          {formData.kind === "builtin" && (
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>
+                Temperature: {formData.temperature.toFixed(1)}
+              </Text>
+              <View style={styles.sliderContainer}>
+                <Text style={styles.sliderLabel}>精确</Text>
+                <View style={styles.sliderTrack}>
+                  <TouchableOpacity
+                    style={[
+                      styles.sliderThumb,
+                      { left: `${formData.temperature * 100}%` },
+                    ]}
+                  />
+                </View>
+                <Text style={styles.sliderLabel}>创意</Text>
+              </View>
+            </View>
+          )}
+
+          {/* 工具 */}
+          {formData.kind === "builtin" && (
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>工具</Text>
+              <View style={styles.toolsGrid}>
+                {AVAILABLE_TOOLS.map((tool) => (
+                  <TouchableOpacity
+                    key={tool}
+                    style={[
+                      styles.toolChip,
+                      formData.tools.includes(tool) && styles.toolChipActive,
+                    ]}
+                    onPress={() => toggleTool(tool)}
+                  >
+                    <Text
+                      style={[
+                        styles.toolChipText,
+                        formData.tools.includes(tool) &&
+                          styles.toolChipTextActive,
+                      ]}
+                    >
+                      {tool}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* 启用状态 */}
+          <View style={styles.formGroup}>
+            <View style={styles.switchRow}>
+              <Text style={styles.formLabel}>启用</Text>
+              <Switch
+                value={formData.enabled}
+                onValueChange={(value) =>
+                  setFormData({ ...formData, enabled: value })
+                }
+                trackColor={{ false: "#374151", true: "#10b981" }}
+                thumbColor={formData.enabled ? "#fff" : "#9ca3af"}
+              />
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
+  );
 
   return (
     <View style={styles.container}>
       {/* 头部 */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Agent 列表</Text>
-        <Text style={styles.headerSubtitle}>
-          {isConnected ? `${agents.length} 个 Agent` : "未连接"}
-        </Text>
+        <View>
+          <Text style={styles.headerTitle}>Agent 管理</Text>
+          <Text style={styles.headerSubtitle}>
+            {isConnected ? `${agents.length} 个 Agent` : "未连接"}
+          </Text>
+        </View>
+        {isConnected && (
+          <TouchableOpacity style={styles.addButton} onPress={handleCreate}>
+            <Text style={styles.addButtonText}>+ 创建</Text>
+          </TouchableOpacity>
+        )}
       </View>
+
+      {/* 加载状态 */}
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#10b981" />
+        </View>
+      )}
 
       {/* Agent 列表 */}
       {!isConnected ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>🔌</Text>
           <Text style={styles.emptyText}>未连接到桌面端</Text>
-          <Text style={styles.emptySubtext}>
-            请先在看板页面连接到桌面端
-          </Text>
+          <Text style={styles.emptySubtext}>请先在看板页面连接到桌面端</Text>
         </View>
-      ) : agents.length === 0 ? (
+      ) : agents.length === 0 && !loading ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>🤖</Text>
           <Text style={styles.emptyText}>暂无 Agent</Text>
-          <Text style={styles.emptySubtext}>
-            请在桌面端创建 Agent
-          </Text>
+          <Text style={styles.emptySubtext}>点击右上角创建第一个 Agent</Text>
         </View>
       ) : (
         <FlatList
@@ -110,8 +511,12 @@ export default function AgentsPage() {
           renderItem={renderAgentItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          refreshing={loading}
+          onRefresh={loadAgents}
         />
       )}
+
+      {renderFormModal()}
     </View>
   );
 }
@@ -137,6 +542,22 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     color: "#9ca3af",
     fontSize: 14,
+    marginTop: 2,
+  },
+  addButton: {
+    backgroundColor: "#10b981",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  loadingContainer: {
+    padding: 16,
+    alignItems: "center",
   },
   listContent: {
     padding: 16,
@@ -237,5 +658,159 @@ const styles = StyleSheet.create({
   emptySubtext: {
     color: "#6b7280",
     textAlign: "center",
+  },
+  // Modal styles
+  modalContainer: {
+    flex: 1,
+    backgroundColor: "#111827",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  modalCancel: {
+    color: "#9ca3af",
+    fontSize: 16,
+  },
+  modalTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "600",
+  },
+  modalSave: {
+    color: "#10b981",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalSaveDisabled: {
+    color: "#6b7280",
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "500",
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: "#1f2937",
+    borderRadius: 8,
+    padding: 12,
+    color: "#fff",
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  formTextarea: {
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
+  kindSelector: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  kindOption: {
+    flex: 1,
+    backgroundColor: "#1f2937",
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  kindOptionActive: {
+    borderColor: "#10b981",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+  },
+  kindText: {
+    color: "#9ca3af",
+    fontSize: 14,
+  },
+  kindTextActive: {
+    color: "#10b981",
+  },
+  providerOption: {
+    backgroundColor: "#1f2937",
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  providerOptionActive: {
+    borderColor: "#10b981",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+  },
+  providerText: {
+    color: "#9ca3af",
+    fontSize: 14,
+  },
+  providerTextActive: {
+    color: "#10b981",
+  },
+  sliderContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  sliderLabel: {
+    color: "#6b7280",
+    fontSize: 12,
+  },
+  sliderTrack: {
+    flex: 1,
+    height: 4,
+    backgroundColor: "#374151",
+    borderRadius: 2,
+    position: "relative",
+  },
+  sliderThumb: {
+    position: "absolute",
+    top: -8,
+    width: 20,
+    height: 20,
+    backgroundColor: "#10b981",
+    borderRadius: 10,
+    marginLeft: -10,
+  },
+  toolsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  toolChip: {
+    backgroundColor: "#1f2937",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  toolChipActive: {
+    borderColor: "#10b981",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
+  },
+  toolChipText: {
+    color: "#9ca3af",
+    fontSize: 12,
+  },
+  toolChipTextActive: {
+    color: "#10b981",
+  },
+  switchRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 });
