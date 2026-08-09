@@ -20,8 +20,8 @@ export class WsHub {
   private globalSubs = new Set<WebSocket>();
   private heartbeatTimer?: NodeJS.Timeout;
 
-  /** 客户端消息回调（cancel 等需要引擎配合的操作） */
-  onClientMessage?: (msg: { type: string; runId: string }) => void;
+  /** 客户端消息回调（cancel/steer 等需要引擎配合的操作） */
+  onClientMessage?: (msg: { type: string; runId: string; content?: string }) => void;
 
   attach(server: Server, path = "/ws"): void {
     this.wss = new WebSocketServer({ server, path });
@@ -44,6 +44,9 @@ export class WsHub {
             break;
           case "cancel":
             this.onClientMessage?.({ type: "cancel", runId: msg.runId });
+            break;
+          case "steer":
+            this.onClientMessage?.({ type: "steer", runId: msg.runId, content: msg.content });
             break;
         }
       });

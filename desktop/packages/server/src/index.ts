@@ -18,6 +18,10 @@ async function main(): Promise<void> {
       logger.info(`cancel requested for run ${msg.runId}`);
       ctx.engine.cancelRun(msg.runId);
     }
+    if (msg.type === "steer" && msg.content) {
+      logger.info(`steering message for run ${msg.runId}`);
+      ctx.engine.addSteering(msg.runId, msg.content);
+    }
   };
 
   server.listen(env.port, () => {

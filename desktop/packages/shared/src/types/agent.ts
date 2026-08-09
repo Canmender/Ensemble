@@ -89,6 +89,12 @@ export interface AgentTaskInput {
   resumeSessionId?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * Steering 消息队列（参考 OpenClaw）：
+   * 用户在 agent 运行中注入的消息，会在下一个检查点注入上下文。
+   * 引用类型：executor 消费时会清空队列。
+   */
+  steeringQueue?: Array<{ content: string; timestamp: number }>;
 }
 
 export type AgentStatusTimeline = AgentStatus;

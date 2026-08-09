@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { AgentConfig, AgentTaskInput, AgentEvent } from "@ensemble/shared";
-import type { AgentAdapter } from "../types";
+import type { AgentAdapter, SteeringMessage } from "../types";
 import { runAgenticLoop } from "./loop";
 import type { ProviderRegistry } from "../../llm/registry";
 import type { ToolRegistry } from "../../tools/types";
@@ -122,6 +122,7 @@ export class BuiltinAgentExecutor implements AgentAdapter {
       hooks,
       offloadDir,
       toolResultOffloadChars: this.cfg.context?.toolResultOffloadChars,
+      steeringQueue: input.steeringQueue as SteeringMessage[] | undefined,
     });
   }
 
