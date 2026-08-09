@@ -1,4 +1,5 @@
 import type { AgentEvent, AppSettings } from "@ensemble/shared";
+import type { SteeringMessage } from "../types";
 import type { LLMMessage, LLMProvider, LLMRequest, LLMTool, LLMToolCall } from "../../llm/types";
 import type { AgentTool, ToolContext } from "../../tools/types";
 import type { ContextManager } from "../../context/manager";
@@ -37,12 +38,6 @@ export interface LoopOptions {
    * agent 会在下一轮 LLM 调用中看到这些消息。
    */
   steeringQueue?: SteeringMessage[];
-}
-
-/** Steering 消息：用户在 agent 运行中注入的消息 */
-export interface SteeringMessage {
-  content: string;
-  timestamp: number;
 }
 
 /** 工具调用签名（用于循环检测） */
@@ -88,10 +83,11 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
   const offloadChars = opts.toolResultOffloadChars ?? 8000;
 
   // 工具循环检测状态（参考 OpenClaw toolLoopRecovery）
+  // 改进：检查窗口内的重复模式，而非仅连续重复
   const toolLoopState = {
     recentSignatures: [] as string[],
-    consecutiveDuplicates: 0,
-    maxConsecutive: 3, // 连续 3 次相同调用视为循环
+    maxWindowSize: 12,     // 检查最近 12 个签名
+    maxDuplicates: 3,      // 同一签名出现 3 次视为循环
     terminated: false,
   };
 
@@ -201,32 +197,35 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
       }
     }
 
-    // 工具循环检测（参考 OpenClaw toolLoopRecovery）
-    // 检测相同工具+参数连续调用，防止死循环浪费 token
+    // 工具循环检测（参考 OpenClaw toolLoopRecovery，改进：窗口内重复检测）
+    // 检测同一工具+参数在窗口内重复出现，防止死循环浪费 token
     for (const call of calls) {
       const sig = toolCallSignature(call);
-      const lastSig = toolLoopState.recentSignatures[toolLoopState.recentSignatures.length - 1];
-      if (sig === lastSig) {
-        toolLoopState.consecutiveDuplicates++;
-      } else {
-        toolLoopState.consecutiveDuplicates = 0;
-      }
       toolLoopState.recentSignatures.push(sig);
-      // 只保留最近 10 个签名
-      if (toolLoopState.recentSignatures.length > 10) {
+      // 维护滑动窗口
+      if (toolLoopState.recentSignatures.length > toolLoopState.maxWindowSize) {
         toolLoopState.recentSignatures.shift();
       }
     }
 
-    if (toolLoopState.consecutiveDuplicates >= toolLoopState.maxConsecutive) {
+    // 检查窗口内是否有签名重复超过阈值
+    const sigCounts = new Map<string, number>();
+    for (const sig of toolLoopState.recentSignatures) {
+      sigCounts.set(sig, (sigCounts.get(sig) ?? 0) + 1);
+    }
+    const maxEntry = [...sigCounts.entries()].reduce(
+      (max, entry) => entry[1] > max[1] ? entry : max,
+      ["", 0],
+    );
+
+    if (maxEntry[1] >= toolLoopState.maxDuplicates) {
       toolLoopState.terminated = true;
       const loopTool = calls[0]?.name ?? "unknown";
-      const message = `工具循环检测：${loopTool} 连续调用 ${toolLoopState.consecutiveDuplicates} 次相同参数，自动终止以避免浪费。`;
+      const message = `工具循环检测：${loopTool} 在最近 ${toolLoopState.maxWindowSize} 次调用中重复 ${maxEntry[1]} 次相同参数，自动终止以避免浪费。`;
       yield { type: "status", status: "running", detail: message, ts: Date.now() };
       yield { type: "tool_result", tool: "loop_detector", output: message, ts: Date.now() };
       // 注入一条系统消息告知 LLM 循环已终止
       ctx.msgs.push({ role: "user", content: `[系统] ${message} 请换一种方法或直接给出结论。` });
-      toolLoopState.consecutiveDuplicates = 0;
       toolLoopState.recentSignatures = [];
       continue; // 给 LLM 一次机会调整策略
     }
