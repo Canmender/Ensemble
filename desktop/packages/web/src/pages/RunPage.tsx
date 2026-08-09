@@ -1,14 +1,63 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Brain, CheckCircle2, Copy, Wrench, XCircle } from "lucide-react";
-import { Background, Controls, ReactFlow } from "reactflow";
-import "reactflow/dist/style.css";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
 import { fmtTime } from "../lib/events";
 import type { Run as RunType } from "../types";
 import { Badge, Button, Card, Spinner, StatusDot, cls, statusLabel } from "../components/ui";
+
+/** reactflow 动态加载：仅在用户切换到"画布"视图时才加载（~140KB） */
+const WorkflowCanvas = lazy(() =>
+  Promise.all([
+    import("reactflow"),
+    import("reactflow/dist/style.css"),
+  ]).then(([rf]) => {
+    return {
+      default: function WorkflowCanvasInner({ jobs }: { jobs: any[] }) {
+        const { ReactFlow, Background, Controls } = rf;
+        const nodes = useMemo(
+          () =>
+            jobs.map((j, i) => ({
+              id: j.id,
+              position: { x: (i % 3) * 210, y: Math.floor(i / 3) * 110 },
+              data: { label: j.agentName },
+              className: cls(
+                "rounded-lg border-2 bg-surface px-3 py-2 font-medium text-fg",
+                j.status === "success"
+                  ? "!border-success"
+                  : j.status === "error"
+                    ? "!border-destructive"
+                    : j.status === "running" || j.status === "thinking"
+                      ? "!border-primary"
+                      : "!border-border",
+              ),
+            })),
+          [jobs],
+        );
+        const edges = useMemo(
+          () =>
+            jobs.slice(1).map((j, i) => ({
+              id: `e-${i}`,
+              source: jobs[i].id,
+              target: j.id,
+              animated: jobs[i].status === "running" || j.status === "running",
+            })),
+          [jobs],
+        );
+        return (
+          <div className="min-h-0 flex-1" style={{ minHeight: 320 }}>
+            <ReactFlow nodes={nodes} edges={edges} fitView proOptions={{ hideAttribution: true }}>
+              <Background />
+              <Controls />
+            </ReactFlow>
+          </div>
+        );
+      },
+    };
+  }),
+);
 
 const modeLabel: Record<string, string> = { single: "单一分发", workflow: "工作流", chat: "群聊" };
 
@@ -132,48 +181,6 @@ function ToolTimeline({ items }: { items: any[] }) {
           return null;
         })}
       </div>
-    </div>
-  );
-}
-
-// ---------- 工作流画布（ReactFlow DAG：agent 协作图） ----------
-function WorkflowCanvas({ jobs }: { jobs: any[] }) {
-  const nodes = useMemo(
-    () =>
-      jobs.map((j, i) => ({
-        id: j.id,
-        position: { x: (i % 3) * 210, y: Math.floor(i / 3) * 110 },
-        data: { label: j.agentName },
-        className: cls(
-          "rounded-lg border-2 bg-surface px-3 py-2 font-medium text-fg",
-          j.status === "success"
-            ? "!border-success"
-            : j.status === "error"
-              ? "!border-destructive"
-              : j.status === "running" || j.status === "thinking"
-                ? "!border-primary"
-                : "!border-border",
-        ),
-      })),
-    [jobs],
-  );
-  const edges = useMemo(
-    () =>
-      jobs.slice(1).map((j, i) => ({
-        id: `e-${i}`,
-        source: jobs[i].id,
-        target: j.id,
-        animated: jobs[i].status === "running" || j.status === "running",
-      })),
-    [jobs],
-  );
-
-  return (
-    <div className="min-h-0 flex-1" style={{ minHeight: 320 }}>
-      <ReactFlow nodes={nodes} edges={edges} fitView proOptions={{ hideAttribution: true }}>
-        <Background />
-        <Controls />
-      </ReactFlow>
     </div>
   );
 }
@@ -391,7 +398,9 @@ export default function RunPage() {
             {view === "timeline" ? (
               <ToolTimeline items={sortedEvents} />
             ) : view === "canvas" ? (
-              <WorkflowCanvas jobs={jobs} />
+              <Suspense fallback={<div className="flex flex-1 items-center justify-center text-xs text-muted"><Spinner label="加载画布…" /></div>}>
+                <WorkflowCanvas jobs={jobs} />
+              </Suspense>
             ) : collapseLog ? (
               <div className="flex flex-1 flex-col items-center justify-center gap-2 p-4 text-center">
                 <span className="text-xs text-muted">过程日志已折叠，聚焦结果</span>
