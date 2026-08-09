@@ -523,17 +523,30 @@ function DiscoverySection() {
 }
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "skills" | "local" | "general">("providers");
+  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "skills" | "local" | "relay" | "general">("providers");
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ProviderConfig | undefined>();
   const [fetchingModels, setFetchingModels] = useState<string | null>(null);
 
+  // 中继服务器状态
+  const [relayUrl, setRelayUrl] = useState("http://SERVER_IP_REDACTED:8888");
+  const [relayStatus, setRelayStatus] = useState<{ connected: boolean; status: string }>({ connected: false, status: "disconnected" });
+  const [relayConnecting, setRelayConnecting] = useState(false);
+
   async function refresh() {
     const [p, s] = await Promise.all([api.get<ProviderConfig[]>("/providers"), api.get<AppSettings>("/settings")]);
     setProviders(p ?? []);
     setSettings(s);
+
+    // 获取中继状态
+    try {
+      const relay = await api.get<{ connected: boolean; status: string }>("/relay/status");
+      if (relay) setRelayStatus(relay);
+    } catch (e) {
+      // 忽略错误
+    }
   }
 
   useEffect(() => {
@@ -565,12 +578,36 @@ export default function SettingsPage() {
     void refresh();
   }
 
+  async function connectRelay() {
+    if (!relayUrl.trim()) return;
+    setRelayConnecting(true);
+    try {
+      const result = await api.post<{ success: boolean; message?: string; error?: string }>("/relay/connect", { url: relayUrl });
+      if (result?.success) {
+        alert("✅ " + result.message);
+      } else {
+        alert("❌ " + (result?.error || "连接失败"));
+      }
+      void refresh();
+    } catch (e) {
+      alert("❌ 连接失败: " + (e as Error).message);
+    } finally {
+      setRelayConnecting(false);
+    }
+  }
+
+  async function disconnectRelay() {
+    await api.post("/relay/disconnect");
+    void refresh();
+  }
+
   const tabs = [
     { key: "providers" as const, label: "LLM Providers", icon: <Plug className="h-4 w-4" /> },
     { key: "tools" as const, label: "工具与安全", icon: <Wrench className="h-4 w-4" /> },
     { key: "mcp" as const, label: "MCP", icon: <Server className="h-4 w-4" /> },
     { key: "skills" as const, label: "Skill 池", icon: <BookOpen className="h-4 w-4" /> },
     { key: "local" as const, label: "本地 Agent", icon: <Download className="h-4 w-4" /> },
+    { key: "relay" as const, label: "云端中继", icon: <Cloud className="h-4 w-4" /> },
     { key: "general" as const, label: "通用", icon: <Settings className="h-4 w-4" /> },
   ];
 
@@ -795,6 +832,76 @@ export default function SettingsPage() {
       {tab === "skills" && <SkillSection />}
 
       {tab === "local" && <DiscoverySection />}
+
+      {tab === "relay" && (
+        <div className="space-y-4">
+          <Card className="p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-fg">云端中继服务器</h3>
+                <p className="mt-0.5 text-xs text-muted">支持手机端跨网络连接，无需同一 WiFi</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`h-2 w-2 rounded-full ${relayStatus.connected ? "bg-emerald-500" : "bg-gray-400"}`} />
+                <span className="text-xs text-muted">
+                  {relayStatus.connected ? "已连接" : "未连接"}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <Label>服务器地址</Label>
+                <Input
+                  value={relayUrl}
+                  onChange={(e) => setRelayUrl(e.target.value)}
+                  placeholder="http://your-server:8888"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                {relayStatus.connected ? (
+                  <Button variant="secondary" onClick={disconnectRelay} className="px-4 py-2">
+                    断开连接
+                  </Button>
+                ) : (
+                  <Button
+                    variant="primary"
+                    onClick={connectRelay}
+                    disabled={relayConnecting || !relayUrl.trim()}
+                    className="px-4 py-2"
+                  >
+                    {relayConnecting ? <Spinner label="连接中" /> : "连接中继服务器"}
+                  </Button>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-5">
+            <h3 className="mb-2 text-sm font-semibold text-fg">使用说明</h3>
+            <div className="space-y-2 text-xs text-muted">
+              <p>📡 <strong>局域网直连</strong>：手机和电脑在同一 WiFi 下，自动发现并连接</p>
+              <p>☁️ <strong>云端中继</strong>：手机和电脑不在同一网络，通过中继服务器连接</p>
+              <p className="mt-3">
+                <strong>部署中继服务器：</strong>
+              </p>
+              <pre className="mt-1 rounded bg-muted/20 p-2 text-[11px]">
+{`# 1. 上传代码到服务器
+scp -r relay-server/ root@your-server:/opt/ensemble/
+
+# 2. 安装依赖并启动
+ssh root@your-server
+cd /opt/ensemble/relay-server
+npm install --production
+npm install -g pm2
+PORT=8888 pm2 start dist/index.js --name ensemble-relay
+pm2 save && pm2 startup`}
+              </pre>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {tab === "general" && (
         <div className="space-y-4">
