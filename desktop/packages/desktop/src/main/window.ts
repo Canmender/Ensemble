@@ -19,6 +19,9 @@ export function createWindow(loadUrl: string): BrowserWindow {
     },
   });
 
+  // 后台标签页降频：窗口最小化/隐藏时降低渲染帧率，节省 CPU/GPU
+  win.webContents.setBackgroundThrottling(true);
+
   // 外部链接用系统浏览器打开（防止应用内跳走）
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http://") || url.startsWith("https://")) {

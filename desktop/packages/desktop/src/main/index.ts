@@ -12,6 +12,12 @@ let isQuitting = false;
 
 const isDev = !app.isPackaged || !!process.env.RENDERER_URL;
 
+// ---------- Chromium 渲染优化 ----------
+// GPU 光栅化：将页面光栅化交给 GPU，减少 CPU 占用
+app.commandLine.appendSwitch("enable-gpu-rasterization");
+// 零拷贝：GPU 直接渲染到屏幕缓冲区，减少内存拷贝
+app.commandLine.appendSwitch("enable-zero-copy");
+
 // ---------- 单实例锁（防多开，激活已运行窗口） ----------
 if (!app.requestSingleInstanceLock()) {
   // 已有实例在运行：立即退出（不继续初始化，避免双实例）
