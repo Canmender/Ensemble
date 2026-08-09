@@ -1,0 +1,17 @@
+{
+  "name": "@ensemble/shared-protocol",
+  "version": "0.1.0",
+  "description": "合鸣跨端共享类型 & 通信协议（桌面 + 移动端）",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

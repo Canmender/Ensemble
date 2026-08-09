@@ -30,3 +30,23 @@ Thumbs.db
 
 # hermes / claude local state
 .hermes/
+
+# Expo
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+
+# Native builds
+android/
+ios/
+
+# Testing
+coverage/
+
+# Misc
+*.tgz
+.cache/
