@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import {
   Bot, Brain, LayoutDashboard, ListTodo, MessageSquare, Moon, Settings, Sun,
-  Workflow, Zap, MonitorSmartphone, Users, Archive
+  Workflow, Zap, MonitorSmartphone, Archive
 } from "lucide-react";
 import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
@@ -22,7 +22,7 @@ const NAV_ITEMS = [
   { to: "/agents", label: "智能体", icon: Bot },
   { to: "/workflows", label: "工作流", icon: Workflow },
   { to: "/tasks", label: "归档处", icon: Archive },
-  { to: "/chat", label: "IM", icon: MessageSquare },
+  { to: "/chat", label: "群聊", icon: MessageSquare },
   { to: "/memory", label: "记忆", icon: Brain },
   { to: "/settings", label: "设置", icon: Settings },
 ];
