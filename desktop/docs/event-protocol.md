@@ -48,8 +48,34 @@ type AgentEvent =
 type WsClientMsg =
   | { type: "subscribe"; runId: string }
   | { type: "unsubscribe"; runId: string }
-  | { type: "cancel"; runId: string };
+  | { type: "cancel"; runId: string }
+  | { type: "steer"; runId: string; content: string };  // Steering 消息注入
 ```
+
+### Steering 消息
+
+用户在 agent 运行中发送消息，注入到下一个迭代检查点：
+
+```js
+// 前端发送 steering 消息
+ws.send(JSON.stringify({
+  type: "steer",
+  runId: "run_xxx",
+  content: "换个方向，试试用 Python 实现"
+}));
+```
+
+**处理流程**：
+1. `WsHub` 收到 `steer` 消息 → 调用 `onClientMessage`
+2. `Engine.addSteering(runId, content)` 将消息加入队列
+3. `loop.ts` 在每次迭代开始时检查 `steeringQueue`
+4. 注入消息到 `ctx.msgs`，格式：`[用户追加] ${content}`
+5. LLM 在下一轮调用中看到用户追加的消息
+
+**限制**：
+- 消息在工具执行前注入（检查点），不会中断正在执行的工具
+- Run 结束后队列自动清理
+- 注入后队列清空，避免重复注入
 
 ## 断线重连与补拉
 
