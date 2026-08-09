@@ -89,6 +89,12 @@ export default function App() {
             border: "#374151",
             notification: "#10b981",
           },
+          fonts: {
+            regular: { fontFamily: "System", fontWeight: "400" },
+            medium: { fontFamily: "System", fontWeight: "500" },
+            bold: { fontFamily: "System", fontWeight: "700" },
+            heavy: { fontFamily: "System", fontWeight: "900" },
+          },
         }}
       >
         <Stack.Navigator screenOptions={{ headerShown: false }}>

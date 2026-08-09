@@ -31,7 +31,7 @@ interface RelayConfig {
 class ConnectionService {
   private socket: Socket | null = null;
   private currentDeviceId: string | null = null;
-  private pingInterval: NodeJS.Timeout | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private connectionMode: ConnectionMode = "lan";
@@ -145,6 +145,15 @@ class ConnectionService {
     useDeviceStore.getState().setConnectionState("disconnected");
     useDeviceStore.getState().setConnectedDevice(null);
     this.reconnectAttempts = 0;
+  }
+
+  /** 发送消息（内部方法） */
+  private send(message: unknown): void {
+    if (!this.socket?.connected) {
+      console.warn("未连接，无法发送消息");
+      return;
+    }
+    this.socket.emit("message", message);
   }
 
   /** 发送消息到指定设备 */

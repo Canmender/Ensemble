@@ -13,7 +13,7 @@ const SERVICE_DOMAIN = "local.";
 class DiscoveryService {
   private zeroconf: Zeroconf;
   private isScanning = false;
-  private scanTimeout: NodeJS.Timeout | null = null;
+  private scanTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.zeroconf = new Zeroconf();
