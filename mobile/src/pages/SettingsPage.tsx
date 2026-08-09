@@ -22,12 +22,14 @@ export default function SettingsPage() {
     useDeviceStore();
   const [manualIp, setManualIp] = useState("");
   const [manualPort, setManualPort] = useState("3000");
+  const [relayUrl, setRelayUrl] = useState("");
   const [autoConnect, setAutoConnect] = useState(true);
   const [notifications, setNotifications] = useState(true);
+  const [connectionMode, setConnectionMode] = useState<"lan" | "relay">("lan");
 
   const isConnected = connectionState === "connected";
 
-  // 手动连接
+  // 手动连接（局域网）
   const handleManualConnect = async () => {
     if (!manualIp.trim()) {
       Alert.alert("错误", "请输入 IP 地址");
@@ -45,6 +47,24 @@ export default function SettingsPage() {
       Alert.alert("成功", "已连接到桌面端");
     } else {
       Alert.alert("失败", "无法连接到桌面端，请检查 IP 和端口");
+    }
+  };
+
+  // 连接到云端中继服务器
+  const handleRelayConnect = async () => {
+    if (!relayUrl.trim()) {
+      Alert.alert("错误", "请输入中继服务器地址");
+      return;
+    }
+
+    // 配置中继服务器
+    connectionService.setRelayConfig({ url: relayUrl.trim() });
+
+    const success = await connectionService.connectViaRelay();
+    if (success) {
+      Alert.alert("成功", "已连接到中继服务器");
+    } else {
+      Alert.alert("失败", "无法连接到中继服务器，请检查地址");
     }
   };
 
@@ -104,39 +124,113 @@ export default function SettingsPage() {
       {/* 连接状态 */}
       {renderConnectionStatus()}
 
-      {/* 手动连接 */}
+      {/* 连接模式选择 */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>手动连接</Text>
-        <View style={styles.manualConnectForm}>
-          <TextInput
-            style={styles.input}
-            placeholder="IP 地址 (如 192.168.1.100)"
-            placeholderTextColor="#6b7280"
-            value={manualIp}
-            onChangeText={setManualIp}
-            keyboardType="numeric"
-          />
-          <TextInput
-            style={styles.input}
-            placeholder="端口 (默认 3000)"
-            placeholderTextColor="#6b7280"
-            value={manualPort}
-            onChangeText={setManualPort}
-            keyboardType="numeric"
-          />
+        <Text style={styles.sectionTitle}>连接模式</Text>
+        <View style={styles.modeSelector}>
           <TouchableOpacity
             style={[
-              styles.connectButton,
-              isConnected && styles.disconnectButton,
+              styles.modeButton,
+              connectionMode === "lan" && styles.modeButtonActive,
             ]}
-            onPress={isConnected ? handleDisconnect : handleManualConnect}
+            onPress={() => setConnectionMode("lan")}
           >
-            <Text style={styles.connectButtonText}>
-              {isConnected ? "断开连接" : "连接"}
+            <Text
+              style={[
+                styles.modeButtonText,
+                connectionMode === "lan" && styles.modeButtonTextActive,
+              ]}
+            >
+              📡 局域网直连
             </Text>
+            <Text style={styles.modeDescription}>同一 WiFi 下直接连接</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.modeButton,
+              connectionMode === "relay" && styles.modeButtonActive,
+            ]}
+            onPress={() => setConnectionMode("relay")}
+          >
+            <Text
+              style={[
+                styles.modeButtonText,
+                connectionMode === "relay" && styles.modeButtonTextActive,
+              ]}
+            >
+              ☁️ 云端中继
+            </Text>
+            <Text style={styles.modeDescription}>跨网络通过服务器连接</Text>
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* 局域网连接 */}
+      {connectionMode === "lan" && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>局域网连接</Text>
+          <View style={styles.manualConnectForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="IP 地址 (如 192.168.1.100)"
+              placeholderTextColor="#6b7280"
+              value={manualIp}
+              onChangeText={setManualIp}
+              keyboardType="numeric"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="端口 (默认 3000)"
+              placeholderTextColor="#6b7280"
+              value={manualPort}
+              onChangeText={setManualPort}
+              keyboardType="numeric"
+            />
+            <TouchableOpacity
+              style={[
+                styles.connectButton,
+                isConnected && styles.disconnectButton,
+              ]}
+              onPress={isConnected ? handleDisconnect : handleManualConnect}
+            >
+              <Text style={styles.connectButtonText}>
+                {isConnected ? "断开连接" : "连接"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* 云端中继连接 */}
+      {connectionMode === "relay" && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>云端中继服务器</Text>
+          <View style={styles.manualConnectForm}>
+            <TextInput
+              style={styles.input}
+              placeholder="服务器地址 (如 http://your-server:3001)"
+              placeholderTextColor="#6b7280"
+              value={relayUrl}
+              onChangeText={setRelayUrl}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={[
+                styles.connectButton,
+                isConnected && styles.disconnectButton,
+              ]}
+              onPress={isConnected ? handleDisconnect : handleRelayConnect}
+            >
+              <Text style={styles.connectButtonText}>
+                {isConnected ? "断开连接" : "连接中继服务器"}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.hintText}>
+              需要先在阿里云部署中继服务器，详见文档
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* 设备发现 */}
       <View style={styles.section}>
@@ -330,6 +424,43 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  modeSelector: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  modeButton: {
+    flex: 1,
+    backgroundColor: "#1f2937",
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 4,
+    alignItems: "center",
+  },
+  modeButtonActive: {
+    backgroundColor: "#10b981",
+    borderWidth: 2,
+    borderColor: "#34d399",
+  },
+  modeButtonText: {
+    color: "#9ca3af",
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  modeButtonTextActive: {
+    color: "#fff",
+  },
+  modeDescription: {
+    color: "#6b7280",
+    fontSize: 11,
+    textAlign: "center",
+  },
+  hintText: {
+    color: "#6b7280",
+    fontSize: 12,
+    marginTop: 8,
+    textAlign: "center",
   },
   emptyText: {
     color: "#6b7280",

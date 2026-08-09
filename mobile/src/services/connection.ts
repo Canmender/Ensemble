@@ -1,6 +1,10 @@
 /**
  * 连接服务
- * 管理与桌面端的 WebSocket 连接和 mDNS 发现
+ * 管理与桌面端的 WebSocket 连接
+ *
+ * 支持两种连接模式：
+ * 1. 局域网直连 — 直接连接桌面端 IP
+ * 2. 云端中继 — 通过阿里云服务器中继
  */
 
 import { io, Socket } from "socket.io-client";
@@ -13,12 +17,25 @@ import { createMessage, isValidMessage } from "@ensemble/shared-protocol";
 import { useDeviceStore } from "../store/deviceStore";
 import { useTaskStore } from "../store/taskStore";
 
+/** 连接模式 */
+export type ConnectionMode = "lan" | "relay";
+
+/** 云端中继服务器配置 */
+interface RelayConfig {
+  /** 中继服务器地址 */
+  url: string;
+  /** 认证 token（可选） */
+  token?: string;
+}
+
 class ConnectionService {
   private socket: Socket | null = null;
   private currentDeviceId: string | null = null;
   private pingInterval: NodeJS.Timeout | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
+  private connectionMode: ConnectionMode = "lan";
+  private relayConfig: RelayConfig | null = null;
 
   /** 初始化当前设备信息 */
   async init(): Promise<void> {
@@ -32,7 +49,7 @@ class ConnectionService {
       type: "mobile",
       os: "React Native",
       appVersion: "0.1.0",
-      wsPort: 0, // 客户端不需要端口
+      wsPort: 0,
       httpPort: 0,
       ip: "0.0.0.0",
       lastSeen: Date.now(),
@@ -41,8 +58,32 @@ class ConnectionService {
     useDeviceStore.getState().setCurrentDevice(deviceInfo);
   }
 
-  /** 连接到桌面端 */
+  /** 配置云端中继服务器 */
+  setRelayConfig(config: RelayConfig): void {
+    this.relayConfig = config;
+  }
+
+  /** 连接到桌面端（局域网直连） */
   async connect(ip: string, port: number): Promise<boolean> {
+    this.connectionMode = "lan";
+    return this.connectToServer(`http://${ip}:${port}`);
+  }
+
+  /** 连接到云端中继服务器 */
+  async connectViaRelay(relayUrl?: string): Promise<boolean> {
+    this.connectionMode = "relay";
+    const url = relayUrl || this.relayConfig?.url;
+
+    if (!url) {
+      useDeviceStore.getState().setError("未配置中继服务器地址");
+      return false;
+    }
+
+    return this.connectToServer(url);
+  }
+
+  /** 底层连接实现 */
+  private async connectToServer(url: string): Promise<boolean> {
     if (this.socket?.connected) {
       this.disconnect();
     }
@@ -51,13 +92,14 @@ class ConnectionService {
     useDeviceStore.getState().setError(null);
 
     try {
-      this.socket = io(`http://${ip}:${port}`, {
+      this.socket = io(url, {
         transports: ["websocket"],
         reconnection: true,
         reconnectionAttempts: this.maxReconnectAttempts,
         reconnectionDelay: 1000,
         reconnectionDelayMax: 5000,
         timeout: 10000,
+        auth: this.relayConfig?.token ? { token: this.relayConfig.token } : undefined,
       });
 
       this.setupSocketListeners();
@@ -105,42 +147,66 @@ class ConnectionService {
     this.reconnectAttempts = 0;
   }
 
-  /** 发送消息 */
-  send(message: EnsembleMessage): void {
-    if (!this.socket?.connected) {
+  /** 发送消息到指定设备 */
+  sendToDevice(targetDeviceId: string, type: string, payload: unknown): void {
+    if (!this.socket?.connected || !this.currentDeviceId) {
       console.warn("未连接，无法发送消息");
       return;
     }
 
-    this.socket.emit("message", message);
+    if (this.connectionMode === "relay") {
+      // 云端中继模式：通过服务器转发
+      this.socket.emit("message", {
+        to: targetDeviceId,
+        type,
+        payload,
+      });
+    } else {
+      // 局域网直连模式：直接发送
+      const message = createMessage(
+        type as any,
+        this.currentDeviceId,
+        targetDeviceId,
+        payload as any
+      );
+      this.socket.emit("message", message);
+    }
+  }
+
+  /** 广播消息到所有设备 */
+  broadcast(type: string, payload: unknown): void {
+    if (!this.socket?.connected || !this.currentDeviceId) {
+      console.warn("未连接，无法发送消息");
+      return;
+    }
+
+    if (this.connectionMode === "relay") {
+      // 云端中继模式：广播
+      this.socket.emit("message", {
+        to: "*",
+        type,
+        payload,
+      });
+    } else {
+      // 局域网直连模式
+      const message = createMessage(
+        type as any,
+        this.currentDeviceId,
+        null,
+        payload as any
+      );
+      this.socket.emit("message", message);
+    }
   }
 
   /** 创建任务 */
   createTask(title: string, mode: "single" | "workflow" | "chat", input: unknown): void {
-    if (!this.currentDeviceId) return;
-
-    const message = createMessage(
-      "task:create",
-      this.currentDeviceId,
-      null, // 广播给所有设备
-      { title, mode, input }
-    );
-
-    this.send(message);
+    this.broadcast("task:create", { title, mode, input });
   }
 
   /** 发送聊天消息 */
   sendChatMessage(runId: string, content: string): void {
-    if (!this.currentDeviceId) return;
-
-    const message = createMessage(
-      "chat:send",
-      this.currentDeviceId,
-      null,
-      { runId, content }
-    );
-
-    this.send(message);
+    this.broadcast("chat:send", { runId, content });
   }
 
   /** 发送控制命令 */
@@ -149,33 +215,25 @@ class ConnectionService {
     targetId: string,
     targetType: "task" | "run" | "job"
   ): void {
-    if (!this.currentDeviceId) return;
-
-    const message = createMessage(
-      "control:command",
-      this.currentDeviceId,
-      null,
-      { command, targetId, targetType }
-    );
-
-    this.send(message);
+    this.broadcast("control:command", { command, targetId, targetType });
   }
 
   /** 请求状态同步 */
   requestSync(since?: number): void {
-    if (!this.currentDeviceId) return;
+    this.broadcast("sync:request", {
+      types: ["agents", "tasks", "runs", "jobs"],
+      since,
+    });
+  }
 
-    const message = createMessage(
-      "sync:request",
-      this.currentDeviceId,
-      null,
-      {
-        types: ["agents", "tasks", "runs", "jobs"],
-        since,
-      }
-    );
+  /** 获取连接模式 */
+  getConnectionMode(): ConnectionMode {
+    return this.connectionMode;
+  }
 
-    this.send(message);
+  /** 是否已连接 */
+  isConnected(): boolean {
+    return this.socket?.connected || false;
   }
 
   /** 设置 Socket 监听器 */
