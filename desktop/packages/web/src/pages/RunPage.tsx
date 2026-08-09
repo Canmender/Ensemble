@@ -12,6 +12,7 @@ import { Badge, Button, Card, Spinner, StatusDot, cls, statusLabel } from "../co
 const WorkflowCanvas = lazy(() =>
   Promise.all([
     import("reactflow"),
+    // @ts-ignore - CSS side-effect import
     import("reactflow/dist/style.css"),
   ]).then(([rf]) => {
     return {
