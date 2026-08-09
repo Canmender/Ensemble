@@ -17,6 +17,12 @@ import { Server, Socket } from "socket.io";
 import cors from "cors";
 import { v4 as uuidv4 } from "uuid";
 
+// ==================== 配置 ====================
+
+const PORT = parseInt(process.env.PORT || "8888", 10);
+const OFFLINE_MESSAGE_EXPIRY = 24 * 60 * 60 * 1000; // 24 小时
+const MAX_OFFLINE_MESSAGES_PER_DEVICE = 100; // 每个设备最多暂存消息数
+
 // ==================== 类型定义 ====================
 
 interface DeviceInfo {
@@ -156,23 +162,41 @@ io.on("connection", (socket: Socket) => {
       return;
     }
 
-    const { to, type, payload } = data;
-    const fromDevice = connectedDevices.get(fromDeviceId);
+    // 输入验证
+    if (!data || typeof data !== "object") {
+      socket.emit("error", { message: "无效的消息格式" });
+      return;
+    }
 
-    console.log(`[消息] ${fromDevice?.name} -> ${to} 类型: ${type}`);
+    const { to, type, payload } = data;
+    if (!type || typeof type !== "string") {
+      socket.emit("error", { message: "消息类型不能为空" });
+      return;
+    }
+
+    const fromDevice = connectedDevices.get(fromDeviceId);
+    console.log(`[消息] ${fromDevice?.name} -> ${to || "广播"} 类型: ${type}`);
 
     // 构造完整消息
     const message = {
       id: uuidv4(),
       from: fromDeviceId,
       fromName: fromDevice?.name || "未知设备",
-      to,
+      to: to || "*",
       type,
       payload,
       timestamp: Date.now(),
     };
 
-    // 查找目标设备
+    // 广播消息
+    if (!to || to === "*") {
+      // 广播给所有其他设备
+      socket.broadcast.emit("message", message);
+      console.log(`[广播] 消息已广播给所有设备`);
+      return;
+    }
+
+    // 定向消息
     const targetDevice = connectedDevices.get(to);
 
     if (targetDevice) {
@@ -184,7 +208,16 @@ io.on("connection", (socket: Socket) => {
       if (!offlineMessages.has(to)) {
         offlineMessages.set(to, []);
       }
-      offlineMessages.get(to)!.push({
+
+      const queue = offlineMessages.get(to)!;
+
+      // 检查队列大小限制
+      if (queue.length >= MAX_OFFLINE_MESSAGES_PER_DEVICE) {
+        // 移除最旧的消息
+        queue.shift();
+      }
+
+      queue.push({
         id: message.id,
         from: fromDeviceId,
         to,
@@ -277,17 +310,15 @@ setInterval(() => {
 
 // ==================== 启动服务器 ====================
 
-const PORT = parseInt(process.env.PORT || "3001", 10);
-
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, "0.0.0.0", () => {
   console.log(`
 ╔═══════════════════════════════════════════════════════════╗
 ║           合鸣云端中继服务器已启动                        ║
 ╠═══════════════════════════════════════════════════════════╣
-║  HTTP:     http://0.0.0.0:${PORT}                          ║
+║  HTTP:      http://0.0.0.0:${PORT}                         ║
 ║  WebSocket: ws://0.0.0.0:${PORT}                           ║
-║  健康检查: http://0.0.0.0:${PORT}/health                   ║
-║  设备列表: http://0.0.0.0:${PORT}/devices                  ║
+║  健康检查:  http://0.0.0.0:${PORT}/health                  ║
+║  设备列表:  http://0.0.0.0:${PORT}/devices                 ║
 ╚═══════════════════════════════════════════════════════════╝
   `);
 });
