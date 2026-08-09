@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import {
-  Bot, Brain, LayoutDashboard, ListTodo, MessageSquare, Moon, Settings, Sun,
+  Bot, Brain, LayoutDashboard, MessageSquare, Moon, Settings, Sun,
   Workflow, Zap, MonitorSmartphone, Archive
 } from "lucide-react";
 import { api } from "./lib/api";

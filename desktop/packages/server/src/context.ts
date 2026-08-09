@@ -84,8 +84,12 @@ export function createAppContext(
   void mcpManager.reload();
 
   // 每日维护：记忆 consolidate/轮转 + offload 清理
-  const offloadStore = new OffloadStore(join(dataDir, "offload", "agents"));
+  // offload 目录：与 executor 保持一致（工作区内 .ensemble-offload）
+  const offloadDir = config.getSettings().workspaceRoot;
+  const workspaceOffload = offloadDir ? new OffloadStore(join(offloadDir, ".ensemble-offload")) : undefined;
+  const dataOffload = new OffloadStore(join(dataDir, "offload", "agents"));
   const maintenanceTimer = setInterval(async () => {
+    const wsRoot = config.getSettings().workspaceRoot;
     for (const a of config.listAgents()) {
       if (a.memory?.enabled) {
         // consolidate 按配置间隔判断（与 flushNow 内逻辑一致）
@@ -99,7 +103,12 @@ export function createAppContext(
         }
         memoryProvider.rotate(a.id, 90);
       }
-      offloadStore.cleanup(a.id, 7 * 86_400_000);
+      // 清理两个可能的 offload 目录
+      dataOffload.cleanup(a.id, 7 * 86_400_000);
+      if (wsRoot) {
+        const wsOffload = new OffloadStore(join(wsRoot, ".ensemble-offload"));
+        wsOffload.cleanup(a.id, 7 * 86_400_000);
+      }
     }
   }, 24 * 3600_000);
   maintenanceTimer.unref?.();
