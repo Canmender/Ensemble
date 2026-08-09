@@ -1,16 +1,16 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, Loader2,
-  MessageSquare, PlayCircle, Plus, Workflow, Zap,
+  MessageSquare, PlayCircle, Plus, Workflow, Zap, Target, Sparkles,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
 import { relativeTime } from "../lib/events";
-import type { Agent, Run } from "../types";
+import type { Agent, Run, WorkflowDef } from "../types";
 import {
-  Badge, Button, Card, Input, Modal, Select, Spinner, StatusDot, Textarea, cls, statusLabel,
+  Badge, Button, Card, Input, Label, Modal, Select, Spinner, StatusDot, Textarea, cls, statusLabel,
 } from "../components/ui";
 
 // 已加载历史的 run（守卫：仅加载一次，避免 WS 预建 store 导致历史永不加载）
@@ -79,6 +79,170 @@ function QuickCreate({ agents, onRun }: { agents: Agent[]; onRun: (id: string) =
             <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
             <Button variant="primary" onClick={run} disabled={busy || !prompt.trim()}>
               {busy ? <Spinner label="创建中" /> : "运行"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </>
+  );
+}
+
+// ---------- 完整创建（详细配置） ----------
+function FullCreate({ agents, onRun }: { agents: Agent[]; onRun: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"single" | "workflow" | "chat">("single");
+  const [title, setTitle] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [agentIds, setAgentIds] = useState<string[]>([]);
+  const [workflowId, setWorkflowId] = useState("");
+  const [participantIds, setParticipantIds] = useState<string[]>([]);
+  const [maxRounds, setMaxRounds] = useState(3);
+  const [workflows, setWorkflows] = useState<WorkflowDef[]>([]);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (agents.length && !agentIds.length) {
+      setAgentIds([agents[0].id]);
+      setParticipantIds(agents.slice(0, 2).map((a) => a.id));
+    }
+    void api.get<WorkflowDef[]>("/workflows").then((w) => {
+      setWorkflows(w ?? []);
+      if (w?.length) setWorkflowId(w[0].id);
+    });
+  }, [agents]);
+
+  function toggle(list: string[], id: string): string[] {
+    return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+  }
+
+  async function submit() {
+    if (!prompt.trim()) return;
+    let input: any;
+    if (mode === "single") {
+      if (!agentIds.length) return;
+      input = { mode, prompt, agentIds };
+    } else if (mode === "workflow") {
+      if (!workflowId) return;
+      input = { mode, workflowId, prompt };
+    } else {
+      if (participantIds.length < 2) return;
+      input = { mode, prompt, participantIds, maxRounds };
+    }
+    setBusy(true);
+    try {
+      const r = await api.post<Run>("/tasks", { title: title || prompt.slice(0, 40), input });
+      setOpen(false);
+      setTitle("");
+      setPrompt("");
+      onRun(r.id);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <Button variant="secondary" onClick={() => setOpen(true)}>
+        <Plus className="h-4 w-4" /> 完整创建
+      </Button>
+      <Modal open={open} onClose={() => setOpen(false)} title="完整创建任务" wide>
+        <div className="space-y-4">
+          {/* 模式选择 */}
+          <div>
+            <Label>协作模式</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                { value: "single" as const, label: "单一分发", icon: Target, desc: "一个任务发给一个或多个 Agent 并行执行" },
+                { value: "workflow" as const, label: "工作流", icon: Workflow, desc: "DAG 编排：按依赖顺序在多个 Agent 间流转" },
+                { value: "chat" as const, label: "群聊", icon: MessageSquare, desc: "多个 Agent 围绕任务轮转对话" },
+              ].map((m) => (
+                <button
+                  key={m.value}
+                  onClick={() => setMode(m.value)}
+                  className={cls(
+                    "rounded-xl border p-3 text-left transition-all",
+                    mode === m.value ? "border-primary bg-primary/10 ring-2 ring-ring/30" : "border-border hover:border-primary/50",
+                  )}
+                >
+                  <m.icon className="h-5 w-5 text-primary" />
+                  <div className="mt-1 text-sm font-medium text-fg">{m.label}</div>
+                  <div className="mt-0.5 text-[11px] leading-snug text-muted">{m.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <Label>标题</Label>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="任务标题（可选）" />
+          </div>
+
+          {mode === "single" && (
+            <div>
+              <Label>选择 Agent（可多选，并行执行）</Label>
+              <div className="flex flex-wrap gap-2">
+                {agents.map((a) => (
+                  <button
+                    key={a.id}
+                    onClick={() => setAgentIds(toggle(agentIds, a.id))}
+                    className={cls(
+                      "rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                      agentIds.includes(a.id) ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted hover:border-primary/50",
+                    )}
+                  >
+                    {a.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {mode === "workflow" && (
+            <div>
+              <Label>工作流</Label>
+              <Select value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
+                {workflows.map((w) => (
+                  <option key={w.id} value={w.id}>{w.name}（{w.nodes.length} 节点）</option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          {mode === "chat" && (
+            <div className="space-y-3">
+              <div>
+                <Label>参与者（≥2 个）</Label>
+                <div className="flex flex-wrap gap-2">
+                  {agents.map((a) => (
+                    <button
+                      key={a.id}
+                      onClick={() => setParticipantIds(toggle(participantIds, a.id))}
+                      className={cls(
+                        "rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                        participantIds.includes(a.id) ? "border-violet-500 bg-violet-50 font-medium text-violet-700" : "border-border text-muted hover:border-violet-300",
+                      )}
+                    >
+                      {a.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="w-40">
+                <Label>最大轮数</Label>
+                <Input type="number" min={1} value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} />
+              </div>
+            </div>
+          )}
+
+          <div>
+            <Label>任务描述</Label>
+            <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="详细描述任务…" rows={4} />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setOpen(false)}>取消</Button>
+            <Button variant="primary" onClick={submit} disabled={busy || !prompt.trim()}>
+              {busy ? <Spinner label="创建中" /> : "创建任务"}
             </Button>
           </div>
         </div>
@@ -402,17 +566,13 @@ export default function DashboardPage() {
       <div className="mb-5 flex items-center justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold text-fg">
-            <Activity className="h-6 w-6 text-primary" /> 协作看板
+            <Activity className="h-6 w-6 text-primary" /> 看板
           </h1>
           <p className="mt-1 text-sm text-muted">实时监控多 Agent 协作 · 全部任务按状态分列</p>
         </div>
         <div className="flex items-center gap-2">
           <QuickCreate agents={agents} onRun={(id) => setExpanded(id)} />
-          <Link to="/tasks">
-            <Button variant="secondary">
-              <Plus className="h-4 w-4" /> 完整创建
-            </Button>
-          </Link>
+          <FullCreate agents={agents} onRun={(id) => setExpanded(id)} />
         </div>
       </div>
 
