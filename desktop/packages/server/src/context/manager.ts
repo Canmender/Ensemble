@@ -4,7 +4,7 @@ import { OffloadStore, previewWithPointer, shouldOffload } from "./offload";
 
 export interface ContextWindowConfig {
   budgetTokens: number;
-  /** 达到 budget 的多少比例触发压缩（默认 0.5） */
+  /** 达到 budget 的多少比例触发压缩（默认 0.95，参考 OpenCode） */
   compactionThreshold: number;
   /** 保留的最近原文原子组数 */
   keepRecentRawGroups: number;
@@ -38,7 +38,7 @@ export class ContextManager {
   }) {
     this.cfg = {
       budgetTokens: opts.config.budgetTokens ?? 80_000,
-      compactionThreshold: opts.config.compactionThreshold ?? 0.5,
+      compactionThreshold: opts.config.compactionThreshold ?? 0.95,
       keepRecentRawGroups: opts.config.keepRecentRawGroups ?? 8,
       toolResultOffloadChars: opts.config.toolResultOffloadChars ?? 8000,
     };

@@ -6,6 +6,7 @@ import type {
   Task,
   TaskInput,
 } from "@ensemble/shared";
+import type { SteeringMessage } from "../adapters/types";
 import { Store } from "./store";
 import { AdapterRegistry } from "../adapters/registry";
 import { WsHub } from "../api/ws/hub";
@@ -20,11 +21,14 @@ import { ChatMode } from "./chat";
  * - executeJob：跑单个 agent job，逐条落库 + 广播，汇总结论
  * - 三种模式（single/workflow/chat）都通过 executeJob 执行
  * - 取消：每个 job 持 AbortController，run 级注册表统一 abort
+ * - steering：用户在 agent 运行中注入消息（参考 OpenClaw）
  */
 export class OrchestrationEngine {
   private runAborts = new Map<string, Set<AbortController>>();
   private agentChains = new Map<string, Promise<unknown>>();
   private agentConfigs = new Map<string, AgentConfig>();
+  /** Steering 消息队列：runId → 待注入消息 */
+  private steeringQueues = new Map<string, SteeringMessage[]>();
 
   constructor(
     private store: Store,
@@ -106,6 +110,7 @@ export class OrchestrationEngine {
       if (!cancelled) logger.error("run failed", { run: run.id, message });
     } finally {
       this.runAborts.delete(run.id);
+      this.cleanupSteering(run.id);
     }
   }
 
@@ -161,6 +166,7 @@ export class OrchestrationEngine {
           ...input,
           prompt,
           signal: controller.signal,
+          steeringQueue: this.getSteeringQueue(run.id),
         })) {
           // 原子分配 seq（MAX+1 与 INSERT 在同一同步块，并行 job 不冲突）
           const seq = this.store.appendRunEvent(run.id, job.id, ev);
@@ -228,6 +234,35 @@ export class OrchestrationEngine {
     const aborts = this.runAborts.get(runId);
     if (!aborts) return;
     for (const ac of aborts) ac.abort();
+  }
+
+  /**
+   * 注入 steering 消息（参考 OpenClaw）：
+   * 用户在 agent 运行中发送的消息，会在下一个检查点注入上下文。
+   */
+  addSteering(runId: string, content: string): void {
+    let queue = this.steeringQueues.get(runId);
+    if (!queue) {
+      queue = [];
+      this.steeringQueues.set(runId, queue);
+    }
+    queue.push({ content, timestamp: Date.now() });
+    logger.info(`steering message queued for run ${runId}: ${content.slice(0, 50)}...`);
+  }
+
+  /** 获取指定 run 的 steering 队列（供 executor 消费） */
+  getSteeringQueue(runId: string): SteeringMessage[] {
+    let queue = this.steeringQueues.get(runId);
+    if (!queue) {
+      queue = [];
+      this.steeringQueues.set(runId, queue);
+    }
+    return queue;
+  }
+
+  /** 清理 steering 队列 */
+  private cleanupSteering(runId: string): void {
+    this.steeringQueues.delete(runId);
   }
 
   /** 查找工作流定义（供 WorkflowMode 调度） */

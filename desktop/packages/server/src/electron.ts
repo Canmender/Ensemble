@@ -54,6 +54,7 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
   ctx.hub.attach(server, "/ws");
   ctx.hub.onClientMessage = (msg) => {
     if (msg.type === "cancel") ctx.engine.cancelRun(msg.runId);
+    if (msg.type === "steer" && msg.content) ctx.engine.addSteering(msg.runId, msg.content);
   };
 
   return new Promise((resolve, reject) => {
