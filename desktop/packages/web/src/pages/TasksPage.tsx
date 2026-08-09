@@ -1,284 +1,163 @@
+/**
+ * 归档处页面
+ * 负责统计和调用已完成的任务
+ */
+
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { ListTodo, MessageSquare, Target, Workflow } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Archive, BarChart3, Calendar, CheckCircle, Clock, Search, TrendingUp } from "lucide-react";
 import { api } from "../lib/api";
 import { relativeTime } from "../lib/events";
-import type { Agent, Run, Task, TaskMode, WorkflowDef } from "../types";
-import {
-  Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, StatusDot, Textarea, cls, statusLabel,
-} from "../components/ui";
+import type { Run } from "../types";
+import { Badge, Card, EmptyState, Input, Spinner, cls } from "../components/ui";
 
-const MODES: Array<{ value: TaskMode; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }> = [
-  { value: "single", label: "单一分发", icon: Target, desc: "一个任务发给一个或多个 Agent 并行执行" },
-  { value: "workflow", label: "工作流", icon: Workflow, desc: "DAG 编排：按依赖顺序在多个 Agent 间流转" },
-  { value: "chat", label: "群聊", icon: MessageSquare, desc: "多个 Agent 围绕任务轮转对话、委派接力" },
-];
+/** 统计卡片 */
+function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: number | string; color: string }) {
+  return (
+    <Card className="flex items-center gap-3 p-4">
+      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color}`}>
+        <Icon className="h-5 w-5 text-white" />
+      </div>
+      <div>
+        <div className="text-2xl font-bold text-fg">{value}</div>
+        <div className="text-xs text-muted">{label}</div>
+      </div>
+    </Card>
+  );
+}
 
-const modeLabel: Record<string, string> = { single: "单发", workflow: "工作流", chat: "群聊" };
-
-function CreateTaskDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (runId: string) => void }) {
-  const [mode, setMode] = useState<TaskMode>("single");
-  const [title, setTitle] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [agentIds, setAgentIds] = useState<string[]>([]);
-  const [workflowId, setWorkflowId] = useState("");
-  const [participantIds, setParticipantIds] = useState<string[]>([]);
-  const [maxRounds, setMaxRounds] = useState(3);
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [workflows, setWorkflows] = useState<WorkflowDef[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+export default function TasksPage() {
+  const [runs, setRuns] = useState<Run[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<"all" | "success" | "error" | "cancelled">("all");
 
   useEffect(() => {
-    void (async () => {
-      const [a, w] = await Promise.all([api.get<Agent[]>("/agents"), api.get<WorkflowDef[]>("/workflows")]);
-      setAgents(a);
-      setWorkflows(w ?? []);
-      if (a.length) {
-        setAgentIds([a[0].id]);
-        setParticipantIds(a.slice(0, 2).map((x) => x.id));
-      }
-      if (w?.length) setWorkflowId(w[0].id);
-    })();
+    void loadRuns();
   }, []);
 
-  function toggle(list: string[], id: string): string[] {
-    return list.includes(id) ? list.filter((x) => x !== id) : [...list, id];
+  async function loadRuns() {
+    setLoading(true);
+    try {
+      const data = await api.get<Run[]>("/runs");
+      setRuns(data ?? []);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function submit() {
-    if (!prompt.trim()) return;
-    let input: any;
-    if (mode === "single") {
-      if (!agentIds.length) return;
-      input = { mode, prompt, agentIds };
-    } else if (mode === "workflow") {
-      if (!workflowId) return;
-      input = { mode, workflowId, prompt };
-    } else {
-      if (participantIds.length < 2) return;
-      input = { mode, prompt, participantIds, maxRounds };
-    }
-    setSubmitting(true);
-    try {
-      const run = await api.post<Run>("/tasks", { title: title || prompt.slice(0, 40), input });
-      onCreated(run.id);
-    } finally {
-      setSubmitting(false);
-    }
-  }
+  // 统计数据
+  const stats = {
+    total: runs.length,
+    success: runs.filter((r) => r.status === "success").length,
+    error: runs.filter((r) => r.status === "error").length,
+    cancelled: runs.filter((r) => r.status === "cancelled").length,
+  };
+
+  // 过滤
+  const filtered = runs.filter((r) => {
+    if (filter !== "all" && r.status !== filter) return false;
+    if (search && !r.taskTitle?.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
+
+  // 按日期分组
+  const grouped = filtered.reduce<Record<string, Run[]>>((acc, run) => {
+    const date = new Date(run.startedAt).toLocaleDateString("zh-CN");
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(run);
+    return acc;
+  }, {});
 
   return (
-    <div className="space-y-5">
-      {/* Mode picker */}
-      <div>
-        <Label>协作模式</Label>
-        <div className="grid grid-cols-3 gap-2">
-          {MODES.map((m) => (
+    <div className="mx-auto max-w-5xl px-8 py-8">
+      <header className="mb-6">
+        <h1 className="text-2xl font-bold text-fg">归档处</h1>
+        <p className="mt-1 text-sm text-muted">查看历史任务统计和已完成的任务</p>
+      </header>
+
+      {/* 统计卡片 */}
+      <div className="mb-6 grid grid-cols-4 gap-4">
+        <StatCard icon={BarChart3} label="总任务数" value={stats.total} color="bg-blue-500" />
+        <StatCard icon={CheckCircle} label="成功" value={stats.success} color="bg-emerald-500" />
+        <StatCard icon={Clock} label="失败" value={stats.error} color="bg-red-500" />
+        <StatCard icon={TrendingUp} label="取消" value={stats.cancelled} color="bg-gray-500" />
+      </div>
+
+      {/* 搜索和过滤 */}
+      <div className="mb-6 flex items-center gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索任务..."
+            className="pl-9"
+          />
+        </div>
+        <div className="flex gap-2">
+          {(["all", "success", "error", "cancelled"] as const).map((f) => (
             <button
-              key={m.value}
-              onClick={() => setMode(m.value)}
+              key={f}
+              onClick={() => setFilter(f)}
               className={cls(
-                "rounded-xl border p-3 text-left transition-all",
-                mode === m.value
-                  ? "border-primary bg-primary/10 ring-2 ring-ring/30"
-                  : "border-border hover:border-primary/50",
+                "rounded-lg px-3 py-1.5 text-sm transition-colors",
+                filter === f ? "bg-primary/10 text-primary" : "text-muted hover:bg-muted/10",
               )}
             >
-              <m.icon className="h-5 w-5 text-primary" />
-              <div className="mt-1 text-sm font-medium text-fg">{m.label}</div>
-              <div className="mt-0.5 text-[11px] leading-snug text-muted">{m.desc}</div>
+              {f === "all" ? "全部" : f === "success" ? "成功" : f === "error" ? "失败" : "取消"}
             </button>
           ))}
         </div>
       </div>
 
-      <div>
-        <Label>标题</Label>
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="任务标题（可选）" />
-      </div>
-
-      {mode === "single" && (
-        <div>
-          <Label>选择 Agent（可多选，并行执行）</Label>
-          <div className="flex flex-wrap gap-2">
-            {agents.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => setAgentIds(toggle(agentIds, a.id))}
-                className={cls(
-                  "rounded-lg border px-3 py-1.5 text-sm transition-colors",
-                  agentIds.includes(a.id)
-                    ? "border-primary bg-primary/10 font-medium text-primary"
-                    : "border-border text-muted hover:border-primary/50",
-                )}
-              >
-                {a.name}
-              </button>
-            ))}
-          </div>
+      {/* 任务列表 */}
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Spinner label="加载中" />
         </div>
-      )}
-
-      {mode === "workflow" && (
-        <div>
-          <Label>工作流</Label>
-          <Select value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
-            {workflows.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name}（{w.nodes.length} 节点）
-              </option>
-            ))}
-          </Select>
-        </div>
-      )}
-
-      {mode === "chat" && (
-        <div className="space-y-3">
-          <div>
-            <Label>参与者（≥2 个）</Label>
-            <div className="flex flex-wrap gap-2">
-              {agents.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => setParticipantIds(toggle(participantIds, a.id))}
-                  className={cls(
-                    "rounded-lg border px-3 py-1.5 text-sm transition-colors",
-                    participantIds.includes(a.id)
-                      ? "border-violet-500 bg-violet-50 font-medium text-violet-700"
-                      : "border-border text-muted hover:border-violet-300",
-                  )}
-                >
-                  {a.name}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="w-40">
-            <Label>最大轮数</Label>
-            <Input type="number" min={1} value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} />
-          </div>
-        </div>
-      )}
-
-      <div>
-        <Label>任务内容</Label>
-        <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} placeholder="描述任务…（工作流中可用 {{task.prompt}} 注入）" />
-      </div>
-
-      <div className="flex justify-end gap-3 border-t border-border pt-4">
-        <Button onClick={onClose} variant="ghost">
-          取消
-        </Button>
-        <Button variant="primary" onClick={submit} disabled={submitting || !prompt.trim()}>
-          {submitting ? <Spinner label="创建中" /> : "创建并运行"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [runsByTask, setRunsByTask] = useState<Record<string, Run[]>>({});
-  const [showCreate, setShowCreate] = useState(false);
-  const navigate = useNavigate();
-
-  async function refresh() {
-    const [t, r] = await Promise.all([api.get<Task[]>("/tasks"), api.get<Run[]>("/runs")]);
-    setTasks(t ?? []);
-    const grouped: Record<string, Run[]> = {};
-    for (const run of r ?? []) {
-      (grouped[run.taskId] ??= []).push(run);
-    }
-    setRunsByTask(grouped);
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
-
-  async function rerun(task: Task) {
-    const run = await api.post<Run>(`/tasks/${task.id}/rerun`);
-    navigate(`/runs/${run.id}`);
-  }
-
-  return (
-    <div className="mx-auto max-w-5xl px-8 py-8">
-      <header className="mb-6 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-fg">任务</h1>
-          <p className="mt-1 text-sm text-muted">创建与管理多 Agent 协作任务</p>
-        </div>
-        <Button variant="primary" onClick={() => setShowCreate(true)}>
-          + 新建任务
-        </Button>
-      </header>
-
-      {tasks.length === 0 ? (
-        <Card>
-          <EmptyState icon={<ListTodo className="h-8 w-8" />} title="还没有任务" desc="创建一个任务，选择单一分发 / 工作流 / 群聊模式" />
-        </Card>
+      ) : Object.keys(grouped).length === 0 ? (
+        <EmptyState icon={<Archive className="h-8 w-8" />} title="暂无归档" desc="还没有已完成的任务" />
       ) : (
-        <div className="space-y-4">
-          {tasks.map((t) => {
-            const runs = runsByTask[t.id] ?? [];
-            const latest = runs[0];
-            return (
-              <Card key={t.id} className="p-5">
-                <div className="flex items-center justify-between">
-                  <div>
+        <div className="space-y-6">
+          {Object.entries(grouped).map(([date, dateRuns]) => (
+            <div key={date}>
+              <div className="mb-3 flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-muted" />
+                <span className="text-sm font-medium text-muted">{date}</span>
+                <span className="text-xs text-muted">({dateRuns.length} 个任务)</span>
+              </div>
+              <div className="space-y-2">
+                {dateRuns.map((run) => (
+                  <Link
+                    key={run.id}
+                    to={`/runs/${run.id}`}
+                    className="group flex items-center justify-between rounded-xl border border-border bg-surface p-4 transition-all hover:border-primary/50 hover:shadow-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={cls(
+                          "h-2.5 w-2.5 rounded-full",
+                          run.status === "success" ? "bg-success" : run.status === "error" ? "bg-destructive" : "bg-muted",
+                        )}
+                      />
+                      <div>
+                        <div className="font-medium text-fg group-hover:text-primary">{run.taskTitle || "未命名任务"}</div>
+                        <div className="mt-0.5 text-xs text-muted">{run.mode} · {relativeTime(run.startedAt)}</div>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-fg">{t.title}</span>
-                      <Badge color={t.mode === "single" ? "brand" : t.mode === "workflow" ? "violet" : "amber"}>
-                        {modeLabel[t.mode]}
+                      <Badge color={run.status === "success" ? "green" : run.status === "error" ? "red" : "ink"}>
+                        {run.status === "success" ? "成功" : run.status === "error" ? "失败" : run.status}
                       </Badge>
                     </div>
-                    <div className="mt-0.5 text-xs text-muted">
-                      创建于 {relativeTime(t.createdAt)} · {runs.length} 次运行
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {latest && (
-                      <Link
-                        to={`/runs/${latest.id}`}
-                        className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-muted hover:border-primary/60 hover:text-primary"
-                      >
-                        <StatusDot status={latest.status} />
-                        {statusLabel(latest.status)}
-                      </Link>
-                    )}
-                    <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => rerun(t)}>
-                      重新运行
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {runs.slice(0, 5).map((r) => (
-                    <Link
-                      key={r.id}
-                      to={`/runs/${r.id}`}
-                      className="flex items-center gap-1.5 rounded-md bg-bg px-2 py-1 text-xs text-muted hover:bg-primary/10 hover:text-primary"
-                    >
-                      <StatusDot status={r.status} />
-                      {new Date(r.startedAt).toLocaleTimeString("zh-CN", { hour12: false })}
-                    </Link>
-                  ))}
-                </div>
-              </Card>
-            );
-          })}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
-
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="新建任务" wide>
-        <CreateTaskDialog
-          onClose={() => setShowCreate(false)}
-          onCreated={(runId) => {
-            setShowCreate(false);
-            navigate(`/runs/${runId}`);
-          }}
-        />
-      </Modal>
     </div>
   );
 }

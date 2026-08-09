@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
-import { Bot, Brain, LayoutDashboard, ListTodo, MessageSquare, Moon, Settings, Sun, Workflow, Zap } from "lucide-react";
+import {
+  Bot, Brain, LayoutDashboard, ListTodo, MessageSquare, Moon, Settings, Sun,
+  Workflow, Zap, MonitorSmartphone, Users, Archive
+} from "lucide-react";
 import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
 import { useTheme, type Theme } from "./lib/theme";
@@ -15,11 +18,11 @@ import WorkflowsPage from "./pages/WorkflowsPage";
 import ChatPage from "./pages/ChatPage";
 
 const NAV_ITEMS = [
-  { to: "/", label: "概览", icon: LayoutDashboard },
-  { to: "/agents", label: "Agents", icon: Bot },
+  { to: "/", label: "看板", icon: LayoutDashboard },
+  { to: "/agents", label: "智能体", icon: Bot },
   { to: "/workflows", label: "工作流", icon: Workflow },
-  { to: "/tasks", label: "任务", icon: ListTodo },
-  { to: "/chat", label: "群聊", icon: MessageSquare },
+  { to: "/tasks", label: "归档处", icon: Archive },
+  { to: "/chat", label: "IM", icon: MessageSquare },
   { to: "/memory", label: "记忆", icon: Brain },
   { to: "/settings", label: "设置", icon: Settings },
 ];
@@ -42,20 +45,42 @@ function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: t
   );
 }
 
-function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const cycling: Theme[] = ["light", "dark", "system"];
-  const next = cycling[(cycling.indexOf(theme) + 1) % cycling.length];
-  const labels: Record<Theme, string> = { light: "浅色", dark: "深色", system: "跟随系统" };
-  const Icon = theme === "dark" ? Moon : theme === "light" ? Sun : Zap;
+/** 亮暗色切换开关 */
+function ThemeSwitch() {
+  const { isDark, setTheme } = useTheme();
   return (
     <button
-      onClick={() => setTheme(next)}
-      title={`主题：${labels[theme]}（点击切换到${labels[next]}）`}
-      className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-muted transition-colors hover:bg-muted/10 hover:text-fg"
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="relative flex h-6 w-11 items-center rounded-full bg-muted/30 transition-colors hover:bg-muted/50"
+      title={isDark ? "切换到浅色" : "切换到深色"}
     >
-      <Icon className="h-4 w-4" />
-      <span className="text-xs">{labels[theme]}</span>
+      <span
+        className={cls(
+          "flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm transition-transform",
+          isDark ? "translate-x-5" : "translate-x-0.5",
+        )}
+      >
+        {isDark ? <Moon className="h-3 w-3 text-primary" /> : <Sun className="h-3 w-3 text-amber-500" />}
+      </span>
+    </button>
+  );
+}
+
+/** 跟随系统按钮 */
+function SystemThemeToggle() {
+  const { theme, setTheme } = useTheme();
+  const isSystem = theme === "system";
+  return (
+    <button
+      onClick={() => setTheme(isSystem ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : "system")}
+      className={cls(
+        "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors",
+        isSystem ? "bg-primary/10 text-primary" : "text-muted hover:bg-muted/10 hover:text-fg",
+      )}
+      title={isSystem ? "已跟随系统主题" : "点击跟随系统主题"}
+    >
+      <MonitorSmartphone className="h-3.5 w-3.5" />
+      <span>跟随系统</span>
     </button>
   );
 }
@@ -103,7 +128,8 @@ export default function App() {
             <NavItem key={item.to} {...item} />
           ))}
         </nav>
-        <div className="space-y-1 border-t border-border px-3 py-3">
+        <div className="space-y-2 border-t border-border px-3 py-3">
+          {/* 服务器状态 */}
           <div className="flex items-center justify-between px-1">
             <span className="flex items-center gap-1.5 text-xs">
               <span
@@ -117,7 +143,14 @@ export default function App() {
               </span>
             </span>
           </div>
-          <ThemeToggle />
+          {/* 主题控制 */}
+          <div className="flex items-center justify-between px-1">
+            <span className="text-xs text-muted">主题</span>
+            <div className="flex items-center gap-2">
+              <ThemeSwitch />
+              <SystemThemeToggle />
+            </div>
+          </div>
         </div>
       </aside>
 

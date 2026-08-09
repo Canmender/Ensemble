@@ -1,293 +1,403 @@
+/**
+ * IM 即时通讯页面
+ * - 左侧：联系人列表（智能体 + 我的设备 + 群聊）
+ * - 右侧：聊天窗口
+ */
+
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { MessageSquare, ShieldCheck, Sparkles } from "lucide-react";
+import {
+  Bot, MessageSquare, MonitorSmartphone, Plus, Send, Users, Smartphone, Brain, Sparkles
+} from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
-import type { Agent, Run, WorkflowDef } from "../types";
-import { Button, Card, Input, Label, Select, Spinner, Textarea, cls, statusLabel } from "../components/ui";
+import type { Agent, Run } from "../types";
+import { Button, Card, Input, Label, Modal, Spinner, Textarea, cls } from "../components/ui";
 
-/** 审批面板：头脑风暴通过后放入看板/工作流开始制作 */
-function ApprovalPanel({ runTitle, messages }: { runTitle: string; messages: any[] }) {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [workflows, setWorkflows] = useState<WorkflowDef[]>([]);
-  const [mode, setMode] = useState<"single" | "workflow">("single");
-  const [agentId, setAgentId] = useState("");
-  const [workflowId, setWorkflowId] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [created, setCreated] = useState<Run | null>(null);
+/** 联系人类型 */
+type ContactType = "agent" | "device" | "group";
 
-  useEffect(() => {
-    // 默认任务 prompt = 讨论的最后一条 assistant 结论
-    const last = [...messages].reverse().find((m) => m.agentId !== "user");
-    if (last) setPrompt(last.content.slice(0, 800));
-    void api.get<Agent[]>("/agents").then((a) => {
-      setAgents(a);
-      const enabled = a.find((x) => x.enabled);
-      if (enabled) setAgentId(enabled.id);
-    });
-    void api.get<WorkflowDef[]>("/workflows").then((w) => {
-      setWorkflows(w ?? []);
-      if (w?.length) setWorkflowId(w[0].id);
-    });
-  }, []);
-
-  async function approve() {
-    if (!prompt.trim()) return;
-    setSubmitting(true);
-    try {
-      const input =
-        mode === "single"
-          ? { mode: "single" as const, prompt, agentIds: [agentId] }
-          : { mode: "workflow" as const, workflowId, prompt };
-      const run = await api.post<Run>("/tasks", { title: `${runTitle.slice(0, 30)} → 制作`, input });
-      setCreated(run);
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  return (
-    <Card className="mt-4 border-primary/40 p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <ShieldCheck className="h-5 w-5 text-primary" />
-        <span className="text-sm font-semibold text-fg">审批头脑风暴结果</span>
-        <span className="text-xs text-muted">通过后将作为制作任务放入看板 / 工作流</span>
-      </div>
-
-      <div className="mb-3">
-        <Label>制作任务内容（默认取讨论结论）</Label>
-        <Textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={3} />
-      </div>
-
-      <div className="mb-3 flex items-end gap-3">
-        <div className="w-32">
-          <Label>制作方式</Label>
-          <Select value={mode} onChange={(e) => setMode(e.target.value as any)}>
-            <option value="single">单发</option>
-            <option value="workflow">工作流</option>
-          </Select>
-        </div>
-        {mode === "single" ? (
-          <div className="flex-1">
-            <Label>执行 Agent</Label>
-            <Select value={agentId} onChange={(e) => setAgentId(e.target.value)}>
-              {agents.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-        ) : (
-          <div className="flex-1">
-            <Label>工作流</Label>
-            <Select value={workflowId} onChange={(e) => setWorkflowId(e.target.value)}>
-              {workflows.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-        )}
-        <Button variant="primary" onClick={approve} disabled={submitting || !prompt.trim()}>
-          <ShieldCheck className="h-4 w-4" /> 审批通过，开始制作
-        </Button>
-      </div>
-
-      {created && (
-        <div className="flex items-center gap-2 rounded-lg bg-success/10 px-3 py-2 text-sm text-success">
-          <span>✓ 已创建，已放入看板开始执行</span>
-          <Link to={`/runs/${created.id}`} className="text-primary hover:underline">
-            查看运行
-          </Link>
-          <Link to="/" className="text-primary hover:underline">看板</Link>
-          <Link to="/workflows" className="text-primary hover:underline">工作流</Link>
-        </div>
-      )}
-    </Card>
-  );
+/** 联系人 */
+interface Contact {
+  id: string;
+  type: ContactType;
+  name: string;
+  avatar?: string;
+  status?: "online" | "offline" | "busy";
+  lastMessage?: string;
+  lastTime?: string;
+  unread?: number;
 }
 
-/** 头脑风暴空间：agent 之间的想法迸发地，不直接参与项目制作 */
-export default function ChatPage() {
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [participants, setParticipants] = useState<string[]>([]);
-  const [topic, setTopic] = useState("");
-  const [rounds, setRounds] = useState(3);
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [currentRun, setCurrentRun] = useState<Run | null>(null);
+/** 聊天消息 */
+interface ChatMessage {
+  id: string;
+  contactId: string;
+  content: string;
+  sender: "user" | "assistant";
+  timestamp: number;
+}
 
-  const live = useRunStore((s) => (activeRunId ? s.live[activeRunId] : undefined));
-  const messages = live?.messages ?? [];
-  const scrollRef = useRef<HTMLDivElement>(null);
+/** 创建群聊对话框 */
+function CreateGroupDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (group: Contact) => void }) {
+  const [name, setName] = useState("");
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
 
   useEffect(() => {
-    void api.get<Agent[]>("/agents").then((a) => {
-      setAgents(a);
-      const enabled = a.filter((x) => x.enabled).slice(0, 2);
-      if (enabled.length >= 2) setParticipants(enabled.map((x) => x.id));
-    });
+    void api.get<Agent[]>("/agents").then(setAgents);
   }, []);
 
-  useEffect(() => {
-    if (!activeRunId) return;
-    let cancelled = false;
-    wsClient.subscribe(activeRunId);
-    void api.get<{ run: Run; chatMessages: any[] }>(`/runs/${activeRunId}`).then((d) => {
-      if (cancelled) return;
-      setCurrentRun(d.run);
-      const store = useRunStore.getState();
-      store.getOrCreate(activeRunId);
-      store.setStatus(activeRunId, d.run.status);
-      if (d.run.finalResult) store.setFinal(activeRunId, d.run.finalResult);
-      for (const m of d.chatMessages ?? []) {
-        store.appendMessage(activeRunId, { jobId: m.jobId, agentId: m.agentId, content: m.content });
-      }
+  function toggleAgent(id: string) {
+    setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+
+  function create() {
+    if (!name.trim() || selected.length < 2) return;
+    onCreated({
+      id: `group-${Date.now()}`,
+      type: "group",
+      name,
+      status: "online",
     });
-    return () => {
-      cancelled = true;
-      wsClient.unsubscribe(activeRunId);
-    };
-  }, [activeRunId]);
-
-  // 自动滚动到最新
-  useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-  }, [messages.length]);
-
-  function toggleParticipant(id: string) {
-    setParticipants((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+    onClose();
   }
-
-  async function start() {
-    if (!topic.trim() || participants.length < 2) return;
-    setBusy(true);
-    try {
-      const run = await api.post<Run>("/tasks", {
-        title: `头脑风暴：${topic.slice(0, 30)}`,
-        input: { mode: "chat", prompt: topic, participantIds: participants, maxRounds: rounds },
-      });
-      setActiveRunId(run.id);
-      setCurrentRun(run);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const status = live?.status ?? currentRun?.status;
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col px-8 py-8">
-      <header className="mb-6">
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-fg">
-          <MessageSquare className="h-6 w-6 text-primary" /> 群聊 · 头脑风暴
-        </h1>
-        <p className="mt-1 text-sm text-muted">Agent 之间的想法迸发地 —— 项目前期的讨论空间，不直接参与制作</p>
-      </header>
-
-      {/* 发起面板 */}
-      <Card className="mb-4 p-5">
-        <div className="mb-3">
-          <div className="mb-1.5 text-xs font-semibold text-muted">参与 Agent（≥2）</div>
-          <div className="flex flex-wrap gap-2">
-            {agents.map((a) => (
-              <button
-                key={a.id}
-                onClick={() => toggleParticipant(a.id)}
-                className={cls(
-                  "rounded-lg border px-3 py-1.5 text-sm transition-colors",
-                  participants.includes(a.id)
-                    ? "border-primary bg-primary/10 font-medium text-primary"
-                    : "border-border text-muted hover:border-primary/50",
-                )}
-              >
-                {a.name}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Input
-            className="flex-1"
-            placeholder="头脑风暴话题… 如：如何设计一个实时协作看板的 UX？"
-            value={topic}
-            onChange={(e) => setTopic(e.target.value)}
-          />
-          <Select className="w-28" value={rounds} onChange={(e) => setRounds(Number(e.target.value))}>
-            {[1, 2, 3, 4, 5].map((n) => (
-              <option key={n} value={n}>
-                {n} 轮
-              </option>
-            ))}
-          </Select>
-          <Button variant="primary" onClick={start} disabled={busy || !topic.trim() || participants.length < 2}>
-            <Sparkles className="h-4 w-4" /> 开始头脑风暴
-          </Button>
-        </div>
-      </Card>
-
-      {/* 消息流 */}
-      {activeRunId ? (
-        <Card className="flex min-h-[55vh] flex-col">
-          <div className="flex items-center justify-between border-b border-border px-4 py-2">
-            <span className="text-xs font-medium text-fg">{currentRun?.taskTitle ?? "头脑风暴"}</span>
-            <span className="flex items-center gap-1.5 text-xs text-muted">
-              {status === "running" || status === "queued" ? (
-                <>
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                  Agent 们正在讨论…
-                </>
-              ) : (
-                statusLabel(status ?? "")
+    <div className="space-y-4">
+      <div>
+        <Label>群聊名称</Label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="头脑风暴：XXX" />
+      </div>
+      <div>
+        <Label>选择智能体（≥2）</Label>
+        <div className="flex flex-wrap gap-2">
+          {agents.map((a) => (
+            <button
+              key={a.id}
+              onClick={() => toggleAgent(a.id)}
+              className={cls(
+                "rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                selected.includes(a.id)
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border text-muted hover:border-primary/50",
               )}
-            </span>
-          </div>
-          <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
-            {messages.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-xs text-muted/70">等待第一个想法…</div>
-            ) : (
-              messages.map((m, i) => (
-                <div key={i} className={cls("flex", m.agentId === "user" ? "justify-end" : "justify-start")}>
-                  <div
-                    className={cls(
-                      "max-w-[80%] rounded-2xl px-4 py-2.5",
-                      m.agentId === "user" ? "bg-primary text-primary-fg" : "bg-bg",
-                    )}
-                  >
-                    {m.agentId !== "user" && (
-                      <div className="mb-1 text-[11px] font-semibold text-primary">@{m.agentId}</div>
-                    )}
-                    <div className={cls("whitespace-pre-wrap text-sm leading-relaxed", m.agentId === "user" ? "" : "text-fg")}>
-                      {m.content}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-            {(status === "running" || status === "queued") && (
-              <div className="flex items-center gap-2 text-xs text-muted">
-                <Spinner label="讨论进行中" />
-              </div>
-            )}
-          </div>
-        </Card>
-      ) : (
-        <Card className="flex min-h-[40vh] flex-col items-center justify-center p-8 text-center">
-          <MessageSquare className="mb-3 h-8 w-8 text-muted/50" />
-          <div className="text-sm text-muted">选择 Agent 并输入话题，开始一场头脑风暴</div>
-          <div className="mt-1 max-w-sm text-xs text-muted/70">讨论结果不会直接修改项目，只为前期想法提供灵感</div>
-        </Card>
-      )}
-
-      {/* 头脑风暴完成 → 审批面板 */}
-      {activeRunId && status === "success" && (
-        <ApprovalPanel runTitle={currentRun?.taskTitle ?? "头脑风暴"} messages={messages} />
-      )}
+            >
+              {a.name}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="secondary" onClick={onClose}>取消</Button>
+        <Button onClick={create} disabled={!name.trim() || selected.length < 2}>创建群聊</Button>
+      </div>
     </div>
   );
 }
 
+/** 联系人列表项 */
+function ContactItem({ contact, active, onClick }: { contact: Contact; active: boolean; onClick: () => void }) {
+  const icon = contact.type === "agent" ? Bot : contact.type === "device" ? Smartphone : Users;
+  const Icon = icon;
+  const statusColor = contact.status === "online" ? "bg-success" : contact.status === "busy" ? "bg-warning" : "bg-muted";
+
+  return (
+    <button
+      onClick={onClick}
+      className={cls(
+        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all",
+        active ? "bg-primary/10" : "hover:bg-muted/10",
+      )}
+    >
+      <div className="relative">
+        <div className={cls(
+          "flex h-10 w-10 items-center justify-center rounded-full",
+          contact.type === "agent" ? "bg-violet-500/10 text-violet-500" :
+          contact.type === "device" ? "bg-blue-500/10 text-blue-500" :
+          "bg-emerald-500/10 text-emerald-500",
+        )}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <span className={cls("absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface", statusColor)} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between">
+          <span className={cls("text-sm font-medium truncate", active ? "text-primary" : "text-fg")}>{contact.name}</span>
+          {contact.lastTime && <span className="text-[10px] text-muted">{contact.lastTime}</span>}
+        </div>
+        {contact.lastMessage && (
+          <div className="mt-0.5 text-xs text-muted truncate">{contact.lastMessage}</div>
+        )}
+      </div>
+      {(contact.unread ?? 0) > 0 && (
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] text-white">
+          {contact.unread}
+        </span>
+      )}
+    </button>
+  );
+}
+
+export default function ChatPage() {
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [activeContact, setActiveContact] = useState<Contact | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // 加载联系人
+  useEffect(() => {
+    void loadContacts();
+  }, []);
+
+  async function loadContacts() {
+    const agents = await api.get<Agent[]>("/agents");
+    const agentContacts: Contact[] = (agents ?? []).map((a) => ({
+      id: a.id,
+      type: "agent" as const,
+      name: a.name,
+      status: a.enabled ? "online" : "offline",
+    }));
+
+    // 我的设备（预留手机端）
+    const deviceContacts: Contact[] = [
+      { id: "this-pc", type: "device", name: "本机（电脑端）", status: "online" },
+    ];
+
+    setContacts([...deviceContacts, ...agentContacts]);
+  }
+
+  // 滚动到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // 发送消息
+  async function sendMessage() {
+    if (!inputText.trim() || !activeContact || sending) return;
+
+    const userMsg: ChatMessage = {
+      id: `msg-${Date.now()}`,
+      contactId: activeContact.id,
+      content: inputText,
+      sender: "user",
+      timestamp: Date.now(),
+    };
+
+    setMessages((prev) => [...prev, userMsg]);
+    setInputText("");
+    setSending(true);
+
+    try {
+      // 调用 API 获取智能体回复
+      const response = await api.post<{ reply: string }>("/chat", {
+        agentId: activeContact.id,
+        message: inputText,
+      });
+
+      if (response?.reply) {
+        const agentMsg: ChatMessage = {
+          id: `msg-${Date.now()}-agent`,
+          contactId: activeContact.id,
+          content: response.reply,
+          sender: "assistant",
+          timestamp: Date.now(),
+        };
+        setMessages((prev) => [...prev, agentMsg]);
+      }
+    } catch (e) {
+      console.error("发送失败:", e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  // 当前联系人的消息
+  const activeMessages = activeContact ? messages.filter((m) => m.contactId === activeContact.id) : [];
+
+  // 联系人分组
+  const deviceContacts = contacts.filter((c) => c.type === "device");
+  const agentContacts = contacts.filter((c) => c.type === "agent");
+  const groupContacts = contacts.filter((c) => c.type === "group");
+
+  return (
+    <div className="flex h-full">
+      {/* 左侧联系人列表 */}
+      <aside className="flex w-72 flex-col border-r border-border bg-surface">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h2 className="text-sm font-semibold text-fg">消息</h2>
+          <button
+            onClick={() => setShowCreateGroup(true)}
+            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:bg-muted/10 hover:text-fg"
+            title="创建群聊（头脑风暴）"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-2 py-2 space-y-4">
+          {/* 我的设备 */}
+          {deviceContacts.length > 0 && (
+            <div>
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase text-muted">
+                我的设备
+              </div>
+              {deviceContacts.map((c) => (
+                <ContactItem
+                  key={c.id}
+                  contact={c}
+                  active={activeContact?.id === c.id}
+                  onClick={() => setActiveContact(c)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* 智能体 */}
+          {agentContacts.length > 0 && (
+            <div>
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase text-muted">
+                智能体
+              </div>
+              {agentContacts.map((c) => (
+                <ContactItem
+                  key={c.id}
+                  contact={c}
+                  active={activeContact?.id === c.id}
+                  onClick={() => setActiveContact(c)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* 群聊 */}
+          {groupContacts.length > 0 && (
+            <div>
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase text-muted">
+                群聊
+              </div>
+              {groupContacts.map((c) => (
+                <ContactItem
+                  key={c.id}
+                  contact={c}
+                  active={activeContact?.id === c.id}
+                  onClick={() => setActiveContact(c)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* 右侧聊天窗口 */}
+      <div className="flex flex-1 flex-col">
+        {activeContact ? (
+          <>
+            {/* 聊天头部 */}
+            <div className="flex items-center gap-3 border-b border-border px-6 py-3">
+              <div className={cls(
+                "flex h-9 w-9 items-center justify-center rounded-full",
+                activeContact.type === "agent" ? "bg-violet-500/10 text-violet-500" :
+                activeContact.type === "device" ? "bg-blue-500/10 text-blue-500" :
+                "bg-emerald-500/10 text-emerald-500",
+              )}>
+                {activeContact.type === "agent" ? <Bot className="h-4 w-4" /> :
+                 activeContact.type === "device" ? <Smartphone className="h-4 w-4" /> :
+                 <Users className="h-4 w-4" />}
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-fg">{activeContact.name}</div>
+                <div className="text-xs text-muted">
+                  {activeContact.status === "online" ? "在线" : activeContact.status === "busy" ? "忙碌" : "离线"}
+                </div>
+              </div>
+            </div>
+
+            {/* 消息列表 */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {activeMessages.length === 0 ? (
+                <div className="flex h-full items-center justify-center">
+                  <div className="text-center">
+                    <MessageSquare className="mx-auto h-12 w-12 text-muted/30" />
+                    <p className="mt-2 text-sm text-muted">开始与 {activeContact.name} 对话</p>
+                  </div>
+                </div>
+              ) : (
+                activeMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={cls(
+                      "flex",
+                      msg.sender === "user" ? "justify-end" : "justify-start",
+                    )}
+                  >
+                    <div
+                      className={cls(
+                        "max-w-[70%] rounded-2xl px-4 py-2.5",
+                        msg.sender === "user"
+                          ? "bg-primary text-white rounded-br-md"
+                          : "bg-muted/20 text-fg rounded-bl-md",
+                      )}
+                    >
+                      <div className="text-sm">{msg.content}</div>
+                      <div className={cls(
+                        "mt-1 text-[10px]",
+                        msg.sender === "user" ? "text-white/70" : "text-muted",
+                      )}>
+                        {new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* 输入框 */}
+            <div className="border-t border-border px-6 py-4">
+              <div className="flex items-center gap-3">
+                <Input
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+                  placeholder={`发送给 ${activeContact.name}...`}
+                  className="flex-1"
+                  disabled={sending}
+                />
+                <Button
+                  onClick={sendMessage}
+                  disabled={!inputText.trim() || sending}
+                  className="px-4"
+                >
+                  {sending ? <Spinner /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="text-center">
+              <Brain className="mx-auto h-16 w-16 text-muted/20" />
+              <h3 className="mt-4 text-lg font-medium text-fg">选择联系人开始对话</h3>
+              <p className="mt-1 text-sm text-muted">与智能体聊天或创建群聊进行头脑风暴</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 创建群聊对话框 */}
+      <Modal open={showCreateGroup} onClose={() => setShowCreateGroup(false)} title="创建群聊（头脑风暴）">
+        <CreateGroupDialog
+          onClose={() => setShowCreateGroup(false)}
+          onCreated={(group) => {
+            setContacts((prev) => [...prev, group]);
+            setActiveContact(group);
+          }}
+        />
+      </Modal>
+    </div>
+  );
+}
