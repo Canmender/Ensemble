@@ -15,8 +15,7 @@
   },
   "dependencies": {
     "@ensemble/server": "workspace:*",
-    "@ensemble/shared": "workspace:*",
-    "electron-updater": "^6.8.9"
+    "@ensemble/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
