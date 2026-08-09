@@ -2,7 +2,7 @@
 REM 合鸣中继服务器部署脚本 (Windows)
 REM 用法: deploy.bat
 
-set SERVER_IP=SERVER_IP_REDACTED
+set SERVER_IP=YOUR_SERVER_IP
 set SERVER_USER=root
 set DEPLOY_DIR=/opt/ensemble/relay-server
 
