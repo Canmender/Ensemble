@@ -35,5 +35,5 @@ nsis:
 publish:
   provider: github
   owner: Canmender
-  repo: ensemble
+  repo: Ensemble
   releaseType: release
