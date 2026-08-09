@@ -82,6 +82,15 @@ pnpm --filter @ensemble/server test   # 单元测试
 pnpm -r typecheck                    # 全量类型检查
 ```
 
+## 📚 文档
+
+| 文档 | 说明 |
+|---|---|
+| [架构设计](docs/ARCHITECTURE.md) | 总体架构、核心模块、数据流、扩展点 |
+| [开发指南](docs/DEVELOPMENT.md) | 本地开发、构建、测试、打包、发布、CLI、FAQ |
+| [扩展指南](docs/EXTENDING.md) | 添加工具 / Agent 类型 / Provider / Skill / 记忆后端 / MCP / 工作流 |
+| [事件协议](docs/event-protocol.md) | WebSocket 事件协议与断线补拉 |
+
 ## 📄 日志
 
 功能演进见 [CHANGELOG.md](CHANGELOG.md)。
