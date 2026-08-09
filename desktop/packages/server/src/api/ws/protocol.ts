@@ -23,7 +23,8 @@ export type RunEvent =
 export type WsClientMsg =
   | { type: "subscribe"; runId: string }
   | { type: "unsubscribe"; runId: string }
-  | { type: "cancel"; runId: string };
+  | { type: "cancel"; runId: string }
+  | { type: "steer"; runId: string; content: string };
 
 export function parseClientMsg(raw: string): WsClientMsg | null {
   try {
@@ -31,6 +32,7 @@ export function parseClientMsg(raw: string): WsClientMsg | null {
     if (msg?.type === "subscribe" && typeof msg.runId === "string") return msg;
     if (msg?.type === "unsubscribe" && typeof msg.runId === "string") return msg;
     if (msg?.type === "cancel" && typeof msg.runId === "string") return msg;
+    if (msg?.type === "steer" && typeof msg.runId === "string" && typeof msg.content === "string") return msg;
     return null;
   } catch {
     return null;

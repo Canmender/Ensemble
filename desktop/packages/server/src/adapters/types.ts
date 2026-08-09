@@ -12,4 +12,10 @@ export interface AgentAdapter {
   dispose(): Promise<void>;
 }
 
+/** Steering 消息：用户在 agent 运行中注入的消息 */
+export interface SteeringMessage {
+  content: string;
+  timestamp: number;
+}
+
 export type { AgentConfig, AgentTaskInput, AgentEvent };
