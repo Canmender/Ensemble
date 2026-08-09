@@ -30,12 +30,34 @@ export interface LoopOptions {
   /** 大工具结果 offload 目录 */
   offloadDir?: string;
   toolResultOffloadChars?: number;
+  /**
+   * Steering 消息队列（参考 OpenClaw）：
+   * 用户在 agent 执行中发送的消息会进入此队列，
+   * 在每个迭代检查点（工具执行前）注入上下文。
+   * agent 会在下一轮 LLM 调用中看到这些消息。
+   */
+  steeringQueue?: SteeringMessage[];
+}
+
+/** Steering 消息：用户在 agent 运行中注入的消息 */
+export interface SteeringMessage {
+  content: string;
+  timestamp: number;
+}
+
+/** 工具调用签名（用于循环检测） */
+function toolCallSignature(call: LLMToolCall): string {
+  return `${call.name}:${JSON.stringify(call.input)}`;
 }
 
 /**
  * Agentic 工具循环（hook 驱动）：
  * preReasoning（记忆注入/压缩）→ LLM 流式 → postReasoning → 执行工具 → postToolResult → postCall。
  * 产出归一化 AgentEvent，对齐 run_events 表与前端 LogLine。
+ *
+ * 增强（参考 OpenClaw）：
+ * - 工具循环检测：相同工具+参数连续调用 3 次 → 自动终止
+ * - 上下文自动压缩：token 使用达阈值时触发
  */
 export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEvent> {
   const msgs: LLMMessage[] = [];
@@ -64,6 +86,14 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
 
   const offload = opts.offloadDir ? new OffloadStore(opts.offloadDir) : undefined;
   const offloadChars = opts.toolResultOffloadChars ?? 8000;
+
+  // 工具循环检测状态（参考 OpenClaw toolLoopRecovery）
+  const toolLoopState = {
+    recentSignatures: [] as string[],
+    consecutiveDuplicates: 0,
+    maxConsecutive: 3, // 连续 3 次相同调用视为循环
+    terminated: false,
+  };
 
   yield { type: "status", status: "starting", detail: opts.model, ts: Date.now() };
 
@@ -159,6 +189,46 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
       // 最终轮也触发 postCall（记忆 flush），随后 await pendingFlushes
       await hooks.run("postCall", ctx);
       break;
+    }
+
+    // Steering 消息检查（参考 OpenClaw steering messages）
+    // 用户在 agent 执行中发送的消息在此注入，LLM 下一轮可见
+    if (opts.steeringQueue && opts.steeringQueue.length > 0) {
+      const steering = opts.steeringQueue.splice(0, opts.steeringQueue.length);
+      for (const msg of steering) {
+        ctx.msgs.push({ role: "user", content: `[用户追加] ${msg.content}` });
+        yield { type: "status", status: "running", detail: `已注入用户消息: ${msg.content.slice(0, 50)}...`, ts: Date.now() };
+      }
+    }
+
+    // 工具循环检测（参考 OpenClaw toolLoopRecovery）
+    // 检测相同工具+参数连续调用，防止死循环浪费 token
+    for (const call of calls) {
+      const sig = toolCallSignature(call);
+      const lastSig = toolLoopState.recentSignatures[toolLoopState.recentSignatures.length - 1];
+      if (sig === lastSig) {
+        toolLoopState.consecutiveDuplicates++;
+      } else {
+        toolLoopState.consecutiveDuplicates = 0;
+      }
+      toolLoopState.recentSignatures.push(sig);
+      // 只保留最近 10 个签名
+      if (toolLoopState.recentSignatures.length > 10) {
+        toolLoopState.recentSignatures.shift();
+      }
+    }
+
+    if (toolLoopState.consecutiveDuplicates >= toolLoopState.maxConsecutive) {
+      toolLoopState.terminated = true;
+      const loopTool = calls[0]?.name ?? "unknown";
+      const message = `工具循环检测：${loopTool} 连续调用 ${toolLoopState.consecutiveDuplicates} 次相同参数，自动终止以避免浪费。`;
+      yield { type: "status", status: "running", detail: message, ts: Date.now() };
+      yield { type: "tool_result", tool: "loop_detector", output: message, ts: Date.now() };
+      // 注入一条系统消息告知 LLM 循环已终止
+      ctx.msgs.push({ role: "user", content: `[系统] ${message} 请换一种方法或直接给出结论。` });
+      toolLoopState.consecutiveDuplicates = 0;
+      toolLoopState.recentSignatures = [];
+      continue; // 给 LLM 一次机会调整策略
     }
 
     // 执行工具调用（并行：独立工具同时执行，3-5× 加速；结果按调用顺序回填）
