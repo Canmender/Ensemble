@@ -7,7 +7,6 @@
 
 import { io, Socket } from "socket.io-client";
 import { logger } from "../util/logger";
-import { v4 as uuidv4 } from "uuid";
 
 export interface RelayConfig {
   /** 中继服务器地址 */

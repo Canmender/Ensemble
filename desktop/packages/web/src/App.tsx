@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import {
   Bot, Brain, LayoutDashboard, ListTodo, MessageSquare, Moon, Settings, Sun,
@@ -8,14 +8,16 @@ import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
 import { useTheme, type Theme } from "./lib/theme";
 import { cls } from "./components/ui";
-import DashboardPage from "./pages/DashboardPage";
-import AgentsPage from "./pages/AgentsPage";
-import TasksPage from "./pages/TasksPage";
-import RunPage from "./pages/RunPage";
-import SettingsPage from "./pages/SettingsPage";
-import MemoryPage from "./pages/MemoryPage";
-import WorkflowsPage from "./pages/WorkflowsPage";
-import ChatPage from "./pages/ChatPage";
+
+/* 路由级懒加载：首屏只加载当前页面，其余按需拆分 */
+const DashboardPage = lazy(() => import("./pages/DashboardPage"));
+const AgentsPage = lazy(() => import("./pages/AgentsPage"));
+const TasksPage = lazy(() => import("./pages/TasksPage"));
+const RunPage = lazy(() => import("./pages/RunPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const MemoryPage = lazy(() => import("./pages/MemoryPage"));
+const WorkflowsPage = lazy(() => import("./pages/WorkflowsPage"));
+const ChatPage = lazy(() => import("./pages/ChatPage"));
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
@@ -82,6 +84,18 @@ function SystemThemeToggle() {
       <MonitorSmartphone className="h-3.5 w-3.5" />
       <span>跟随系统</span>
     </button>
+  );
+}
+
+/** 页面加载骨架屏 */
+function PageLoading() {
+  return (
+    <div className="flex h-full items-center justify-center">
+      <div className="flex flex-col items-center gap-3 text-muted">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <span className="text-sm">加载中…</span>
+      </div>
+    </div>
   );
 }
 
@@ -156,16 +170,18 @@ export default function App() {
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">
-        <Routes>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/agents" element={<AgentsPage />} />
-          <Route path="/tasks" element={<TasksPage />} />
-          <Route path="/runs/:id" element={<RunPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/memory" element={<MemoryPage />} />
-          <Route path="/workflows" element={<WorkflowsPage />} />
-          <Route path="/chat" element={<ChatPage />} />
-        </Routes>
+        <Suspense fallback={<PageLoading />}>
+          <Routes>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/agents" element={<AgentsPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
+            <Route path="/runs/:id" element={<RunPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/memory" element={<MemoryPage />} />
+            <Route path="/workflows" element={<WorkflowsPage />} />
+            <Route path="/chat" element={<ChatPage />} />
+          </Routes>
+        </Suspense>
       </main>
     </div>
   );

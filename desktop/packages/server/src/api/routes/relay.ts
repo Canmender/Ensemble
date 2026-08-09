@@ -7,7 +7,6 @@ import { hostname } from "node:os";
 import type { AppContext } from "../../context";
 import { relayClient } from "../relay-client";
 import { logger } from "../../util/logger";
-import { v4 as uuidv4 } from "uuid";
 
 /** 生成设备 ID */
 function getDeviceId(): string {
