@@ -2,6 +2,17 @@
 
 本项目采用语义化版本（SemVer）。所有值得注意的变更记录于此。
 
+## [0.4.1] - 2026-08-10
+
+深色模式色彩修复版本。
+
+### 🔧 修复
+
+- AgentsPage: 硬编码 amber 颜色改为 warning 语义 token
+- ChatPage: 硬编码 blue/emerald 颜色改为 primary/success 语义 token
+- ChatPage/TasksPage: text-white 改为 text-primary-fg
+- 所有颜色统一使用语义化设计 token，深色模式兼容
+
 ## [0.4.0] - 2026-08-10
 
 双记忆池系统，参考腾讯 Agent Memory 架构。
