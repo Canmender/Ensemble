@@ -7,6 +7,7 @@
 - [架构详解](#架构详解)
 - [模块说明](#模块说明)
 - [性能优化](#性能优化)
+- [多 Agent 架构](#多-agent-架构)
 - [开发指南](#开发指南)
 - [部署与发布](#部署与发布)
 - [故障排查](#故障排查)
@@ -231,6 +232,35 @@ ws.send({ type: "subscribe", runId: "run_xxx" });
 | 工具循环恢复 | 防止死循环 | `server/src/adapters/builtin/loop.ts` |
 | Steering 消息 | 用户可中断/引导 | `server/src/adapters/builtin/loop.ts` |
 | 预编译 SQL | DB 解析开销↓ | `server/src/orchestration/store.ts` |
+
+---
+
+## 多 Agent 架构
+
+详见 [MULTI_AGENT_ARCHITECTURE.md](MULTI_AGENT_ARCHITECTURE.md)，涵盖：
+
+| 主题 | 说明 |
+|------|------|
+| **Memory-Tool 协议** | 三层记忆架构（Working/Episodic/Semantic）、memory_write/read/list 交互协议 |
+| **ReAct 拆解** | Plan → Execute → Reflect 三阶段、状态定义、路由逻辑 |
+| **LangGraph 状态机** | 节点/边/条件边、State Schema、Checkpoint 恢复 |
+| **角色分工** | Planner（规划）、Executor（执行）、Critic（评审）、Summarizer（总结） |
+| **RAG 集成** | 向量检索 + BM25 混合、分块策略、Rerank |
+| **Function Calling** | API 适配层、MCP 动态发现、OpenAPI 自动生成工具 |
+| **对抗迭代** | Coder vs Tester、覆盖率驱动、自动 Bug 修复 |
+| **容器化部署** | Docker/Docker Compose、Prometheus 监控、自动回滚 |
+| **自动调优** | 日志驱动 Prompt 优化、Few-shot 自动选择、A/B 测试 |
+| **10 万次稳定性** | 限流/重试/熔断/超时/降级/幂等/审计 |
+
+### 集成路线图
+
+| Phase | 内容 | 状态 |
+|-------|------|------|
+| 1 | Memory-Tool 协议、ReAct 循环、上下文压缩 | ✅ 已完成 |
+| 2 | Plan-Execute-Reflect、角色分工、状态机 | 📋 规划中 |
+| 3 | RAG 知识库、Function Calling、MCP 发现 | 📋 规划中 |
+| 4 | Coder vs Tester 对抗迭代 | 📋 规划中 |
+| 5 | 容器化、监控、自动调优、10 万次验证 | 📋 规划中 |
 
 ---
 
