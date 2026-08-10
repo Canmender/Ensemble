@@ -13,6 +13,10 @@ export interface AgentEventItem {
     outcome?: string;
     result?: string;
     message?: string;
+    status?: string;
+    detail?: string;
+    usage?: { totalCostUsd?: number; [k: string]: unknown };
+    output?: string;
     [k: string]: unknown;
   };
 }
@@ -25,6 +29,7 @@ export interface LiveJob {
   events: AgentEventItem[];
   result?: string;
   sessionId?: string;
+  prompt?: string;
 }
 
 export interface LiveRun {

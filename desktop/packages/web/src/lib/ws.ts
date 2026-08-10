@@ -1,4 +1,4 @@
-import { useRunStore } from "../store/runs";
+import { useRunStore, type AgentEventItem } from "../store/runs";
 
 interface WsEnvelope {
   v: 1;
@@ -21,6 +21,20 @@ interface WsEnvelope {
       ts?: number;
     };
   };
+}
+
+/** Minimal runtime type guard for WsEnvelope */
+function isWsEnvelope(obj: unknown): obj is WsEnvelope {
+  if (typeof obj !== "object" || obj === null) return false;
+  const env = obj as Record<string, unknown>;
+  return (
+    env.v === 1 &&
+    typeof env.runId === "string" &&
+    typeof env.seq === "number" &&
+    typeof env.event === "object" &&
+    env.event !== null &&
+    typeof (env.event as Record<string, unknown>).type === "string"
+  );
 }
 
 /**
@@ -65,14 +79,14 @@ class WsClient {
     };
 
     ws.onmessage = (e) => {
-      let env: WsEnvelope;
+      let parsed: unknown;
       try {
-        env = JSON.parse(e.data);
+        parsed = JSON.parse(e.data);
       } catch {
         return;
       }
-      if (!env?.runId) return;
-      this.apply(env);
+      if (!isWsEnvelope(parsed)) return;
+      this.apply(parsed);
     };
 
     ws.onclose = (e) => {
@@ -138,9 +152,8 @@ class WsClient {
           store.upsertJob(env.runId, env.jobId, { status: ev.status ?? "" });
         break;
       case "agent.event":
-        if (env.jobId) {
-          const payload = (ev as any).event ?? {};
-          store.appendEvent(env.runId, { seq: env.seq, jobId: env.jobId, event: payload });
+        if (env.jobId && ev.event) {
+          store.appendEvent(env.runId, { seq: env.seq, jobId: env.jobId, event: ev.event as AgentEventItem["event"] });
         }
         break;
       case "chat.message":
@@ -164,11 +177,11 @@ class WsClient {
   private async catchUp(runId: string, afterSeq: number): Promise<void> {
     try {
       const res = await fetch(`/api/runs/${runId}/events?afterSeq=${afterSeq}`);
-      const json = (await res.json()) as any;
-      const events: Array<{ seq: number; jobId?: string; event: unknown }> = json?.data?.events ?? [];
+      const json = (await res.json()) as { data?: { events?: Array<{ seq: number; jobId?: string; event: AgentEventItem["event"] }> } };
+      const events = json?.data?.events ?? [];
       const store = useRunStore.getState();
       for (const item of events) {
-        store.appendEvent(runId, { seq: item.seq, jobId: item.jobId, event: item.event as any });
+        store.appendEvent(runId, { seq: item.seq, jobId: item.jobId, event: item.event });
         this.localSeq.set(runId, Math.max(this.localSeq.get(runId) ?? 0, item.seq));
       }
     } catch {

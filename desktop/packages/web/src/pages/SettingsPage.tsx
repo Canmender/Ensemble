@@ -3,51 +3,9 @@ import { BookOpen, Cloud, Download, Globe, Pencil, Plug, Server, Settings, Trash
 import { api } from "../lib/api";
 import type { AppSettings, DetectedAgent, McpServerConfig, ProviderConfig, SkillDef, SyncResult } from "../types";
 import {
-  Badge, Button, Card, ConfirmDialog, Input, Label, Modal, Select, Spinner, Textarea, cls, showToast,
+  Badge, Button, Card, Input, Label, Modal, Select, Spinner, Textarea, cls, showToast,
 } from "../components/ui";
-
-// ---------- useConfirm hook ----------
-function useConfirm() {
-  const [state, setState] = useState<{
-    open: boolean;
-    title: string;
-    message: string;
-    confirmLabel: string;
-    danger: boolean;
-    onConfirm: () => void;
-  }>({ open: false, title: "", message: "", confirmLabel: "确认", danger: false, onConfirm: () => {} });
-
-  const confirm = useCallback(
-    (opts: { title: string; message: string; confirmLabel?: string; danger?: boolean }) =>
-      new Promise<boolean>((resolve) => {
-        setState({
-          open: true,
-          title: opts.title,
-          message: opts.message,
-          confirmLabel: opts.confirmLabel ?? "确认",
-          danger: opts.danger ?? false,
-          onConfirm: () => resolve(true),
-        });
-      }),
-    [],
-  );
-
-  const Dialog = (
-    <ConfirmDialog
-      open={state.open}
-      onClose={() => {
-        setState((s) => ({ ...s, open: false }));
-      }}
-      onConfirm={state.onConfirm}
-      title={state.title}
-      message={state.message}
-      confirmLabel={state.confirmLabel}
-      danger={state.danger}
-    />
-  );
-
-  return { confirm, Dialog };
-}
+import { useConfirm } from "../hooks/useConfirm";
 
 const TYPE_LABEL: Record<string, string> = {
   anthropic: "Anthropic Claude",
@@ -74,7 +32,7 @@ function ProviderForm({ initial, onDone }: { initial?: ProviderConfig; onDone: (
   async function save() {
     if (!form.id.trim() || !form.name.trim()) return;
     try {
-      const body: any = {
+      const body: ProviderConfig = {
         id: form.id,
         name: form.name,
         type: form.type,
@@ -119,7 +77,7 @@ function ProviderForm({ initial, onDone }: { initial?: ProviderConfig; onDone: (
       </div>
       <div>
         <Label>类型</Label>
-        <Select value={form.type} onChange={(e) => set({ type: e.target.value as any })}>
+        <Select value={form.type} onChange={(e) => set({ type: e.target.value as ProviderConfig["type"] })}>
           <option value="anthropic">Anthropic Claude（官方 API）</option>
           <option value="openai">OpenAI 兼容（OpenRouter / DeepSeek / Ollama）</option>
           <option value="custom">自定义端点（OpenAI 兼容协议）</option>
@@ -180,7 +138,7 @@ function McpForm({ initial, onDone }: { initial?: McpServerConfig; onDone: () =>
   async function save() {
     if (!form.id.trim() || !form.name.trim()) return;
     try {
-      const body: any = {
+      const body: McpServerConfig = {
         id: form.id,
         name: form.name,
         transport: form.transport,
@@ -231,7 +189,7 @@ function McpForm({ initial, onDone }: { initial?: McpServerConfig; onDone: () =>
       </div>
       <div>
         <Label>传输方式</Label>
-        <Select value={form.transport} onChange={(e) => set({ transport: e.target.value as any })}>
+        <Select value={form.transport} onChange={(e) => set({ transport: e.target.value as McpServerConfig["transport"] })}>
           <option value="stdio">stdio（本地进程）</option>
           <option value="http">HTTP（Streamable）</option>
         </Select>
@@ -334,10 +292,10 @@ function McpSection() {
                   {s.status?.connected ? `${s.status.toolCount} tools` : s.status?.error?.slice(0, 30) ?? "未连接"}
                 </span>
               </span>
-              <button onClick={() => { setEditing(s); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" title="编辑">
+              <button onClick={() => { setEditing(s); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" aria-label="编辑" title="编辑">
                 <Pencil className="h-4 w-4" />
               </button>
-              <button onClick={() => remove(s.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" title="删除">
+              <button onClick={() => remove(s.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" aria-label="删除" title="删除">
                 <Trash2 className="h-4 w-4" />
               </button>
             </div>
@@ -445,10 +403,10 @@ function SkillSection() {
                 <span className="font-semibold text-fg">{s.name}</span>
               </div>
               <div className="flex gap-1">
-                <button onClick={() => { setEditing(s); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" title="编辑">
+                <button onClick={() => { setEditing(s); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" aria-label="编辑" title="编辑">
                   <Pencil className="h-4 w-4" />
                 </button>
-                <button onClick={() => remove(s.name)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" title="删除">
+                <button onClick={() => remove(s.name)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" aria-label="删除" title="删除">
                   <Trash2 className="h-4 w-4" />
                 </button>
               </div>
@@ -479,7 +437,7 @@ function SkillSection() {
 function AutoLaunchToggle() {
   const [on, setOn] = useState(false);
   useEffect(() => {
-    void (window as any).desktop?.isAutoLaunch().then(setOn).catch(() => {});
+    void window.desktop?.isAutoLaunch?.().then(setOn).catch(() => {});
   }, []);
   return (
     <label className="flex items-center gap-2 text-sm text-fg">
@@ -487,7 +445,7 @@ function AutoLaunchToggle() {
         type="checkbox"
         checked={on}
         onChange={async (e) => {
-          const v = await (window as any).desktop?.setAutoLaunch(e.target.checked);
+          const v = await window.desktop?.setAutoLaunch?.(e.target.checked);
           setOn(!!v);
         }}
       />
@@ -498,16 +456,16 @@ function AutoLaunchToggle() {
 
 // ---------- 系统信息（Windows 原生） ----------
 function SystemInfo() {
-  const [info, setInfo] = useState<Record<string, any> | null>(null);
+  const [info, setInfo] = useState<DesktopSystemInfo | null>(null);
   useEffect(() => {
-    void (window as any).desktop?.systemInfo().then(setInfo).catch(() => {});
+    void window.desktop?.systemInfo?.().then(setInfo).catch(() => {});
   }, []);
   if (!info) return <span className="text-xs text-muted">加载中…</span>;
-  const uptimeMin = Math.round((Number(info.uptime) || 0) / 60);
+  const uptimeMin = Math.round((info.uptime || 0) / 60);
   return (
     <div className="space-y-1 text-xs text-muted">
-      <div>平台：{String(info.platform)} · {String(info.arch)}</div>
-      <div>Electron {String(info.versions?.electron)} · Node {String(info.versions?.node)}</div>
+      <div>平台：{info.platform} · {info.arch}</div>
+      <div>Electron {info.versions.electron} · Node {info.versions.node}</div>
       <div>运行时长：{uptimeMin > 0 ? `${uptimeMin} 分钟` : "刚刚启动"}</div>
     </div>
   );
@@ -684,10 +642,12 @@ export default function SettingsPage() {
         <p className="mt-1 text-sm text-muted">配置模型提供商、Agent 工具与工作区</p>
       </header>
 
-      <div className="mb-6 flex gap-1 rounded-xl bg-muted/10 p-1">
+      <div className="mb-6 flex gap-1 rounded-xl bg-muted/10 p-1" role="tablist">
         {tabs.map((t) => (
           <button
             key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
             onClick={() => setTab(t.key)}
             className={cls(
               "flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors",
@@ -733,10 +693,10 @@ export default function SettingsPage() {
                   <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => fetchModels(p.id)} disabled={fetchingModels === p.id}>
                     {fetchingModels === p.id ? "拉取中…" : "拉取模型"}
                   </Button>
-                  <button onClick={() => { setEditing(p); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" title="编辑">
+                  <button onClick={() => { setEditing(p); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" aria-label="编辑" title="编辑">
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button onClick={() => remove(p.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" title="删除">
+                  <button onClick={() => remove(p.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" aria-label="删除" title="删除">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -776,7 +736,7 @@ export default function SettingsPage() {
           <Card className="p-5">
             <h3 className="mb-1 text-sm font-semibold text-fg">命令执行确认策略</h3>
             <p className="mb-3 text-xs text-muted">Agent 执行 shell 命令前是否需要弹窗确认</p>
-            <Select value={settings.codeExecutionConfirm} onChange={(e) => saveSettings({ codeExecutionConfirm: e.target.value as any })}>
+            <Select value={settings.codeExecutionConfirm} onChange={(e) => saveSettings({ codeExecutionConfirm: e.target.value as AppSettings["codeExecutionConfirm"] })}>
               <option value="ask">每次询问（推荐）</option>
               <option value="always">总是自动允许</option>
               <option value="never">总是拒绝</option>
@@ -974,14 +934,14 @@ pm2 save && pm2 startup`}
           <Card className="p-5">
             <h3 className="mb-1 text-sm font-semibold text-fg">配置目录</h3>
             <p className="mb-3 text-xs text-muted">Agent 配置、Provider 配置、数据库等存储位置</p>
-            {(window as any).desktop?.openConfigDir ? (
-              <Button variant="secondary" onClick={() => (window as any).desktop.openConfigDir()}>打开配置目录</Button>
+            {window.desktop?.openConfigDir ? (
+              <Button variant="secondary" onClick={() => window.desktop?.openConfigDir?.()}>打开配置目录</Button>
             ) : (
               <span className="text-xs text-muted">（浏览器模式下不可用）</span>
             )}
           </Card>
 
-          {(window as any).desktop?.isAutoLaunch && (
+          {window.desktop?.isAutoLaunch && (
             <Card className="p-5">
               <div className="flex items-center justify-between">
                 <div>
@@ -993,7 +953,7 @@ pm2 save && pm2 startup`}
             </Card>
           )}
 
-          {(window as any).desktop?.systemInfo && (
+          {window.desktop?.systemInfo && (
             <Card className="p-5">
               <h3 className="mb-2 text-sm font-semibold text-fg">系统信息</h3>
               <SystemInfo />

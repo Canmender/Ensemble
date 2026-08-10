@@ -3,49 +3,9 @@ import { Bot, Brain, Pencil, Trash2, Zap } from "lucide-react";
 import { api } from "../lib/api";
 import type { Agent, DetectedAgent, LocalAgentConfig, MemorySnapshot, ProviderConfig, SkillDef } from "../types";
 import {
-  Badge, Button, Card, ConfirmDialog, EmptyState, Input, Label, Modal, Select, Spinner, Textarea, cls, showToast,
+  Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, Textarea, cls, showToast,
 } from "../components/ui";
-
-// ---------- useConfirm hook ----------
-function useConfirm() {
-  const [state, setState] = useState<{
-    open: boolean;
-    title: string;
-    message: string;
-    confirmLabel: string;
-    danger: boolean;
-    onConfirm: () => void;
-  }>({ open: false, title: "", message: "", confirmLabel: "确认", danger: false, onConfirm: () => {} });
-
-  const confirm = useCallback(
-    (opts: { title: string; message: string; confirmLabel?: string; danger?: boolean }) =>
-      new Promise<boolean>((resolve) => {
-        setState({
-          open: true,
-          title: opts.title,
-          message: opts.message,
-          confirmLabel: opts.confirmLabel ?? "确认",
-          danger: opts.danger ?? false,
-          onConfirm: () => resolve(true),
-        });
-      }),
-    [],
-  );
-
-  const Dialog = (
-    <ConfirmDialog
-      open={state.open}
-      onClose={() => setState((s) => ({ ...s, open: false }))}
-      onConfirm={state.onConfirm}
-      title={state.title}
-      message={state.message}
-      confirmLabel={state.confirmLabel}
-      danger={state.danger}
-    />
-  );
-
-  return { confirm, Dialog };
-}
+import { useConfirm } from "../hooks/useConfirm";
 
 function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void }) {
   const [form, setForm] = useState<Agent>(
@@ -83,7 +43,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
     void (async () => {
       const [p, h, sk, disc] = await Promise.all([
         api.get<ProviderConfig[]>("/providers"),
-        api.get<any>("/health"),
+        api.get<{ tools: string[] }>("/health"),
         api.get<SkillDef[]>("/skills").catch(() => []),
         api.get<DetectedAgent[]>("/discovery").catch(() => []),
       ]);
@@ -370,7 +330,7 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
               <Label>Prompt 传递</Label>
               <Select
                 value={form.local?.promptMode ?? "arg"}
-                onChange={(e) => patchLocal({ promptMode: e.target.value as any })}
+                onChange={(e) => patchLocal({ promptMode: e.target.value as LocalAgentConfig["promptMode"] })}
               >
                 <option value="arg">作为最后参数</option>
                 <option value="stdin">写入 stdin</option>
@@ -409,7 +369,7 @@ function TestButton({ agent }: { agent: Agent }) {
     setBusy(true);
     setResult(null);
     try {
-      const data = await api.post<{ events: any[] }>(`/agents/${agent.id}/test`, { prompt: "Reply with exactly: OK" });
+      const data = await api.post<{ events: Array<{ type: string; outcome?: string; result?: string }> }>(`/agents/${agent.id}/test`, { prompt: "Reply with exactly: OK" });
       const done = data.events.find((e) => e.type === "done");
       setResult(done ? `${done.outcome} · ${(done.result ?? "").slice(0, 60)}` : "no done event");
     } catch (e) {
@@ -526,7 +486,7 @@ export default function AgentsPage() {
           <h1 className="text-2xl font-bold text-fg">Agents</h1>
           <p className="mt-1 text-sm text-muted">在应用内创建自定义 Agent（选择模型、配置角色与工具）</p>
         </div>
-        <Button variant="primary" onClick={() => { setEditing(undefined); setShowForm(true); }}>
+        <Button variant="primary" onClick={() => { setEditing(undefined); setShowForm(true); }} aria-label="添加 Agent">
           + 新建 Agent
         </Button>
       </header>
@@ -555,10 +515,10 @@ export default function AgentsPage() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => { setEditing(a); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" title="编辑">
+                  <button onClick={() => { setEditing(a); setShowForm(true); }} className="rounded-md p-1.5 text-muted hover:bg-muted/10 hover:text-fg" aria-label="编辑" title="编辑">
                     <Pencil className="h-4 w-4" />
                   </button>
-                  <button onClick={() => remove(a.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" title="删除">
+                  <button onClick={() => remove(a.id)} className="rounded-md p-1.5 text-muted hover:bg-destructive/10 hover:text-destructive" aria-label="删除" title="删除">
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>

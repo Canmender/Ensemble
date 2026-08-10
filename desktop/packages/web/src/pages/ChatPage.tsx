@@ -14,6 +14,7 @@ import {
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
+import { loadRunDetail } from "../lib/loadRunDetail";
 import type { Agent } from "../types";
 import { Button, Card, Input, Label, Modal, Spinner, cls, showToast } from "../components/ui";
 
@@ -136,6 +137,7 @@ function ContactItem({ contact, active, onClick }: { contact: Contact; active: b
   return (
     <button
       onClick={onClick}
+      aria-current={active ? "true" : undefined}
       className={cls(
         "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all",
         active ? "bg-primary/10" : "hover:bg-muted/10",
@@ -218,18 +220,7 @@ export default function ChatPage() {
     wsClient.subscribe(runId);
 
     // 加载历史消息（如果 store 中还没有）
-    const store = useRunStore.getState();
-    const existing = store.live[runId];
-    if (!existing || existing.messages.length === 0) {
-      void api.get<any>(`/runs/${runId}`).then((d) => {
-        store.getOrCreate(runId);
-        store.setStatus(runId, d.run.status);
-        if (d.run.finalResult) store.setFinal(runId, d.run.finalResult, d.run.error);
-        for (const m of d.chatMessages ?? []) {
-          store.appendMessage(runId, { jobId: m.jobId, agentId: m.agentId, content: m.content });
-        }
-      });
-    }
+    void loadRunDetail(runId, { loadEvents: false, loadChatMessages: true });
 
     return () => {
       wsClient.unsubscribe(runId);
@@ -338,6 +329,7 @@ export default function ChatPage() {
           <button
             onClick={() => setShowCreateGroup(true)}
             className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:bg-muted/10 hover:text-fg"
+            aria-label="创建群聊"
             title="创建群聊（头脑风暴）"
           >
             <Plus className="h-4 w-4" />
@@ -489,6 +481,7 @@ export default function ChatPage() {
                   onClick={sendMessage}
                   disabled={!inputText.trim() || sending}
                   className="px-4"
+                  aria-label="发送消息"
                 >
                   {sending ? <Spinner /> : <Send className="h-4 w-4" />}
                 </Button>
