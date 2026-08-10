@@ -95,6 +95,12 @@ class WsClient {
     }
   }
 
+  steer(runId: string, content: string): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "steer", runId, content }));
+    }
+  }
+
   private apply(env: WsEnvelope): void {
     const store = useRunStore.getState();
     store.getOrCreate(env.runId);
