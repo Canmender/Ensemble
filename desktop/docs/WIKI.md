@@ -201,7 +201,37 @@ ws.send({ type: "subscribe", runId: "run_xxx" });
 - 15s 心跳
 - 断线重连 + afterSeq 补拉
 
-### 6. 工具系统 (`packages/server/src/tools/`)
+### 6. 记忆池系统 (`packages/server/src/memory/pool.ts`)
+
+双记忆池架构：
+
+```
+┌─────────────────────────────────────────────┐
+│            显式记忆池 (Explicit)             │
+│  - 导航栏"记忆"页可见                        │
+│  - Agent 可通过工具读取往期记忆               │
+│  - 长期持久化，用户可管理                     │
+│  - 1000 条/agent，手动淘汰                   │
+├─────────────────────────────────────────────┤
+│            隐式记忆池 (Implicit)             │
+│  - 项目/Run 级别作用域                       │
+│  - 多 Agent 共享重要上下文                    │
+│  - 主动筛选注入 (重要度阈值 0.5)              │
+│  - 100 条/scope，24h 自动过期                │
+└─────────────────────────────────────────────┘
+```
+
+**工具**:
+- `memory_pool_write`: 写入记忆 (显式/隐式)
+- `memory_pool_read`: 读取记忆 (搜索/列表)
+- `memory_pool_list`: 列出记忆条目
+
+**API**:
+- `GET/POST /api/memory-pool/explicit`: 显式记忆 CRUD
+- `GET/POST /api/memory-pool/implicit`: 隐式记忆 CRUD
+- `GET /api/memory-pool/stats`: 统计信息
+
+### 7. 工具系统 (`packages/server/src/tools/`)
 
 #### RAG 知识库 (`tools/rag.ts`)
 
