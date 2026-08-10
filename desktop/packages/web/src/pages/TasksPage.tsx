@@ -78,9 +78,9 @@ export default function TasksPage() {
 
       {/* 统计卡片 */}
       <div className="mb-6 grid grid-cols-4 gap-4">
-        <StatCard icon={BarChart3} label="总任务数" value={stats.total} color="bg-blue-500" />
-        <StatCard icon={CheckCircle} label="成功" value={stats.success} color="bg-emerald-500" />
-        <StatCard icon={Clock} label="失败" value={stats.error} color="bg-red-500" />
+        <StatCard icon={BarChart3} label="总任务数" value={stats.total} color="bg-primary" />
+        <StatCard icon={CheckCircle} label="成功" value={stats.success} color="bg-success" />
+        <StatCard icon={Clock} label="失败" value={stats.error} color="bg-destructive" />
         <StatCard icon={TrendingUp} label="取消" value={stats.cancelled} color="bg-muted" />
       </div>
 

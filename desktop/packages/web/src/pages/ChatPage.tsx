@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Bot, MessageSquare, MonitorSmartphone, Plus, Send, Users, Smartphone, Brain, Sparkles
+  Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain
 } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";

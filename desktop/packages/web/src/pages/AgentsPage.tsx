@@ -1,10 +1,51 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Bot, Brain, Pencil, Trash2, Zap } from "lucide-react";
 import { api } from "../lib/api";
 import type { Agent, DetectedAgent, LocalAgentConfig, MemorySnapshot, ProviderConfig, SkillDef } from "../types";
 import {
-  Badge, Button, Card, EmptyState, Input, Label, Modal, Select, Spinner, Textarea, cls,
+  Badge, Button, Card, ConfirmDialog, EmptyState, Input, Label, Modal, Select, Spinner, Textarea, cls, showToast,
 } from "../components/ui";
+
+// ---------- useConfirm hook ----------
+function useConfirm() {
+  const [state, setState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger: boolean;
+    onConfirm: () => void;
+  }>({ open: false, title: "", message: "", confirmLabel: "确认", danger: false, onConfirm: () => {} });
+
+  const confirm = useCallback(
+    (opts: { title: string; message: string; confirmLabel?: string; danger?: boolean }) =>
+      new Promise<boolean>((resolve) => {
+        setState({
+          open: true,
+          title: opts.title,
+          message: opts.message,
+          confirmLabel: opts.confirmLabel ?? "确认",
+          danger: opts.danger ?? false,
+          onConfirm: () => resolve(true),
+        });
+      }),
+    [],
+  );
+
+  const Dialog = (
+    <ConfirmDialog
+      open={state.open}
+      onClose={() => setState((s) => ({ ...s, open: false }))}
+      onConfirm={state.onConfirm}
+      title={state.title}
+      message={state.message}
+      confirmLabel={state.confirmLabel}
+      danger={state.danger}
+    />
+  );
+
+  return { confirm, Dialog };
+}
 
 function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void }) {
   const [form, setForm] = useState<Agent>(
@@ -455,6 +496,7 @@ export default function AgentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Agent | undefined>();
   const [memoryAgent, setMemoryAgent] = useState<Agent | null>(null);
+  const { confirm, Dialog } = useConfirm();
 
   async function refresh() {
     setAgents(await api.get<Agent[]>("/agents"));
@@ -466,7 +508,8 @@ export default function AgentsPage() {
   }, []);
 
   async function remove(id: string) {
-    if (!confirm(`确定删除 agent ${id}？`)) return;
+    const ok = await confirm({ title: "删除 Agent", message: `确定删除 agent ${id}？`, confirmLabel: "删除", danger: true });
+    if (!ok) return;
     await api.del(`/agents/${id}`);
     void refresh();
   }
@@ -557,6 +600,7 @@ export default function AgentsPage() {
       </Modal>
 
       {memoryAgent && <MemoryModal agent={memoryAgent} onClose={() => setMemoryAgent(null)} />}
+      {Dialog}
     </div>
   );
 }

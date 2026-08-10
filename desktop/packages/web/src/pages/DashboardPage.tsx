@@ -1,8 +1,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
-  Activity, AlertCircle, ArrowRight, Bot, CheckCircle2, ChevronDown, Loader2,
-  MessageSquare, PlayCircle, Plus, Workflow, Zap, Target, Sparkles,
+  Activity, ArrowRight, Bot, CheckCircle2, ChevronDown, Loader2,
+  MessageSquare, PlayCircle, Plus, Workflow, Zap, Target,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";

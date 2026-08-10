@@ -69,7 +69,7 @@ function LogLine({ item }: { item: any }) {
 
   if (ev.type === "tool_use") {
     return (
-      <div className="flex gap-2 py-0.5 text-amber-700">
+      <div className="flex gap-2 py-0.5 text-warning">
         <span className="w-20 shrink-0 text-right text-[11px] text-muted/70">{fmtTime(ev.ts ?? Date.now())}</span>
         <Wrench className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span className="font-mono text-[13px]">
@@ -110,7 +110,7 @@ function LogLine({ item }: { item: any }) {
 
   if (ev.type === "error") {
     return (
-      <div className="flex gap-2 py-0.5 text-red-600">
+      <div className="flex gap-2 py-0.5 text-destructive">
         <span className="w-20 shrink-0 text-right text-[11px] text-muted/70">{fmtTime(ev.ts ?? Date.now())}</span>
         <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span className="whitespace-pre-wrap font-mono text-[13px]">{ev.message}</span>
@@ -120,7 +120,7 @@ function LogLine({ item }: { item: any }) {
 
   if (ev.type === "done") {
     return (
-      <div className="flex gap-2 py-0.5 text-emerald-600">
+      <div className="flex gap-2 py-0.5 text-success">
         <span className="w-20 shrink-0 text-right text-[11px] text-muted/70">{fmtTime(ev.ts ?? Date.now())}</span>
         <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
         <span className="text-xs font-medium">
@@ -322,7 +322,7 @@ export default function RunPage() {
           <div className="space-y-4">
             {messages.map((m, i) => (
               <div key={i} className={cls("flex", m.agentId === "user" ? "justify-end" : "justify-start")}>
-                <div className={cls("max-w-[80%] rounded-2xl px-4 py-2.5", m.agentId === "user" ? "bg-primary text-white" : "bg-muted/10")}>
+                <div className={cls("max-w-[80%] rounded-2xl px-4 py-2.5", m.agentId === "user" ? "bg-primary text-primary-fg" : "bg-muted/10")}>
                   {m.agentId !== "user" && (
                     <div className="mb-1 text-[11px] font-semibold text-violet-600">@{m.agentId}</div>
                   )}

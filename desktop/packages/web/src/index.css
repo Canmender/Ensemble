@@ -95,7 +95,7 @@ body {
 .zoom-in-95 {
   animation-name: zoomIn95;
 }
-.duration-200 {
+.anim-dur-200 {
   animation-duration: 200ms;
 }
 
