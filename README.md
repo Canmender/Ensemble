@@ -1,128 +1,70 @@
-# 🌴 合鸣（Ensemble）— 多 Agent 协作平台
+# 🎵 合鸣 Ensemble
 
-[![GitHub release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+> 一个本地优先的多 Agent 协作平台。连接 Claude Code、Hermes、OpenCode 等 AI Agent，通过可视化编排让它们协同工作。
 
-> 桌面 + 移动端统一的多 Agent 协作平台，支持局域网直连和跨网络云端中继。
-
-<p align="center">
-  <img src="desktop/docs/images/banner.png" alt="合鸣" width="100%" />
-</p>
+[![Release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-58%20passed-brightgreen)](#测试)
 
 ---
 
-## ✨ 核心能力
+## 它能做什么？
 
-| 能力 | 说明 |
-|------|------|
-| **多 Agent 编排** | 5 种模式：单发 / 工作流 / 群聊 / Plan-Execute-Reflect / 对抗迭代 |
-| **内置 Agent** | 多模型支持（Anthropic / OpenAI / 自定义端点）、工具、Skill、记忆 |
-| **本地 Agent 接入** | 自动识别 Claude Code / Hermes / OpenCode / Codex 等 harness |
-| **RAG 知识库** | BM25 + 向量混合检索、递归/语义分块、文档管理 |
-| **Function Calling** | API 适配层、OpenAPI Spec 自动生成工具、MCP 动态发现 |
-| **对抗式迭代** | Coder vs Tester 对抗、覆盖率驱动、自动 Bug 修复 |
-| **实时监控** | WebSocket 批量推送、日志/时间线/画布三视图 |
-| **分层记忆** | 长期 + 情境 + 全文检索 + 可选 Mem0 语义记忆 |
-| **容器化部署** | Docker Compose + Nginx 反向代理 |
+**一句话**：给多个 AI Agent 分配任务，让它们自动协作完成复杂工作。
+
+```
+用户: "帮我重构这个模块，同时写好测试和文档"
+  ↓
+合鸣: 自动拆解任务 → 分配给 Coder / Tester / Reviewer → 并行执行 → 汇总结果
+```
+
+### 五种编排模式
+
+| 模式 | 适用场景 | 工作方式 |
+|------|---------|---------|
+| **单发** | 简单任务 | 一个或多个 Agent 并行执行 |
+| **工作流** | 有依赖的任务链 | DAG 调度，支持条件边和模板注入 |
+| **群聊** | 头脑风暴 | 多 Agent 轮转对话，@agent 委派 |
+| **规划-执行-反思** | 复杂任务 | 自动拆解 → 执行 → 评估 → 迭代改进 |
+| **对抗迭代** | 代码质量 | Coder vs Tester 对抗，覆盖率驱动 |
+
+### 核心能力
+
+- **多模型支持** — Anthropic Claude / OpenAI 兼容 / DeepSeek / Ollama / 自定义端点
+- **本地 Agent 接入** — 自动识别 Claude Code / Hermes / OpenCode / Codex 等 harness
+- **RAG 知识库** — BM25 + 向量混合检索，支持文档上传和语义搜索
+- **工具系统** — 文件操作 / 命令执行 / 网络搜索 / MCP 动态发现
+- **双记忆池** — 显式记忆（长期持久化）+ 隐式记忆（项目/Run 作用域）
+- **实时监控** — WebSocket 推送，日志/时间线/画布三视图
+- **IM 聊天** — 与 Agent 直接对话，消息持久化
 
 ---
 
-## 🏗️ 架构总览
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        合鸣（Ensemble）                          │
-├─────────────────────────────────────────────────────────────────┤
-│  桌面端 (Electron)          │  手机端 (React Native)           │
-│  ├─ Web UI (React)          │  ├─ 远程控制面板                 │
-│  ├─ 内嵌服务器              │  ├─ Agent 管理                   │
-│  └─ 系统托盘/自动更新       │  └─ 实时监控                     │
-├─────────────────────────────────────────────────────────────────┤
-│                        编排引擎                                  │
-│  ├─ single: 单发/多 Agent 并行                                  │
-│  ├─ workflow: DAG 调度                                          │
-│  ├─ chat: 群聊轮转                                              │
-│  ├─ plan: Plan → Execute → Reflect                              │
-│  └─ adversarial: Coder vs Tester                                │
-├─────────────────────────────────────────────────────────────────┤
-│                        工具系统                                  │
-│  ├─ 文件/代码/网络工具                                          │
-│  ├─ RAG 知识库 (BM25 + 向量)                                    │
-│  ├─ Function Calling 适配层                                     │
-│  ├─ MCP 工具服务器                                              │
-│  └─ 记忆工具 (memory_write/read/list)                           │
-├─────────────────────────────────────────────────────────────────┤
-│                        LLM Provider                             │
-│  ├─ Anthropic Claude                                            │
-│  ├─ OpenAI 兼容 (OpenRouter/DeepSeek/Ollama)                    │
-│  └─ 自定义端点                                                  │
-└─────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## 📁 项目结构
-
-```
-.
-├── desktop/                    # 电脑端（Electron + React）
-│   ├── packages/
-│   │   ├── shared/             # 共享类型 + Zod schema
-│   │   ├── server/             # 引擎库（LLM/工具/编排/记忆）
-│   │   ├── web/                # 前端（React + Tailwind + ReactFlow）
-│   │   ├── desktop/            # Electron 壳
-│   │   └── cli/                # 命令行工具
-│   └── docs/                   # 文档
-├── mobile/                     # 手机端（Expo + React Native）
-├── shared/                     # 共享通信协议
-├── relay-server/               # 云端中继服务器
-├── nginx/                      # Nginx 配置
-├── docker-compose.yml          # Docker 部署配置
-└── README.md
-```
-
----
-
-## 🚀 快速开始
+## 快速开始
 
 ### 环境要求
 
 - Node.js ≥ 20
 - pnpm ≥ 10
-- Android SDK（手机端构建）
 
-### 电脑端
+### 安装运行
 
 ```bash
-cd desktop
+# 克隆仓库
+git clone https://github.com/Canmender/Ensemble.git
+cd Ensemble/desktop
+
+# 安装依赖
 pnpm install
 
-# 构建共享包
+# 构建并启动
 pnpm --filter @ensemble/shared build
 pnpm --filter @ensemble/server build
 pnpm --filter @ensemble/web build
-
-# 启动桌面应用
 pnpm --filter @ensemble/desktop start
 ```
 
-### 手机端
-
-```bash
-cd mobile
-npm install
-npx expo start
-```
-
-### 中继服务器
-
-```bash
-cd relay-server
-npm install
-npm run dev
-```
-
-### Docker 部署
+### Docker 部署（中继服务器）
 
 ```bash
 # 开发环境
@@ -134,98 +76,96 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ---
 
-## 🤖 Agent 编排模式
-
-### 1. Single（单发）
-
-单个或多个 Agent 并行执行，可选聚合结果。
-
-### 2. Workflow（工作流）
-
-DAG 调度，支持依赖关系、条件边、模板注入。
-
-### 3. Chat（群聊）
-
-多 Agent 轮转对话，支持 transcript 注入、@agent 委派。
-
-### 4. Plan-Execute-Reflect（规划-执行-反思）
+## 项目结构
 
 ```
-Plan (分解任务) → Execute (调用工具) → Reflect (评估质量)
-     ↑                                      │
-     └──────── 修订计划 (score < 0.85) ←────┘
+.
+├── desktop/                    # 桌面应用
+│   ├── packages/
+│   │   ├── shared/             # 共享类型 + Zod schema
+│   │   ├── server/             # 引擎核心（LLM/工具/编排/记忆/RAG）
+│   │   ├── web/                # 前端（React + Tailwind + ReactFlow）
+│   │   ├── desktop/            # Electron 壳
+│   │   └── cli/                # 命令行工具
+│   └── docs/                   # 文档
+├── mobile/                     # 手机端（Expo + React Native）
+├── relay-server/               # 云端中继服务器
+├── shared/                     # 共享通信协议
+└── nginx/                      # Nginx 反向代理配置
 ```
-
-- 质量阈值控制（默认 0.85）
-- 最大迭代限制（默认 5 次）
-- 自动修订循环
-
-### 5. Adversarial（对抗迭代）
-
-```
-Coder (生成代码) ←──→ Tester (找 Bug)
-         ↓
-    覆盖率 ≥ 90% + Bug = 0 → 完成
-```
-
-- 双 Agent 对抗
-- 覆盖率驱动
-- 自动迭代（最大 10 轮）
 
 ---
 
-## 🛠️ 工具系统
+## 架构
 
-### 内置工具
+```
+┌─────────────────────────────────────────────────────┐
+│  桌面端 (Electron)  │  手机端 (React Native)       │
+├─────────────────────────────────────────────────────┤
+│                    编排引擎                          │
+│  single / workflow / chat / plan / adversarial      │
+├─────────────────────────────────────────────────────┤
+│                    工具系统                          │
+│  文件 / 命令 / 网络 / RAG / MCP / 记忆              │
+├─────────────────────────────────────────────────────┤
+│                  LLM Provider                       │
+│  Anthropic / OpenAI / DeepSeek / Ollama / 自定义    │
+└─────────────────────────────────────────────────────┘
+```
 
-| 工具 | 功能 |
+详细架构文档：
+- [架构设计](desktop/docs/ARCHITECTURE.md) — 总体架构、核心模块、数据流
+- [多 Agent 架构](desktop/docs/MULTI_AGENT_ARCHITECTURE.md) — 编排协议、RAG、对抗迭代
+- [性能优化](desktop/docs/PERFORMANCE.md) — 前端/引擎优化措施
+- [完整 Wiki](desktop/docs/WIKI.md) — 模块详解、开发指南、故障排查
+
+---
+
+## 安全
+
+项目经过两轮深度安全审查，修复了 16 项高危问题：
+
+| 措施 | 说明 |
 |------|------|
-| `read_file` / `write_file` | 文件读写 |
-| `execute_command` | 命令执行 |
-| `web_search` / `web_fetch` | 网络搜索/抓取 |
-| `memory_write` / `memory_read` / `memory_list` | 记忆管理 |
-| `knowledge_search` | RAG 知识库检索 |
-| `knowledge_manage` | 知识库文档管理 |
-
-### Function Calling
-
-```typescript
-// 从 API 定义自动生成工具
-const tools = adapterToTools({
-  name: "github",
-  baseUrl: "https://api.github.com",
-  auth: { type: "token", envKey: "GITHUB_TOKEN" },
-  endpoints: [
-    { name: "search_repos", method: "GET", path: "/search/repositories" },
-  ],
-});
-
-// 从 OpenAPI Spec 自动生成
-const tools = await loadToolsFromOpenApi("https://api.github.com/openapi.json");
-```
-
-### MCP 工具服务器
-
-支持 Model Context Protocol，可动态接入外部工具服务器。
+| 命令注入防护 | Shell 元字符检测 + 词边界匹配 + MCP 命令审计 |
+| API Key 加密 | AES-256-GCM 加密存储，自动迁移旧格式 |
+| WebSocket 认证 | Token 认证 + timingSafeEqual + 1MB 消息限制 |
+| Electron CSP | Content-Security-Policy + 导航守卫 + 权限拒绝 |
+| SSRF 防护 | 私有 IP 检测 + DNS 重绑定防护 |
+| 速率限制 | API + WebSocket 双层限流 |
+| 输入验证 | Zod schema + 字段白名单 + 路径穿越防护 |
 
 ---
 
-## 📊 性能优化
+## 测试
+
+```bash
+cd desktop
+pnpm --filter @ensemble/server test    # 58 个单元测试
+pnpm -r typecheck                      # 全量类型检查
+```
+
+覆盖模块：安全检查（26 个用例）、LLM 重试逻辑（13 个用例）、工具系统、编排引擎、记忆池。
+
+---
+
+## 性能优化
 
 | 优化项 | 效果 |
 |--------|------|
 | 路由懒加载 | 首屏 JS ↓55% |
-| reactflow 动态加载 | RunPage ↓92% |
+| ReactFlow 动态加载 | RunPage ↓92% |
 | WebSocket 批量发送 | 帧数 ↓10-50x |
-| 内存 seq 计数器 | 消除 SELECT MAX |
-| 预编译 SQL | DB 解析开销↓ |
-| permessage-deflate | JSON 压缩 |
+| Zustand 选择器优化 | 消除每 50ms 全页重渲染 |
+| LLM 指数退避重试 | 429/5xx 自动恢复 |
+| RAG 持久化 | 重启不丢失知识库 |
+| 中文 bigram 分词 | 搜索质量显著提升 |
 
 ---
 
-## 📦 安装包
+## 安装包
 
-下载最新版本：[GitHub Releases](https://github.com/Canmender/Ensemble/releases)
+下载：[GitHub Releases](https://github.com/Canmender/Ensemble/releases)
 
 | 平台 | 文件 | 说明 |
 |------|------|------|
@@ -234,61 +174,30 @@ const tools = await loadToolsFromOpenApi("https://api.github.com/openapi.json");
 
 ---
 
-## 📚 文档
+## 技术栈
 
-| 文档 | 说明 |
-|------|------|
-| [多 Agent 架构](desktop/docs/MULTI_AGENT_ARCHITECTURE.md) | Memory/Tool 协议、ReAct 拆解、状态机编排、RAG、对抗迭代 |
-| [架构设计](desktop/docs/ARCHITECTURE.md) | 总体架构、核心模块、数据流、扩展点 |
-| [性能优化](desktop/docs/PERFORMANCE.md) | 前端/Electron/引擎优化措施、设计决策 |
-| [Wiki](desktop/docs/WIKI.md) | 完整 Wiki（架构/模块/开发/部署/故障排查） |
-| [事件协议](desktop/docs/event-protocol.md) | WebSocket 事件协议与断线补拉 |
-| [开发指南](desktop/docs/DEVELOPMENT.md) | 本地开发、构建、测试、打包 |
-| [扩展指南](desktop/docs/EXTENDING.md) | 添加工具/Agent/Provider/Skill |
-
----
-
-## 🧪 测试
-
-```bash
-cd desktop
-pnpm --filter @ensemble/server test   # 单元测试
-pnpm -r typecheck                    # 全量类型检查
-```
+| 层 | 技术 |
+|----|------|
+| 前端 | React 18 / TypeScript / Tailwind CSS / ReactFlow / Zustand |
+| 后端 | Express / WebSocket / SQLite (node:sqlite) / Zod |
+| 桌面 | Electron 43 / esbuild |
+| 手机 | Expo / React Native |
+| 部署 | Docker Compose / Nginx |
+| 测试 | Vitest |
 
 ---
 
-## 🔐 安全说明
-
-- API Key 经系统加密存储（Windows DPAPI）
-- 工具白名单 + 命令确认（HITL）
-- 本地服务仅绑定 127.0.0.1
-- 容器化部署支持资源限制
-
----
-
-## 🤝 参与贡献
+## 贡献
 
 1. Fork 本仓库
 2. 创建功能分支 (`git checkout -b feature/xxx`)
 3. 提交更改 (`git commit -m 'feat: add xxx'`)
-4. 推送到分支 (`git push origin feature/xxx`)
-5. 创建 Pull Request
+4. 推送并创建 Pull Request
+
+开发指南见 [DEVELOPMENT.md](desktop/docs/DEVELOPMENT.md)。
 
 ---
 
-## 📄 许可证
+## 许可证
 
 [MIT License](LICENSE)
-
----
-
-## 🔗 相关项目
-
-| 项目 | 说明 |
-|------|------|
-| [OpenCode](https://github.com/opencode-ai/opencode) | Go 终端 AI 助手 |
-| [OpenClaw](https://github.com/openclaw/openclaw) | 个人 AI 助手 |
-| [LangGraph](https://github.com/langchain-ai/langgraph) | 状态机编排框架 |
-| [AutoGen](https://github.com/microsoft/autogen) | 多 Agent 框架 |
-| [MCP](https://modelcontextprotocol.io/) | Model Context Protocol |
