@@ -1,10 +1,53 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { BookOpen, Cloud, Download, Globe, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
 import { api } from "../lib/api";
 import type { AppSettings, DetectedAgent, McpServerConfig, ProviderConfig, SkillDef, SyncResult } from "../types";
 import {
-  Badge, Button, Card, Input, Label, Modal, Select, Spinner, Textarea, cls,
+  Badge, Button, Card, ConfirmDialog, Input, Label, Modal, Select, Spinner, Textarea, cls, showToast,
 } from "../components/ui";
+
+// ---------- useConfirm hook ----------
+function useConfirm() {
+  const [state, setState] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger: boolean;
+    onConfirm: () => void;
+  }>({ open: false, title: "", message: "", confirmLabel: "确认", danger: false, onConfirm: () => {} });
+
+  const confirm = useCallback(
+    (opts: { title: string; message: string; confirmLabel?: string; danger?: boolean }) =>
+      new Promise<boolean>((resolve) => {
+        setState({
+          open: true,
+          title: opts.title,
+          message: opts.message,
+          confirmLabel: opts.confirmLabel ?? "确认",
+          danger: opts.danger ?? false,
+          onConfirm: () => resolve(true),
+        });
+      }),
+    [],
+  );
+
+  const Dialog = (
+    <ConfirmDialog
+      open={state.open}
+      onClose={() => {
+        setState((s) => ({ ...s, open: false }));
+      }}
+      onConfirm={state.onConfirm}
+      title={state.title}
+      message={state.message}
+      confirmLabel={state.confirmLabel}
+      danger={state.danger}
+    />
+  );
+
+  return { confirm, Dialog };
+}
 
 const TYPE_LABEL: Record<string, string> = {
   anthropic: "Anthropic Claude",
@@ -229,6 +272,7 @@ function McpSection() {
   const [servers, setServers] = useState<McpServerConfig[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<McpServerConfig | undefined>();
+  const { confirm, Dialog } = useConfirm();
 
   async function refresh() {
     setServers(await api.get<McpServerConfig[]>("/mcp"));
@@ -237,7 +281,8 @@ function McpSection() {
   useEffect(() => { void refresh(); }, []);
 
   async function remove(id: string) {
-    if (!confirm(`确定删除 MCP server ${id}？`)) return;
+    const ok = await confirm({ title: "删除 MCP Server", message: `确定删除 MCP server ${id}？`, confirmLabel: "删除", danger: true });
+    if (!ok) return;
     await api.del(`/mcp/${id}`);
     void refresh();
   }
@@ -299,6 +344,7 @@ function McpSection() {
           }}
         />
       </Modal>
+      {Dialog}
     </div>
   );
 }
@@ -346,6 +392,7 @@ function SkillSection() {
   const [skills, setSkills] = useState<SkillDef[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<SkillDef | undefined>();
+  const { confirm, Dialog } = useConfirm();
 
   async function refresh() {
     setSkills(await api.get<SkillDef[]>("/skills"));
@@ -353,7 +400,8 @@ function SkillSection() {
   useEffect(() => { void refresh(); }, []);
 
   async function remove(name: string) {
-    if (!confirm(`确定删除 skill ${name}？`)) return;
+    const ok = await confirm({ title: "删除 Skill", message: `确定删除 skill ${name}？`, confirmLabel: "删除", danger: true });
+    if (!ok) return;
     await api.del(`/skills/${name}`);
     void refresh();
   }
@@ -407,6 +455,7 @@ function SkillSection() {
           }}
         />
       </Modal>
+      {Dialog}
     </div>
   );
 }
@@ -529,6 +578,7 @@ export default function SettingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ProviderConfig | undefined>();
   const [fetchingModels, setFetchingModels] = useState<string | null>(null);
+  const { confirm, Dialog } = useConfirm();
 
   // 中继服务器状态
   const [relayUrl, setRelayUrl] = useState("");
@@ -554,7 +604,8 @@ export default function SettingsPage() {
   }, []);
 
   async function remove(id: string) {
-    if (!confirm(`确定删除 provider ${id}？`)) return;
+    const ok = await confirm({ title: "删除 Provider", message: `确定删除 provider ${id}？`, confirmLabel: "删除", danger: true });
+    if (!ok) return;
     await api.del(`/providers/${id}`);
     void refresh();
   }
@@ -584,13 +635,13 @@ export default function SettingsPage() {
     try {
       const result = await api.post<{ success: boolean; message?: string; error?: string }>("/relay/connect", { url: relayUrl });
       if (result?.success) {
-        alert("✅ " + result.message);
+        showToast(result.message || "连接成功", "success");
       } else {
-        alert("❌ " + (result?.error || "连接失败"));
+        showToast(result?.error || "连接失败", "error");
       }
       void refresh();
     } catch (e) {
-      alert("❌ 连接失败: " + (e as Error).message);
+      showToast("连接失败: " + (e as Error).message, "error");
     } finally {
       setRelayConnecting(false);
     }
@@ -945,6 +996,7 @@ pm2 save && pm2 startup`}
           }}
         />
       </Modal>
+      {Dialog}
     </div>
   );
 }
