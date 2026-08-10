@@ -1,5 +1,7 @@
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage, Server } from "node:http";
+import type { Duplex } from "node:stream";
 import { parseClientMsg, type RunEvent, type WsEnvelope } from "./protocol";
 import { logger } from "../../util/logger";
 
@@ -7,12 +9,17 @@ import { logger } from "../../util/logger";
  * WebSocket Hub：管理客户端订阅（按 runId），广播 run 事件帧。
  * 事件先落库分配 seq，再走 hub.broadcast —— 断线重连后客户端用 afterSeq 补拉。
  *
+ * 安全：
+ * - WebSocket 连接需要 token 验证（通过 URL query 参数传递）
+ * - Wildcard 订阅已禁用，必须指定具体 runId
+ * - maxPayload 限制防止内存耗尽攻击
+ *
  * 性能优化：
  * - 消息批量发送：缓冲 16ms 后批量发送，减少 10-50x 帧数
  * - 共享序列化：同一事件只 JSON.stringify 一次
  * - 背压处理：检查 bufferedAmount 防止慢客户端内存溢出
  */
-/** 特殊 runId：订阅所有运行（看板实时监控用） */
+/** 特殊 runId：订阅所有运行（看板实时监控用） — 已禁用，保留符号供协议层引用 */
 export const WILDCARD_RUN = "*";
 
 /** 待发送的消息 */
@@ -26,11 +33,12 @@ interface PendingMessage {
 
 export class WsHub {
   private wss?: WebSocketServer;
+  private serverPath = "/ws";
   /** ws → 订阅的 runId 集合 */
   private wsSubs = new Map<WebSocket, Set<string>>();
   /** runId → 订阅它的 ws 集合 */
   private runSubs = new Map<string, Set<WebSocket>>();
-  /** 订阅所有运行（wildcard）的连接 */
+  /** 订阅所有运行（wildcard）的连接 — 已禁用 */
   private globalSubs = new Set<WebSocket>();
   private heartbeatTimer?: NodeJS.Timeout;
 
@@ -40,13 +48,24 @@ export class WsHub {
   private readonly BATCH_INTERVAL = 16; // ~60fps, 一帧内批量发送
   private readonly MAX_BUFFERED = 4 * 1024 * 1024; // 4MB 背压阈值
 
+  // 安全：启动时生成的 session token，前端通过 /api/ws-token 获取
+  private _sessionToken = randomBytes(32).toString("hex");
+
+  /** 获取当前 session token（前端用于建立 WebSocket 连接） */
+  get sessionToken(): string {
+    return this._sessionToken;
+  }
+
   /** 客户端消息回调（cancel/steer 等需要引擎配合的操作） */
   onClientMessage?: (msg: { type: string; runId: string; content?: string }) => void;
 
   attach(server: Server, path = "/ws"): void {
+    this.serverPath = path;
+
+    // noServer 模式：手动处理 upgrade 以实现 token 验证
     this.wss = new WebSocketServer({
-      server,
-      path,
+      noServer: true,
+      maxPayload: 1024 * 1024, // 1MB 最大消息体，防止内存耗尽
       perMessageDeflate: {
         // 启用 per-message deflate 压缩 JSON 负载
         zlibDeflateOptions: { level: 3 }, // 低压缩级别，平衡 CPU 和带宽
@@ -91,19 +110,56 @@ export class WsHub {
       ws.on("error", (err) => logger.warn(`ws error: ${String(err)}`));
     });
 
+    // 拦截 HTTP upgrade，验证 token 后再交给 WebSocketServer
+    server.on("upgrade", (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+      const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+
+      // 只处理目标路径的 upgrade
+      if (url.pathname !== this.serverPath) {
+        // 不是我们的路径，不做处理（其他中间件可能会处理）
+        return;
+      }
+
+      // 验证 token
+      const token = url.searchParams.get("token");
+      if (!token || !this.verifyToken(token)) {
+        logger.warn(`ws connection rejected: missing or invalid token from ${extractIp(req)}`);
+        socket.write("HTTP/1.1 401 Unauthorized\r\n\r\n");
+        socket.destroy();
+        return;
+      }
+
+      // Token 有效，完成 WebSocket 握手
+      this.wss!.handleUpgrade(req, socket, head, (ws) => {
+        this.wss!.emit("connection", ws, req);
+      });
+    });
+
     this.heartbeatTimer = setInterval(() => {
       const now = Date.now();
       for (const [runId, set] of this.runSubs) {
         this.send(set, runId, 0, { type: "heartbeat" }, now);
       }
-      this.send(this.globalSubs, WILDCARD_RUN, 0, { type: "heartbeat" }, now);
     }, 15_000);
     this.heartbeatTimer.unref?.();
   }
 
+  /** 使用 timing-safe 比较验证 token，防止时序攻击 */
+  private verifyToken(token: string): boolean {
+    try {
+      const expected = Buffer.from(this._sessionToken, "utf8");
+      const actual = Buffer.from(token, "utf8");
+      if (expected.length !== actual.length) return false;
+      return timingSafeEqual(expected, actual);
+    } catch {
+      return false;
+    }
+  }
+
   subscribe(ws: WebSocket, runId: string): void {
+    // Wildcard 订阅已禁用：防止任意外部客户端监听所有运行事件
     if (runId === WILDCARD_RUN) {
-      this.globalSubs.add(ws);
+      logger.warn("wildcard subscription rejected (disabled for security)");
       return;
     }
     this.wsSubs.get(ws)?.add(runId);

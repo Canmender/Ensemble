@@ -40,6 +40,11 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/relay", relayRouter(ctx));
   app.use("/api/chat", chatRouter(ctx));
 
+  // WebSocket token endpoint：前端获取 session token 用于建立 WS 连接
+  app.get("/api/ws-token", (_req, res) => {
+    res.json({ token: ctx.hub.sessionToken });
+  });
+
   // 托管前端静态资源 + SPA fallback（仅非 /api /ws 路径）
   const staticDir = opts.staticDir;
   if (staticDir) {
