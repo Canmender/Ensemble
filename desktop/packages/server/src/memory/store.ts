@@ -3,6 +3,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import type { MemoryDailyEntry, MemorySnapshot } from "./types";
+import { logger } from "../util/logger";
 
 interface Meta {
   lastFlushAt?: string;
@@ -39,7 +40,8 @@ export class MemoryStore {
   readDaily(agentId: string, date: string): string | undefined {
     try {
       return readFileSync(join(this.agentDir(agentId), "daily", `${date}.md`), "utf8");
-    } catch {
+    } catch (err) {
+      logger.warn(`memory readDaily failed for ${agentId}/${date}: ${String(err)}`);
       return undefined;
     }
   }
@@ -60,7 +62,8 @@ export class MemoryStore {
           };
         })
         .sort((a, b) => b.date.localeCompare(a.date));
-    } catch {
+    } catch (err) {
+      logger.warn(`memory listDaily failed for ${agentId}: ${String(err)}`);
       return [];
     }
   }
@@ -69,7 +72,8 @@ export class MemoryStore {
     const file = join(this.agentDir(agentId), "MEMORY.md");
     try {
       return { content: readFileSync(file, "utf8"), updatedAt: statSync(file).mtime.toISOString() };
-    } catch {
+    } catch (err) {
+      logger.warn(`memory readMemoryFile failed for ${agentId}: ${String(err)}`);
       return undefined;
     }
   }
@@ -82,7 +86,8 @@ export class MemoryStore {
   readMeta(agentId: string): Meta {
     try {
       return JSON.parse(readFileSync(join(this.agentDir(agentId), "meta.json"), "utf8"));
-    } catch {
+    } catch (err) {
+      logger.warn(`memory readMeta failed for ${agentId}: ${String(err)}`);
       return {};
     }
   }
@@ -127,8 +132,8 @@ export class MemoryStore {
           removed++;
         }
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      logger.warn(`memory rotate failed for ${agentId}: ${String(err)}`);
     }
     return removed;
   }

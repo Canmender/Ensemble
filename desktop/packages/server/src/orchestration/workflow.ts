@@ -31,19 +31,36 @@ export class WorkflowMode {
       const ready = [...pending].filter((id) =>
         (inEdges.get(id) ?? []).every((e) => state.has(e.from)),
       );
-      if (ready.length === 0) {
-        // 死锁：依赖无法满足（例如某节点被永久 skip）
-        for (const id of pending) errors.set(id, "blocked by unmet dependencies");
-        break;
-      }
 
-      const jobs = await Promise.all(
-        ready.map((id) =>
-          this.execNode(run, def, nodeById.get(id)!, inEdges, results, errors, state, task),
-        ),
-      );
-      for (const id of ready) pending.delete(id);
-      void jobs;
+      if (ready.length > 0) {
+        const jobs = await Promise.all(
+          ready.map((id) =>
+            this.execNode(run, def, nodeById.get(id)!, inEdges, results, errors, state, task),
+          ),
+        );
+        for (const id of ready) pending.delete(id);
+        void jobs;
+      } else {
+        // 无就绪节点 — 仅标记依赖已失败的节点为 blocked，其余继续等待
+        let madeProgress = false;
+        for (const id of [...pending]) {
+          const hasFailedDep = (inEdges.get(id) ?? []).some((e) => {
+            const s = state.get(e.from);
+            return s === "error" || s === "blocked" || s === "cancelled";
+          });
+          if (hasFailedDep) {
+            state.set(id, "blocked");
+            errors.set(id, `${id}: blocked by failed dependency`);
+            pending.delete(id);
+            madeProgress = true;
+          }
+        }
+        // 没有任何节点可推进，说明剩余节点依赖的前驱均未到达终态（真正的死锁）
+        if (!madeProgress) {
+          for (const id of pending) errors.set(id, `${id}: blocked by unmet dependencies`);
+          break;
+        }
+      }
     }
 
     // 汇点节点（无出边）的结果作为 run 结果
@@ -147,7 +164,8 @@ function edgeSatisfied(e: WorkflowEdge, upState: string | undefined, upResult: s
     try {
       return new RegExp(e.when.regex).test(upResult ?? "");
     } catch {
-      return true;
+      logger.warn(`edge ${e.from}→${e.to}: invalid regex "${e.when.regex}", edge will not trigger`);
+      return false;
     }
   }
   return true;

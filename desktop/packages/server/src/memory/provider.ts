@@ -77,8 +77,9 @@ export class MemoryProviderImpl implements MemoryProvider {
       try {
         const related = await this.externalBackend.search(agentId, systemPrompt.slice(0, 200), 5);
         if (related.length) parts.push(`## 相关历史记忆\n${related.join("\n").slice(0, maxChars)}`);
-      } catch {
+      } catch (err) {
         /* 外部记忆失败静默降级 */
+        logger.warn(`external memory search failed for ${agentId}: ${String(err)}`);
       }
     }
 
@@ -126,7 +127,9 @@ export class MemoryProviderImpl implements MemoryProvider {
 
     // 外部记忆（Mem0）：同步存储提取的事实
     if (this.externalBackend?.enabled) {
-      await this.externalBackend.add(agentId, out.text).catch(() => {});
+      await this.externalBackend.add(agentId, out.text).catch((err) =>
+        logger.warn(`external memory add failed for ${agentId}: ${String(err)}`),
+      );
     }
 
     const meta = this.store.readMeta(agentId);
@@ -186,7 +189,9 @@ export class MemoryProviderImpl implements MemoryProvider {
     for (const f of facts) {
       if (!f.content?.trim()) continue;
       const tag = f.category ? `[${f.category}] ` : "";
-      await this.externalBackend.add(agentId, `[同步] ${tag}${f.content}`).catch(() => {});
+      await this.externalBackend.add(agentId, `[同步] ${tag}${f.content}`).catch((err) =>
+        logger.warn(`external memory import failed for ${agentId}: ${String(err)}`),
+      );
       n++;
     }
     return n;
