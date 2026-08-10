@@ -149,10 +149,13 @@ class WsClient {
 
   private scheduleReconnect(): void {
     if (this.reconnectTimer) return;
+    // 添加抖动防止雷群效应（thundering herd）
+    const jitter = Math.random() * 1000;
+    const delay = this.reconnectDelay + jitter;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = undefined;
       this.connect();
-    }, this.reconnectDelay);
+    }, delay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
   }
 }

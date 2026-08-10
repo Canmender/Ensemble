@@ -22,6 +22,10 @@ export class OpenAICompatibleProvider implements LLMProvider {
   private extraHeaders?: Record<string, string>;
   private defaultModel?: string;
 
+  // 模型列表缓存（5 分钟 TTL）
+  private modelCache: { models: string[]; expiresAt: number } | null = null;
+  private readonly MODEL_CACHE_TTL = 5 * 60 * 1000; // 5 分钟
+
   constructor(cfg: ProviderRuntimeConfig) {
     this.id = cfg.id;
     this.type = cfg.type === "custom" ? "custom" : "openai";
@@ -161,13 +165,26 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   async listModels(): Promise<string[]> {
+    // 检查缓存
+    if (this.modelCache && Date.now() < this.modelCache.expiresAt) {
+      return this.modelCache.models;
+    }
+
     try {
       const res = await fetch(`${this.baseUrl}/models`, {
         headers: this.headers(),
       });
       if (!res.ok) return [];
       const data = (await res.json()) as any;
-      return (data.data ?? []).map((m: any) => m.id).slice(0, 200);
+      const models = (data.data ?? []).map((m: any) => m.id).slice(0, 200);
+
+      // 更新缓存
+      this.modelCache = {
+        models,
+        expiresAt: Date.now() + this.MODEL_CACHE_TTL,
+      };
+
+      return models;
     } catch {
       return [];
     }

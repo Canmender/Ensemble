@@ -82,6 +82,12 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
   const offload = opts.offloadDir ? new OffloadStore(opts.offloadDir) : undefined;
   const offloadChars = opts.toolResultOffloadChars ?? 8000;
 
+  // 工具 Map 化：O(1) 查找替代 O(n) find
+  const toolMap = new Map<string, AgentTool>();
+  for (const tool of opts.tools) {
+    toolMap.set(tool.name, tool);
+  }
+
   // 工具循环检测状态（参考 OpenClaw toolLoopRecovery）
   // 改进：检查窗口内的重复模式，而非仅连续重复
   const toolLoopState = {
@@ -235,7 +241,7 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
       // 1) 确认（串行，yield 等待状态）
       const confirmOk = new Map<string, boolean>();
       for (const call of calls) {
-        const tool = opts.tools.find((t) => t.name === call.name);
+        const tool = toolMap.get(call.name);
         if (tool?.requiresConfirmation && opts.askConfirm) {
           // HITL：发出等待状态（前端 run/看板显示"等待输入"）
           yield { type: "status", status: "thinking", detail: `等待用户确认执行 ${tool.name}`, ts: Date.now() };
@@ -251,7 +257,7 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
       const results = await Promise.race([
         Promise.all(
           calls.map(async (call) => {
-          const tool = opts.tools.find((t) => t.name === call.name);
+          const tool = toolMap.get(call.name);
           if (!tool) {
             return { call, toolName: call.name, content: `unknown tool: ${call.name}`, offloaded: false };
           }
