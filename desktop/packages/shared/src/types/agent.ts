@@ -89,6 +89,8 @@ export interface AgentTaskInput {
   resumeSessionId?: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /** 当前 runId（用于 WS 工具确认路由） */
+  runId?: string;
   /**
    * Steering 消息队列（参考 OpenClaw）：
    * 用户在 agent 运行中注入的消息，会在下一个检查点注入上下文。

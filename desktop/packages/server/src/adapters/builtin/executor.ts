@@ -12,8 +12,8 @@ export interface BuiltinAdapterDeps {
   providerRegistry: ProviderRegistry;
   toolRegistry: ToolRegistry;
   appSettings: () => AppSettings;
-  /** 工具确认回调（桌面 IPC 弹窗；缺省自动允许） */
-  askConfirm?: (tool: string, args: unknown) => Promise<boolean>;
+  /** 工具确认回调（WS 弹窗；缺省自动拒绝） */
+  askConfirm?: (tool: string, args: unknown, runId?: string) => Promise<boolean>;
   /** 大工具结果 offload 基础目录（<dataDir>/offload） */
   offloadBaseDir?: string;
   /** 记忆 provider（P2；未注入则跳过记忆 hook） */
@@ -118,6 +118,7 @@ export class BuiltinAgentExecutor implements AgentAdapter {
       agentId: this.cfg.id,
       appSettings: this.deps.appSettings(),
       askConfirm: this.deps.askConfirm,
+      runId: input.runId,
       ctxManager,
       hooks,
       offloadDir,

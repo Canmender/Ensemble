@@ -23,7 +23,9 @@ export interface LoopOptions {
   cwd?: string;
   agentId: string;
   appSettings?: AppSettings;
-  askConfirm?: (tool: string, args: unknown) => Promise<boolean>;
+  askConfirm?: (tool: string, args: unknown, runId?: string) => Promise<boolean>;
+  /** 当前 runId（用于 WS 确认请求路由） */
+  runId?: string;
   /** 可插拔 hooks */
   hooks?: LoopHook[];
   /** 上下文压缩器 */
@@ -247,7 +249,7 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
           yield { type: "status", status: "thinking", detail: `等待用户确认执行 ${tool.name}`, ts: Date.now() };
           // abort 时不再等待确认弹窗（避免取消被阻塞）
           confirmOk.set(call.id, await Promise.race([
-            opts.askConfirm(tool.name, call.input),
+            opts.askConfirm(tool.name, call.input, opts.runId),
             abortPromise(opts.signal).then(() => false),
           ]));
         }
@@ -271,7 +273,9 @@ export async function* runAgenticLoop(opts: LoopOptions): AsyncGenerator<AgentEv
             signal: opts.signal,
             agentId: opts.agentId,
             appSettings: opts.appSettings,
-            askConfirm: opts.askConfirm,
+            askConfirm: opts.askConfirm
+              ? (tool, args) => opts.askConfirm!(tool, args, opts.runId)
+              : undefined,
           };
 
           const result = await runToolSafe(tool, call.input, toolCtx);

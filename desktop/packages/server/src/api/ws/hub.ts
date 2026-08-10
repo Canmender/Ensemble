@@ -51,13 +51,16 @@ export class WsHub {
   // 安全：启动时生成的 session token，前端通过 /api/ws-token 获取
   private _sessionToken = randomBytes(32).toString("hex");
 
+  // HITL 工具确认：confirmId → { resolve, timer }
+  private pendingConfirms = new Map<string, { resolve: (approved: boolean) => void; timer?: ReturnType<typeof setTimeout> }>();
+
   /** 获取当前 session token（前端用于建立 WebSocket 连接） */
   get sessionToken(): string {
     return this._sessionToken;
   }
 
-  /** 客户端消息回调（cancel/steer 等需要引擎配合的操作） */
-  onClientMessage?: (msg: { type: string; runId: string; content?: string }) => void;
+  /** 客户端消息回调（cancel/steer/tool_confirm 等需要引擎配合的操作） */
+  onClientMessage?: (msg: { type: string; runId: string; content?: string; confirmId?: string; approved?: boolean }) => void;
 
   attach(server: Server, path = "/ws"): void {
     this.serverPath = path;
@@ -94,6 +97,9 @@ export class WsHub {
             break;
           case "steer":
             this.onClientMessage?.({ type: "steer", runId: msg.runId, content: msg.content });
+            break;
+          case "tool_confirm":
+            this.onClientMessage?.({ type: "tool_confirm", runId: msg.runId, confirmId: msg.confirmId, approved: msg.approved });
             break;
         }
       });
@@ -272,12 +278,52 @@ export class WsHub {
     }
   }
 
+  /**
+   * HITL 工具确认：向订阅了该 run 的客户端发送确认请求，等待用户响应。
+   * 超时（默认 5 分钟）自动拒绝。
+   */
+  requestConfirm(runId: string, tool: string, args: unknown, timeoutMs = 300_000): Promise<boolean> {
+    const confirmId = randomBytes(8).toString("hex");
+    return new Promise<boolean>((resolve) => {
+      const timer = setTimeout(() => {
+        this.pendingConfirms.delete(confirmId);
+        resolve(false);
+      }, timeoutMs);
+      timer.unref?.();
+
+      this.pendingConfirms.set(confirmId, { resolve, timer });
+
+      // 广播确认请求给订阅该 run 的前端客户端
+      this.broadcast(runId, 0, {
+        type: "tool_confirm_request",
+        confirmId,
+        tool,
+        args,
+      });
+    });
+  }
+
+  /** 处理前端返回的确认结果 */
+  resolveConfirm(confirmId: string, approved: boolean): void {
+    const pending = this.pendingConfirms.get(confirmId);
+    if (!pending) return;
+    this.pendingConfirms.delete(confirmId);
+    if (pending.timer) clearTimeout(pending.timer);
+    pending.resolve(approved);
+  }
+
   close(): void {
     if (this.flushTimer) {
       clearTimeout(this.flushTimer);
       this.flushTimer = undefined;
     }
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
+    // 清理所有待确认的请求
+    for (const [id, pending] of this.pendingConfirms) {
+      if (pending.timer) clearTimeout(pending.timer);
+      pending.resolve(false);
+    }
+    this.pendingConfirms.clear();
     this.wss?.close();
     this.wsSubs.clear();
     this.runSubs.clear();

@@ -44,6 +44,7 @@ export async function loadRunDetail(
     // Only append jobs/events/messages if not already loaded
     if (!alreadyLoaded) {
       let evSeq = 0;
+      const historicalEvents: Array<{ seq: number; jobId: string; event: any }> = [];
       for (const job of d.jobs ?? []) {
         store.upsertJob(runId, job.id, {
           agentId: job.agentId,
@@ -55,9 +56,27 @@ export async function loadRunDetail(
         if (loadEvents) {
           for (const ev of job.events ?? []) {
             evSeq -= 1;
-            store.appendEvent(runId, { seq: evSeq, jobId: job.id, event: ev });
+            historicalEvents.push({ seq: evSeq, jobId: job.id, event: ev });
           }
         }
+      }
+
+      // Set historical events directly into the store (bypassing the 50ms
+      // throttle buffer used by `appendEvent` for live streaming).  This
+      // ensures the CollaborationCanvas has events available immediately
+      // after loadRunDetail resolves.
+      if (historicalEvents.length > 0) {
+        useRunStore.setState((s) => {
+          const run = s.live[runId];
+          if (!run) return s;
+          const jobs = { ...run.jobs };
+          for (const item of historicalEvents) {
+            if (item.jobId && jobs[item.jobId]) {
+              jobs[item.jobId] = { ...jobs[item.jobId], events: [...jobs[item.jobId].events, item] };
+            }
+          }
+          return { live: { ...s.live, [runId]: { ...run, jobs, events: [...run.events, ...historicalEvents] } } };
+        });
       }
 
       if (loadChatMessages) {

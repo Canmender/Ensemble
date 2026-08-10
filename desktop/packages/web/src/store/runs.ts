@@ -32,6 +32,12 @@ export interface LiveJob {
   prompt?: string;
 }
 
+export interface ToolConfirmRequest {
+  confirmId: string;
+  tool: string;
+  args: unknown;
+}
+
 export interface LiveRun {
   status: string;
   jobs: Record<string, LiveJob>;
@@ -39,6 +45,8 @@ export interface LiveRun {
   messages: Array<{ jobId?: string; agentId: string; content: string }>;
   finalResult?: string;
   error?: string;
+  /** 待确认的工具调用（HITL） */
+  pendingConfirm?: ToolConfirmRequest;
 }
 
 /** 每 run 已消费的 event seq（去重：catchUp 与 WS 推送可能重叠） */
@@ -86,6 +94,8 @@ interface RunStore {
   appendEvent: (runId: string, item: AgentEventItem) => void;
   appendMessage: (runId: string, m: LiveRun["messages"][number]) => void;
   setFinal: (runId: string, finalResult?: string, error?: string) => void;
+  setPendingConfirm: (runId: string, confirm: ToolConfirmRequest) => void;
+  clearPendingConfirm: (runId: string) => void;
 }
 
 function blankRun(): LiveRun {
@@ -157,6 +167,22 @@ export const useRunStore = create<RunStore>((set, get) => ({
           [runId]: { ...run, finalResult: finalResult ?? run.finalResult, error: error ?? run.error },
         },
       };
+    });
+  },
+
+  setPendingConfirm(runId, confirm) {
+    set((s) => {
+      const run = s.live[runId];
+      if (!run) return s;
+      return { live: { ...s.live, [runId]: { ...run, pendingConfirm: confirm } } };
+    });
+  },
+
+  clearPendingConfirm(runId) {
+    set((s) => {
+      const run = s.live[runId];
+      if (!run) return s;
+      return { live: { ...s.live, [runId]: { ...run, pendingConfirm: undefined } } };
     });
   },
 }));
