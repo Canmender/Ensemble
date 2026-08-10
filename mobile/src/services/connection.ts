@@ -12,10 +12,18 @@ import type {
   DeviceInfo,
   EnsembleMessage,
   ConnectionState,
+  AgentEvent,
+  Task,
+  Run,
+  Job,
+  ChatMessage,
+  AgentConfig,
 } from "@ensemble/shared-protocol";
 import { createMessage, isValidMessage } from "@ensemble/shared-protocol";
 import { useDeviceStore } from "../store/deviceStore";
 import { useTaskStore } from "../store/taskStore";
+
+// ==================== 类型定义 ====================
 
 /** 连接模式 */
 export type ConnectionMode = "lan" | "relay";
@@ -28,19 +36,166 @@ interface RelayConfig {
   token?: string;
 }
 
+/** 连接质量指标 */
+export interface ConnectionQuality {
+  /** 最近一次 ping 延迟（毫秒） */
+  latencyMs: number | null;
+  /** 平均延迟（毫秒，基于最近 10 次 ping） */
+  avgLatencyMs: number | null;
+  /** 连接质量等级 */
+  level: "excellent" | "good" | "fair" | "poor" | "unknown";
+  /** 最后一次 ping 时间戳 */
+  lastPingAt: number | null;
+  /** 最后一次 pong 时间戳 */
+  lastPongAt: number | null;
+  /** 丢包计数（ping 未收到 pong） */
+  missedPongs: number;
+}
+
+/** 连接历史记录 */
+export interface ConnectionHistoryEntry {
+  /** 连接时间戳 */
+  connectedAt: number;
+  /** 断开时间戳 */
+  disconnectedAt?: number;
+  /** 连接持续时间（毫秒） */
+  durationMs?: number;
+  /** 连接模式 */
+  mode: ConnectionMode;
+  /** 目标地址 */
+  url: string;
+  /** 设备信息 */
+  deviceName?: string;
+  /** 断开原因 */
+  disconnectReason?: string;
+}
+
+/** 事件回调类型 */
+type EventCallback = (...args: unknown[]) => void;
+
+/** 事件类型映射 */
+interface ConnectionEventMap {
+  /** 连接状态变更 */
+  "connection:state": (state: ConnectionState) => void;
+  /** 设备上线 */
+  "device:online": (device: DeviceInfo) => void;
+  /** 设备离线 */
+  "device:offline": (deviceId: string) => void;
+  /** 任务创建响应 */
+  "task:created": (data: { task: Task; run?: Run }) => void;
+  /** 任务状态更新 */
+  "task:status": (data: { taskId: string; runId: string; status: string; jobs: Job[] }) => void;
+  /** Agent 事件 */
+  "agent:event": (data: { runId: string; jobId: string; event: AgentEvent }) => void;
+  /** 聊天消息 */
+  "chat:message": (message: ChatMessage) => void;
+  /** 同步响应 */
+  "sync:response": (data: { agents?: AgentConfig[]; tasks?: Task[]; runs?: Run[]; jobs?: Job[] }) => void;
+  /** 控制命令响应 */
+  "control:response": (data: { success: boolean; error?: string }) => void;
+  /** 连接质量变更 */
+  "quality:change": (quality: ConnectionQuality) => void;
+  /** 错误 */
+  error: (error: string) => void;
+}
+
+// ==================== AsyncStorage 兼容层 ====================
+
+/** AsyncStorage 接口 */
+interface StorageAdapter {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+  removeItem(key: string): Promise<void>;
+}
+
+/** 创建 AsyncStorage 适配器（带降级） */
+function createStorageAdapter(): StorageAdapter {
+  try {
+    // 尝试加载 @react-native-async-storage/async-storage
+    const AsyncStorage = require("@react-native-async-storage/async-storage").default;
+    return {
+      getItem: (key: string) => AsyncStorage.getItem(key),
+      setItem: (key: string, value: string) => AsyncStorage.setItem(key, value),
+      removeItem: (key: string) => AsyncStorage.removeItem(key),
+    };
+  } catch {
+    // 降级为内存存储（不持久化）
+    console.warn("AsyncStorage 不可用，设备 ID 将不会持久化");
+    const memStore = new Map<string, string>();
+    return {
+      getItem: async (key: string) => memStore.get(key) ?? null,
+      setItem: async (key: string, value: string) => {
+        memStore.set(key, value);
+      },
+      removeItem: async (key: string) => {
+        memStore.delete(key);
+      },
+    };
+  }
+}
+
+// ==================== 常量 ====================
+
+const DEVICE_ID_KEY = "@ensemble/device_id";
+const DEVICE_NAME_KEY = "@ensemble/device_name";
+const CONNECTION_HISTORY_KEY = "@ensemble/connection_history";
+
+/** 心跳间隔（毫秒） */
+const PING_INTERVAL_MS = 25_000;
+
+/** 连接超时（毫秒） */
+const CONNECT_TIMEOUT_MS = 10_000;
+
+/** 最大重连次数 */
+const MAX_RECONNECT_ATTEMPTS = 10;
+
+/** 最大重连延迟（毫秒） */
+const MAX_RECONNECT_DELAY_MS = 30_000;
+
+/** ping 历史窗口大小 */
+const PING_HISTORY_SIZE = 10;
+
+/** 连接历史最大记录数 */
+const MAX_HISTORY_ENTRIES = 20;
+
+// ==================== 连接服务 ====================
+
 class ConnectionService {
   private socket: Socket | null = null;
   private currentDeviceId: string | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempts = 0;
-  private maxReconnectAttempts = 5;
+  private maxReconnectAttempts = MAX_RECONNECT_ATTEMPTS;
   private connectionMode: ConnectionMode = "lan";
   private relayConfig: RelayConfig | null = null;
+  private storage = createStorageAdapter();
+
+  // 连接质量追踪
+  private pingTimestamp: number | null = null;
+  private pingHistory: number[] = [];
+  private missedPongs = 0;
+  private lastPingAt: number | null = null;
+  private lastPongAt: number | null = null;
+
+  // 连接历史
+  private currentConnectionStart: number | null = null;
+  private connectionHistory: ConnectionHistoryEntry[] = [];
+
+  // 事件订阅
+  private eventListeners = new Map<string, Set<EventCallback>>();
+
+  // 重连定时器
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // ==================== 初始化 ====================
 
   /** 初始化当前设备信息 */
   async init(): Promise<void> {
-    // 生成或读取设备 ID
+    // 生成或读取设备 ID（持久化）
     this.currentDeviceId = await this.getOrCreateDeviceId();
+
+    // 加载连接历史
+    await this.loadConnectionHistory();
 
     // 设置当前设备信息
     const deviceInfo: DeviceInfo = {
@@ -48,7 +203,7 @@ class ConnectionService {
       name: await this.getDeviceName(),
       type: "mobile",
       os: "React Native",
-      appVersion: "0.1.0",
+      appVersion: "0.4.3",
       wsPort: 0,
       httpPort: 0,
       ip: "0.0.0.0",
@@ -57,6 +212,57 @@ class ConnectionService {
 
     useDeviceStore.getState().setCurrentDevice(deviceInfo);
   }
+
+  // ==================== 事件订阅 ====================
+
+  /** 订阅事件 */
+  on<K extends keyof ConnectionEventMap>(event: K, callback: ConnectionEventMap[K]): () => void {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, new Set());
+    }
+    this.eventListeners.get(event)!.add(callback as EventCallback);
+
+    // 返回取消订阅函数
+    return () => {
+      this.eventListeners.get(event)?.delete(callback as EventCallback);
+    };
+  }
+
+  /** 订阅一次性事件 */
+  once<K extends keyof ConnectionEventMap>(event: K, callback: ConnectionEventMap[K]): void {
+    const wrappedCallback: EventCallback = (...args: unknown[]) => {
+      this.eventListeners.get(event)?.delete(wrappedCallback);
+      (callback as EventCallback)(...args);
+    };
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, new Set());
+    }
+    this.eventListeners.get(event)!.add(wrappedCallback);
+  }
+
+  /** 触发事件 */
+  private emit<K extends keyof ConnectionEventMap>(
+    event: K,
+    ...args: Parameters<ConnectionEventMap[K]>
+  ): void {
+    const listeners = this.eventListeners.get(event);
+    if (listeners) {
+      for (const callback of listeners) {
+        try {
+          callback(...args);
+        } catch (err) {
+          console.error(`事件监听器错误 (${event}):`, err);
+        }
+      }
+    }
+  }
+
+  /** 移除所有监听器 */
+  removeAllListeners(): void {
+    this.eventListeners.clear();
+  }
+
+  // ==================== 连接管理 ====================
 
   /** 配置云端中继服务器 */
   setRelayConfig(config: RelayConfig): void {
@@ -75,7 +281,9 @@ class ConnectionService {
     const url = relayUrl || this.relayConfig?.url;
 
     if (!url) {
-      useDeviceStore.getState().setError("未配置中继服务器地址");
+      const error = "未配置中继服务器地址";
+      useDeviceStore.getState().setError(error);
+      this.emit("error", error);
       return false;
     }
 
@@ -90,50 +298,74 @@ class ConnectionService {
 
     useDeviceStore.getState().setConnectionState("connecting");
     useDeviceStore.getState().setError(null);
+    useDeviceStore.getState().setLastErrorAt(null);
 
     try {
       this.socket = io(url, {
         transports: ["websocket"],
-        reconnection: true,
-        reconnectionAttempts: this.maxReconnectAttempts,
-        reconnectionDelay: 1000,
-        reconnectionDelayMax: 5000,
-        timeout: 10000,
+        reconnection: false, // 我们自己管理重连
+        timeout: CONNECT_TIMEOUT_MS,
         auth: this.relayConfig?.token ? { token: this.relayConfig.token } : undefined,
       });
 
       this.setupSocketListeners();
 
       // 等待连接建立
-      return new Promise((resolve) => {
+      return new Promise<boolean>((resolve) => {
         const timeout = setTimeout(() => {
           resolve(false);
-        }, 10000);
+        }, CONNECT_TIMEOUT_MS);
 
         this.socket!.once("connect", () => {
           clearTimeout(timeout);
           resolve(true);
         });
 
-        this.socket!.once("connect_error", () => {
+        this.socket!.once("connect_error", (err) => {
           clearTimeout(timeout);
+          const errorMsg = err.message || "连接失败";
+          useDeviceStore.getState().setError(errorMsg);
+          useDeviceStore.getState().setLastErrorAt(Date.now());
+          this.emit("error", errorMsg);
           resolve(false);
         });
       });
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "连接失败";
       useDeviceStore.getState().setConnectionState("error");
-      useDeviceStore.getState().setError(
-        error instanceof Error ? error.message : "连接失败"
-      );
+      useDeviceStore.getState().setError(errorMsg);
+      useDeviceStore.getState().setLastErrorAt(Date.now());
+      this.emit("error", errorMsg);
       return false;
     }
   }
 
   /** 断开连接 */
-  disconnect(): void {
+  disconnect(reason?: string): void {
+    // 清理重连定时器
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
     if (this.pingInterval) {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
+    }
+
+    // 记录连接历史
+    if (this.currentConnectionStart) {
+      const entry: ConnectionHistoryEntry = {
+        connectedAt: this.currentConnectionStart,
+        disconnectedAt: Date.now(),
+        durationMs: Date.now() - this.currentConnectionStart,
+        mode: this.connectionMode,
+        url: this.socket?.io?.uri || "unknown",
+        deviceName: useDeviceStore.getState().connectedDevice?.name,
+        disconnectReason: reason || "user_initiated",
+      };
+      this.addHistoryEntry(entry);
+      this.currentConnectionStart = null;
     }
 
     if (this.socket) {
@@ -144,8 +376,13 @@ class ConnectionService {
 
     useDeviceStore.getState().setConnectionState("disconnected");
     useDeviceStore.getState().setConnectedDevice(null);
+    this.emit("connection:state", "disconnected");
     this.reconnectAttempts = 0;
+    this.missedPongs = 0;
+    this.pingHistory = [];
   }
+
+  // ==================== 消息发送 ====================
 
   /** 发送消息（内部方法） */
   private send(message: unknown): void {
@@ -173,10 +410,10 @@ class ConnectionService {
     } else {
       // 局域网直连模式：直接发送
       const message = createMessage(
-        type as any,
+        type as keyof import("@ensemble/shared-protocol").MessageTypeMap,
         this.currentDeviceId,
         targetDeviceId,
-        payload as any
+        payload as never
       );
       this.socket.emit("message", message);
     }
@@ -199,14 +436,16 @@ class ConnectionService {
     } else {
       // 局域网直连模式
       const message = createMessage(
-        type as any,
+        type as keyof import("@ensemble/shared-protocol").MessageTypeMap,
         this.currentDeviceId,
         null,
-        payload as any
+        payload as never
       );
       this.socket.emit("message", message);
     }
   }
+
+  // ==================== 便捷方法 ====================
 
   /** 创建任务 */
   createTask(title: string, mode: "single" | "workflow" | "chat", input: unknown): void {
@@ -235,6 +474,8 @@ class ConnectionService {
     });
   }
 
+  // ==================== 状态查询 ====================
+
   /** 获取连接模式 */
   getConnectionMode(): ConnectionMode {
     return this.connectionMode;
@@ -245,6 +486,45 @@ class ConnectionService {
     return this.socket?.connected || false;
   }
 
+  /** 获取当前设备 ID */
+  getDeviceId(): string | null {
+    return this.currentDeviceId;
+  }
+
+  /** 获取连接质量 */
+  getConnectionQuality(): ConnectionQuality {
+    const avgLatencyMs =
+      this.pingHistory.length > 0
+        ? Math.round(this.pingHistory.reduce((a, b) => a + b, 0) / this.pingHistory.length)
+        : null;
+
+    const latencyMs = this.pingHistory.length > 0 ? this.pingHistory[this.pingHistory.length - 1] : null;
+
+    let level: ConnectionQuality["level"] = "unknown";
+    if (avgLatencyMs !== null) {
+      if (avgLatencyMs < 50) level = "excellent";
+      else if (avgLatencyMs < 150) level = "good";
+      else if (avgLatencyMs < 500) level = "fair";
+      else level = "poor";
+    }
+
+    return {
+      latencyMs,
+      avgLatencyMs,
+      level,
+      lastPingAt: this.lastPingAt,
+      lastPongAt: this.lastPongAt,
+      missedPongs: this.missedPongs,
+    };
+  }
+
+  /** 获取连接历史 */
+  getConnectionHistory(): ConnectionHistoryEntry[] {
+    return [...this.connectionHistory];
+  }
+
+  // ==================== Socket 监听器 ====================
+
   /** 设置 Socket 监听器 */
   private setupSocketListeners(): void {
     if (!this.socket) return;
@@ -253,7 +533,10 @@ class ConnectionService {
     this.socket.on("connect", () => {
       console.log("已连接到桌面端");
       useDeviceStore.getState().setConnectionState("connected");
+      useDeviceStore.getState().setConnectionQuality(this.getConnectionQuality());
       this.reconnectAttempts = 0;
+      this.currentConnectionStart = Date.now();
+      this.emit("connection:state", "connected");
 
       // 发送设备信息
       this.sendDeviceOnline();
@@ -270,23 +553,38 @@ class ConnectionService {
       console.log("连接断开:", reason);
       useDeviceStore.getState().setConnectionState("disconnected");
       useDeviceStore.getState().setConnectedDevice(null);
+      this.emit("connection:state", "disconnected");
 
       if (this.pingInterval) {
         clearInterval(this.pingInterval);
         this.pingInterval = null;
       }
+
+      // 记录连接历史
+      if (this.currentConnectionStart) {
+        const entry: ConnectionHistoryEntry = {
+          connectedAt: this.currentConnectionStart,
+          disconnectedAt: Date.now(),
+          durationMs: Date.now() - this.currentConnectionStart,
+          mode: this.connectionMode,
+          url: this.socket?.io?.uri || "unknown",
+          deviceName: useDeviceStore.getState().connectedDevice?.name,
+          disconnectReason: reason,
+        };
+        this.addHistoryEntry(entry);
+        this.currentConnectionStart = null;
+      }
+
+      // 尝试重连（指数退避）
+      this.scheduleReconnect();
     });
 
-    // 重连尝试
-    this.socket.on("reconnect_attempt", (attempt) => {
-      this.reconnectAttempts = attempt;
-      useDeviceStore.getState().setConnectionState("reconnecting");
-    });
-
-    // 重连失败
-    this.socket.on("reconnect_failed", () => {
-      useDeviceStore.getState().setConnectionState("error");
-      useDeviceStore.getState().setError("重连失败，请检查网络连接");
+    // 连接错误
+    this.socket.on("connect_error", (err) => {
+      console.error("连接错误:", err.message);
+      useDeviceStore.getState().setError(err.message);
+      useDeviceStore.getState().setLastErrorAt(Date.now());
+      this.emit("error", err.message);
     });
 
     // 接收消息
@@ -300,6 +598,7 @@ class ConnectionService {
     this.socket.on("device:online", (device: DeviceInfo) => {
       if (device.type === "desktop") {
         useDeviceStore.getState().setConnectedDevice(device);
+        this.emit("device:online", device);
       }
     });
 
@@ -308,44 +607,64 @@ class ConnectionService {
       if (connected?.id === deviceId) {
         useDeviceStore.getState().setConnectedDevice(null);
       }
+      this.emit("device:offline", deviceId);
     });
   }
+
+  // ==================== 消息处理 ====================
 
   /** 处理接收到的消息 */
   private handleMessage(message: EnsembleMessage): void {
     const taskStore = useTaskStore.getState();
 
     switch (message.type) {
-      case "task:create:response":
+      case "task:create:response": {
         taskStore.addTask(message.payload.task);
         if (message.payload.run) {
           taskStore.addRun(message.payload.run);
         }
+        this.emit("task:created", {
+          task: message.payload.task,
+          run: message.payload.run,
+        });
         break;
+      }
 
-      case "task:status":
+      case "task:status": {
         taskStore.updateRun(message.payload.runId, {
-          status: message.payload.status as any,
+          status: message.payload.status as Run["status"],
         });
         message.payload.jobs.forEach((job) => {
           taskStore.updateJob(job.id, job);
         });
-        break;
-
-      case "agent:event":
-        taskStore.updateJob(message.payload.jobId, {
-          events: [
-            ...(taskStore.jobs.find((j) => j.id === message.payload.jobId)?.events || []),
-            message.payload.event,
-          ],
+        this.emit("task:status", {
+          taskId: message.payload.taskId,
+          runId: message.payload.runId,
+          status: message.payload.status,
+          jobs: message.payload.jobs,
         });
         break;
+      }
 
-      case "chat:message":
-        // 聊天消息已通过任务状态同步
+      case "agent:event": {
+        const existingJob = taskStore.jobs.find((j) => j.id === message.payload.jobId);
+        taskStore.updateJob(message.payload.jobId, {
+          events: [...(existingJob?.events || []), message.payload.event],
+        });
+        this.emit("agent:event", {
+          runId: message.payload.runId,
+          jobId: message.payload.jobId,
+          event: message.payload.event,
+        });
         break;
+      }
 
-      case "sync:response":
+      case "chat:message": {
+        this.emit("chat:message", message.payload);
+        break;
+      }
+
+      case "sync:response": {
         if (message.payload.agents) {
           taskStore.setAgents(message.payload.agents);
         }
@@ -359,22 +678,40 @@ class ConnectionService {
           taskStore.setJobs(message.payload.jobs);
         }
         taskStore.setLastSyncTs(Date.now());
+        this.emit("sync:response", {
+          agents: message.payload.agents,
+          tasks: message.payload.tasks,
+          runs: message.payload.runs,
+          jobs: message.payload.jobs,
+        });
         break;
+      }
 
-      case "control:response":
+      case "control:response": {
         if (!message.payload.success) {
-          console.error("控制命令失败:", message.payload.error);
+          const error = message.payload.error || "控制命令执行失败";
+          console.error("控制命令失败:", error);
+          useDeviceStore.getState().setError(error);
+          useDeviceStore.getState().setLastErrorAt(Date.now());
         }
+        this.emit("control:response", {
+          success: message.payload.success,
+          error: message.payload.error,
+        });
         break;
+      }
 
-      case "pong":
-        // 心跳响应
+      case "pong": {
+        this.handlePong();
         break;
+      }
 
       default:
-        console.log("未处理的消息类型:", message.type);
+        console.log("未处理的消息类型:", (message as { type: string }).type);
     }
   }
+
+  // ==================== 心跳 & 连接质量 ====================
 
   /** 发送设备上线消息 */
   private sendDeviceOnline(): void {
@@ -394,6 +731,10 @@ class ConnectionService {
   private startPing(): void {
     this.pingInterval = setInterval(() => {
       if (this.socket?.connected && this.currentDeviceId) {
+        this.pingTimestamp = Date.now();
+        this.lastPingAt = this.pingTimestamp;
+        this.missedPongs++;
+
         const message = createMessage(
           "ping",
           this.currentDeviceId,
@@ -401,21 +742,161 @@ class ConnectionService {
           {}
         );
         this.send(message);
+
+        // 更新设备 store 中的连接质量
+        useDeviceStore.getState().setConnectionQuality(this.getConnectionQuality());
       }
-    }, 30000); // 每30秒发送一次心跳
+    }, PING_INTERVAL_MS);
   }
 
-  /** 获取或创建设备 ID */
+  /** 处理 pong 响应 */
+  private handlePong(): void {
+    if (this.pingTimestamp) {
+      const latency = Date.now() - this.pingTimestamp;
+      this.pingHistory.push(latency);
+
+      // 保持历史窗口大小
+      if (this.pingHistory.length > PING_HISTORY_SIZE) {
+        this.pingHistory.shift();
+      }
+
+      this.missedPongs = Math.max(0, this.missedPongs - 1);
+      this.pingTimestamp = null;
+      this.lastPongAt = Date.now();
+
+      // 更新连接质量
+      const quality = this.getConnectionQuality();
+      useDeviceStore.getState().setConnectionQuality(quality);
+      this.emit("quality:change", quality);
+    }
+  }
+
+  // ==================== 重连 ====================
+
+  /** 调度重连（指数退避） */
+  private scheduleReconnect(): void {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      console.log("达到最大重连次数，停止重连");
+      useDeviceStore.getState().setConnectionState("error");
+      useDeviceStore.getState().setError("重连失败，请检查网络连接后手动重试");
+      useDeviceStore.getState().setLastErrorAt(Date.now());
+      this.emit("connection:state", "error");
+      this.emit("error", "重连失败，请检查网络连接后手动重试");
+      return;
+    }
+
+    // 指数退避：1s, 2s, 4s, 8s, 16s, 30s, 30s, ...
+    const baseDelay = Math.min(
+      1000 * Math.pow(2, this.reconnectAttempts),
+      MAX_RECONNECT_DELAY_MS
+    );
+    // 添加随机抖动（±20%）
+    const jitter = baseDelay * (0.8 + Math.random() * 0.4);
+    const delay = Math.round(jitter);
+
+    this.reconnectAttempts++;
+    console.log(`将在 ${delay}ms 后重连 (第 ${this.reconnectAttempts} 次)`);
+
+    useDeviceStore.getState().setConnectionState("reconnecting");
+    this.emit("connection:state", "reconnecting");
+
+    this.reconnectTimer = setTimeout(() => {
+      if (this.socket) {
+        // 尝试重新连接
+        this.socket.connect();
+      }
+    }, delay);
+  }
+
+  // ==================== 设备 ID 持久化 ====================
+
+  /** 获取或创建设备 ID（持久化到 AsyncStorage） */
   private async getOrCreateDeviceId(): Promise<string> {
-    // TODO: 使用 AsyncStorage 持久化设备 ID
-    // 临时使用随机 ID
-    return `mobile-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    try {
+      const stored = await this.storage.getItem(DEVICE_ID_KEY);
+      if (stored) {
+        return stored;
+      }
+    } catch (err) {
+      console.warn("读取设备 ID 失败:", err);
+    }
+
+    // 生成新的设备 ID
+    const id = `mobile-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+    try {
+      await this.storage.setItem(DEVICE_ID_KEY, id);
+    } catch (err) {
+      console.warn("保存设备 ID 失败:", err);
+    }
+
+    return id;
   }
 
   /** 获取设备名称 */
   private async getDeviceName(): Promise<string> {
-    // TODO: 读取设备名称或使用默认名称
-    return "我的手机";
+    try {
+      const stored = await this.storage.getItem(DEVICE_NAME_KEY);
+      if (stored) return stored;
+    } catch {
+      // 忽略
+    }
+
+    const name = "我的手机";
+    try {
+      await this.storage.setItem(DEVICE_NAME_KEY, name);
+    } catch {
+      // 忽略
+    }
+
+    return name;
+  }
+
+  /** 设置设备名称 */
+  async setDeviceName(name: string): Promise<void> {
+    await this.storage.setItem(DEVICE_NAME_KEY, name);
+    const device = useDeviceStore.getState().currentDevice;
+    if (device) {
+      useDeviceStore.getState().setCurrentDevice({ ...device, name });
+    }
+  }
+
+  // ==================== 连接历史 ====================
+
+  /** 加载连接历史 */
+  private async loadConnectionHistory(): Promise<void> {
+    try {
+      const stored = await this.storage.getItem(CONNECTION_HISTORY_KEY);
+      if (stored) {
+        this.connectionHistory = JSON.parse(stored);
+      }
+    } catch {
+      this.connectionHistory = [];
+    }
+  }
+
+  /** 保存连接历史 */
+  private async saveConnectionHistory(): Promise<void> {
+    try {
+      await this.storage.setItem(
+        CONNECTION_HISTORY_KEY,
+        JSON.stringify(this.connectionHistory)
+      );
+    } catch (err) {
+      console.warn("保存连接历史失败:", err);
+    }
+  }
+
+  /** 添加历史记录 */
+  private addHistoryEntry(entry: ConnectionHistoryEntry): void {
+    this.connectionHistory.unshift(entry);
+
+    // 限制历史记录数量
+    if (this.connectionHistory.length > MAX_HISTORY_ENTRIES) {
+      this.connectionHistory = this.connectionHistory.slice(0, MAX_HISTORY_ENTRIES);
+    }
+
+    this.saveConnectionHistory();
   }
 }
 

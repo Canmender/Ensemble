@@ -6,14 +6,18 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Text } from "react-native";
 
-// 页面
+// Pages
 import DashboardPage from "./pages/DashboardPage";
 import TasksPage from "./pages/TasksPage";
 import ChatPage from "./pages/ChatPage";
 import AgentsPage from "./pages/AgentsPage";
 import SettingsPage from "./pages/SettingsPage";
+import RunPage from "./pages/RunPage";
 
-// 状态管理
+// Error boundary
+import { ErrorBoundary } from "./components/ErrorBoundary";
+
+// State management
 import { useDeviceStore } from "./store/deviceStore";
 
 const Stack = createNativeStackNavigator();
@@ -77,6 +81,7 @@ function MainTabs() {
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <SafeAreaProvider>
       <NavigationContainer
         theme={{
@@ -99,9 +104,21 @@ export default function App() {
       >
         <Stack.Navigator screenOptions={{ headerShown: false }}>
           <Stack.Screen name="Main" component={MainTabs} />
+          <Stack.Screen
+            name="Run"
+            component={RunPage}
+            options={{
+              headerShown: true,
+              title: "运行详情",
+              headerStyle: { backgroundColor: "#111827" },
+              headerTintColor: "#fff",
+              headerBackTitle: "返回",
+            }}
+          />
         </Stack.Navigator>
         <StatusBar style="light" />
       </NavigationContainer>
     </SafeAreaProvider>
+    </ErrorBoundary>
   );
 }

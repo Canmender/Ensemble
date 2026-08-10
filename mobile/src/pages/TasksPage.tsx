@@ -1,8 +1,9 @@
 /**
- * 任务列表页面
+ * Task list page
+ * Create, view, cancel tasks with error handling and pull-to-refresh.
  */
 
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,46 +13,79 @@ import {
   TextInput,
   Modal,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
 import type { TaskMode } from "@ensemble/shared-protocol";
 
-export default function TasksPage() {
+export default function TasksPage({ navigation }: { navigation: any }) {
   const { tasks, runs, agents } = useTaskStore();
   const { connectionState } = useDeviceStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskMode, setNewTaskMode] = useState<TaskMode>("single");
   const [newTaskPrompt, setNewTaskPrompt] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastCreateError, setLastCreateError] = useState<string | null>(null);
 
   const isConnected = connectionState === "connected";
 
-  // 创建任务
-  const handleCreateTask = () => {
+  /** Pull-to-refresh: request a sync from the desktop */
+  const onRefresh = useCallback(() => {
+    if (!isConnected) return;
+    setRefreshing(true);
+    try {
+      connectionService.requestSync();
+    } catch (err) {
+      console.error("[TasksPage] Sync request failed:", err);
+    }
+    setTimeout(() => setRefreshing(false), 1500);
+  }, [isConnected]);
+
+  /** Create task with try/catch and feedback */
+  const handleCreateTask = async () => {
     if (!newTaskTitle.trim() || !newTaskPrompt.trim()) {
       Alert.alert("错误", "请填写任务标题和提示词");
       return;
     }
 
-    connectionService.createTask(newTaskTitle, newTaskMode, {
-      prompt: newTaskPrompt,
-      agentIds: agents.slice(0, 1).map((a) => a.id), // 默认使用第一个 agent
-    });
+    setCreating(true);
+    setLastCreateError(null);
 
-    setModalVisible(false);
-    setNewTaskTitle("");
-    setNewTaskPrompt("");
+    try {
+      connectionService.createTask(newTaskTitle, newTaskMode, {
+        prompt: newTaskPrompt,
+        agentIds: agents.slice(0, 1).map((a) => a.id),
+      });
+
+      setModalVisible(false);
+      setNewTaskTitle("");
+      setNewTaskPrompt("");
+      Alert.alert("成功", "任务已创建");
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "创建任务失败，请重试";
+      setLastCreateError(message);
+      Alert.alert("创建失败", message);
+    } finally {
+      setCreating(false);
+    }
   };
 
-  // 获取任务状态
   const getTaskStatus = (taskId: string) => {
     const taskRuns = runs.filter((r) => r.taskId === taskId);
     return taskRuns[0]?.status || "pending";
   };
 
-  // 状态颜色
+  const getLatestRun = (taskId: string) => {
+    const taskRuns = runs.filter((r) => r.taskId === taskId);
+    return taskRuns[0] || null;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
@@ -62,39 +96,98 @@ export default function TasksPage() {
         return "#ef4444";
       case "cancelled":
         return "#6b7280";
+      case "queued":
+        return "#6366f1";
       default:
         return "#374151";
     }
   };
 
-  // 渲染任务项
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case "running":
+        return "运行中";
+      case "success":
+        return "已完成";
+      case "error":
+        return "错误";
+      case "cancelled":
+        return "已取消";
+      case "queued":
+        return "排队中";
+      case "pending":
+        return "待执行";
+      default:
+        return status;
+    }
+  };
+
+  const navigateToRun = (taskId: string) => {
+    const latestRun = getLatestRun(taskId);
+    if (latestRun) {
+      navigation.navigate("Run", { runId: latestRun.id });
+    } else {
+      Alert.alert("提示", "该任务暂无运行记录");
+    }
+  };
+
   const renderTaskItem = ({ item }: { item: any }) => {
     const status = getTaskStatus(item.id);
     const statusColor = getStatusColor(status);
+    const latestRun = getLatestRun(item.id);
+    const hasRun = !!latestRun;
 
     return (
-      <TouchableOpacity style={styles.taskItem}>
+      <TouchableOpacity
+        style={[styles.taskItem, hasRun && styles.taskItemTouchable]}
+        onPress={() => navigateToRun(item.id)}
+        activeOpacity={hasRun ? 0.7 : 1}
+      >
         <View style={styles.taskHeader}>
           <Text style={styles.taskTitle} numberOfLines={1}>
             {item.title}
           </Text>
           <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
-            <Text style={styles.statusText}>{status}</Text>
+            <Text style={styles.statusText}>{getStatusText(status)}</Text>
           </View>
         </View>
 
         <View style={styles.taskMeta}>
-          <Text style={styles.taskMode}>{item.mode}</Text>
+          <Text style={styles.taskMode}>
+            {item.mode === "single"
+              ? "单发"
+              : item.mode === "workflow"
+              ? "工作流"
+              : "群聊"}
+          </Text>
           <Text style={styles.taskTime}>
-            {new Date(item.createdAt).toLocaleDateString()}
+            {new Date(item.createdAt).toLocaleString()}
           </Text>
         </View>
+
+        {hasRun && (
+          <View style={styles.taskRunInfo}>
+            <Text style={styles.runInfoText}>
+              最近运行: {new Date(latestRun.startedAt).toLocaleString()}
+            </Text>
+            <Text style={styles.viewDetailText}>查看详情</Text>
+          </View>
+        )}
 
         {status === "running" && (
           <TouchableOpacity
             style={styles.cancelButton}
-            onPress={() => {
-              connectionService.sendControlCommand("cancel", item.id, "task");
+            onPress={(e) => {
+              e.stopPropagation();
+              try {
+                connectionService.sendControlCommand(
+                  "cancel",
+                  item.id,
+                  "task"
+                );
+              } catch (err) {
+                Alert.alert("取消失败", "无法发送取消命令，请检查连接");
+              }
             }}
           >
             <Text style={styles.cancelButtonText}>取消</Text>
@@ -106,22 +199,35 @@ export default function TasksPage() {
 
   return (
     <View style={styles.container}>
-      {/* 头部 */}
+      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>任务列表</Text>
         <TouchableOpacity
           style={[styles.addButton, !isConnected && styles.addButtonDisabled]}
-          onPress={() => isConnected && setModalVisible(true)}
+          onPress={() => {
+            setLastCreateError(null);
+            isConnected && setModalVisible(true);
+          }}
           disabled={!isConnected}
         >
           <Text style={styles.addButtonText}>+ 新建</Text>
         </TouchableOpacity>
       </View>
 
-      {/* 任务列表 */}
+      {/* Error banner for last create failure */}
+      {lastCreateError && (
+        <View style={styles.errorBanner}>
+          <Text style={styles.errorBannerText}>{lastCreateError}</Text>
+          <TouchableOpacity onPress={() => setLastCreateError(null)}>
+            <Text style={styles.errorBannerDismiss}>x</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Task list */}
       {tasks.length === 0 ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>📋</Text>
+          <Text style={styles.emptyIcon}>{"\u{1F4CB}"}</Text>
           <Text style={styles.emptyText}>暂无任务</Text>
           <Text style={styles.emptySubtext}>
             {isConnected ? "点击右上角 + 创建新任务" : "请先连接到桌面端"}
@@ -133,10 +239,18 @@ export default function TasksPage() {
           renderItem={renderTaskItem}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#10b981"
+              colors={["#10b981"]}
+            />
+          }
         />
       )}
 
-      {/* 创建任务弹窗 */}
+      {/* Create task modal */}
       <Modal
         visible={modalVisible}
         animationType="slide"
@@ -171,7 +285,11 @@ export default function TasksPage() {
                       newTaskMode === mode && styles.modeButtonTextActive,
                     ]}
                   >
-                    {mode === "single" ? "单发" : mode === "workflow" ? "工作流" : "群聊"}
+                    {mode === "single"
+                      ? "单发"
+                      : mode === "workflow"
+                      ? "工作流"
+                      : "群聊"}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -191,14 +309,23 @@ export default function TasksPage() {
               <TouchableOpacity
                 style={styles.cancelModalButton}
                 onPress={() => setModalVisible(false)}
+                disabled={creating}
               >
                 <Text style={styles.cancelModalButtonText}>取消</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.createButton}
+                style={[
+                  styles.createButton,
+                  creating && styles.createButtonDisabled,
+                ]}
                 onPress={handleCreateTask}
+                disabled={creating}
               >
-                <Text style={styles.createButtonText}>创建</Text>
+                {creating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.createButtonText}>创建</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
@@ -239,6 +366,25 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "500",
   },
+  errorBanner: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  errorBannerText: {
+    color: "#ef4444",
+    fontSize: 13,
+    flex: 1,
+  },
+  errorBannerDismiss: {
+    color: "#ef4444",
+    fontSize: 16,
+    fontWeight: "600",
+    paddingLeft: 12,
+  },
   listContent: {
     padding: 16,
   },
@@ -247,6 +393,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 16,
     marginBottom: 12,
+  },
+  taskItemTouchable: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#10b981",
   },
   taskHeader: {
     flexDirection: "row",
@@ -282,6 +432,26 @@ const styles = StyleSheet.create({
   taskTime: {
     color: "#6b7280",
     fontSize: 12,
+  },
+  taskRunInfo: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#374151",
+  },
+  runInfoText: {
+    color: "#9ca3af",
+    fontSize: 12,
+    flex: 1,
+  },
+  viewDetailText: {
+    color: "#10b981",
+    fontSize: 12,
+    fontWeight: "500",
+    marginLeft: 8,
   },
   cancelButton: {
     marginTop: 12,
@@ -386,6 +556,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  createButtonDisabled: {
+    opacity: 0.6,
   },
   createButtonText: {
     color: "#fff",
