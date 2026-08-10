@@ -26,6 +26,19 @@ export interface AppSettings {
   defaultProviderId?: string;
   /** 外部记忆（Mem0）可选配置 */
   mem0?: { endpoint: string; apiKey?: string; enabled: boolean };
+  /** RAG 知识库配置 */
+  rag?: {
+    enabled: boolean;
+    vectorDbUrl?: string;
+    embeddingUrl?: string;
+    embeddingModel?: string;
+    chunkSize?: number;
+    chunkOverlap?: number;
+    topK?: number;
+    rerankUrl?: string;
+    rerankModel?: string;
+    storagePath?: string;
+  };
   /** 安全围栏：约束 Agent 的工具执行边界 */
   security?: {
     /** 是否允许联网（web_search/web_fetch） */
