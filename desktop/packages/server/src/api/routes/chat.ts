@@ -37,12 +37,18 @@ export function chatRouter(ctx: AppContext): Router {
           ctx.engine.broadcastChatMessage(runId, undefined, "user", "user", message);
 
           // 等待智能体回复（轮询检查新消息）
+          // TODO: replace busy-wait polling with an event-based approach (e.g. SSE or WebSocket push)
           const initialCount = ctx.store.listChatMessages(runId).length;
           const maxWait = 60000; // 最多等待 60 秒
           const startTime = Date.now();
 
           while (Date.now() - startTime < maxWait) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            // Early exit if the run was cancelled or failed
+            const currentRun = ctx.store.getRun(runId);
+            if (currentRun?.status === "error" || currentRun?.status === "cancelled") {
+              return ok(res, { reply: "(任务已终止)", agentId });
+            }
             const messages = ctx.store.listChatMessages(runId);
             if (messages.length > initialCount) {
               // 找到最新的非用户消息
@@ -64,13 +70,14 @@ export function chatRouter(ctx: AppContext): Router {
         });
 
         // 等待执行完成
+        // TODO: replace busy-wait polling with an event-based approach (e.g. SSE or WebSocket push)
         const maxWait = 60000;
         const startTime = Date.now();
 
         while (Date.now() - startTime < maxWait) {
-          await new Promise((resolve) => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 200));
           const currentRun = ctx.store.getRun(run.id);
-          if (currentRun?.status === "success" || currentRun?.status === "error") {
+          if (currentRun?.status === "success" || currentRun?.status === "error" || currentRun?.status === "cancelled") {
             break;
           }
         }

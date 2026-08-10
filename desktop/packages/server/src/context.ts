@@ -101,32 +101,38 @@ export function createAppContext(
   const workspaceOffload = offloadDir ? new OffloadStore(join(offloadDir, ".ensemble-offload")) : undefined;
   const dataOffload = new OffloadStore(join(dataDir, "offload", "agents"));
   const maintenanceTimer = setInterval(async () => {
-    const wsRoot = config.getSettings().workspaceRoot;
-    for (const a of config.listAgents()) {
-      if (a.memory?.enabled) {
-        // consolidate 按配置间隔判断（与 flushNow 内逻辑一致）
-        const minInterval = a.memory.consolidateMinIntervalMs ?? 12 * 3600_000;
-        const snap = await memoryProvider.snapshot(a.id);
-        if (
-          !snap.stats.lastConsolidateAt ||
-          Date.now() - new Date(snap.stats.lastConsolidateAt).getTime() >= minInterval
-        ) {
-          void memoryProvider.consolidate(a.id).catch(() => {});
+    try {
+      const wsRoot = config.getSettings().workspaceRoot;
+      for (const a of config.listAgents()) {
+        if (a.memory?.enabled) {
+          // consolidate 按配置间隔判断（与 flushNow 内逻辑一致）
+          const minInterval = a.memory.consolidateMinIntervalMs ?? 12 * 3600_000;
+          const snap = await memoryProvider.snapshot(a.id);
+          if (
+            !snap.stats.lastConsolidateAt ||
+            Date.now() - new Date(snap.stats.lastConsolidateAt).getTime() >= minInterval
+          ) {
+            void memoryProvider.consolidate(a.id).catch((err) =>
+              logger.warn(`memory consolidate failed for ${a.id}: ${String(err)}`),
+            );
+          }
+          memoryProvider.rotate(a.id, 90);
         }
-        memoryProvider.rotate(a.id, 90);
+        // 清理两个可能的 offload 目录
+        dataOffload.cleanup(a.id, 7 * 86_400_000);
+        if (wsRoot) {
+          const wsOffload = new OffloadStore(join(wsRoot, ".ensemble-offload"));
+          wsOffload.cleanup(a.id, 7 * 86_400_000);
+        }
       }
-      // 清理两个可能的 offload 目录
-      dataOffload.cleanup(a.id, 7 * 86_400_000);
-      if (wsRoot) {
-        const wsOffload = new OffloadStore(join(wsRoot, ".ensemble-offload"));
-        wsOffload.cleanup(a.id, 7 * 86_400_000);
-      }
-    }
 
-    // 清理过期的隐式记忆池
-    const cleaned = memoryPoolManager.cleanupExpired();
-    if (cleaned > 0) {
-      logger.info(`memory pool: cleaned ${cleaned} expired implicit memories`);
+      // 清理过期的隐式记忆池
+      const cleaned = memoryPoolManager.cleanupExpired();
+      if (cleaned > 0) {
+        logger.info(`memory pool: cleaned ${cleaned} expired implicit memories`);
+      }
+    } catch (err) {
+      logger.error(`maintenance timer error: ${String(err)}`);
     }
   }, 24 * 3600_000);
   maintenanceTimer.unref?.();

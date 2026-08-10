@@ -11,6 +11,8 @@ const DELEGATE_RE = /@([a-zA-Z0-9-]+)\s*[:：]\s*([\s\S]+)/;
  * - resumeSessionId 让同一 agent 跨轮保留上下文
  * - @agent: 任务 委派解析；@done / [DONE] 终止
  */
+const MAX_ROUNDS_UPPER_BOUND = 50;
+
 export class ChatMode {
   constructor(private engine: OrchestrationEngine) {}
 
@@ -18,7 +20,7 @@ export class ChatMode {
     if (task.input.mode !== "chat") throw new Error("task is not chat mode");
     const { prompt, participantIds, maxRounds } = task.input;
     const participants = participantIds;
-    const rounds = maxRounds;
+    const rounds = Math.min(maxRounds, MAX_ROUNDS_UPPER_BOUND);
 
     this.engine.broadcastChatMessage(run.id, undefined, "user", "user", prompt);
     const transcript: Array<{ agentId: string; role: "user" | "assistant"; content: string }> = [

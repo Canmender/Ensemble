@@ -15,7 +15,7 @@ import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
 import type { Agent } from "../types";
-import { Button, Card, Input, Label, Modal, Spinner, cls } from "../components/ui";
+import { Button, Card, Input, Label, Modal, Spinner, cls, showToast } from "../components/ui";
 
 /** 联系人类型 */
 type ContactType = "agent" | "device" | "group";
@@ -86,6 +86,7 @@ function CreateGroupDialog({ onClose, onCreated }: { onClose: () => void; onCrea
       onClose();
     } catch (e) {
       console.error("创建群聊失败:", e);
+      showToast("创建群聊失败: " + (e as Error).message, "error");
     } finally {
       setCreating(false);
     }
@@ -316,6 +317,8 @@ export default function ChatPage() {
       }
     } catch (e) {
       console.error("发送失败:", e);
+      showToast("发送失败: " + (e as Error).message, "error");
+      setInputText(text); // restore user's message on failure
     } finally {
       setSending(false);
     }

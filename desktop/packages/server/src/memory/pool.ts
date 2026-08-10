@@ -15,6 +15,7 @@
  * 参考: 腾讯 Agent Memory 的 L0-L3 分层
  */
 
+import { randomUUID } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { logger } from "../util/logger";
 import { estimateTokens } from "../adapters/builtin/context";
@@ -85,6 +86,7 @@ export class MemoryPoolManager {
   };
 
   private config: Required<MemoryPoolConfig>;
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
     private db: DatabaseSync,
@@ -100,6 +102,16 @@ export class MemoryPoolManager {
 
     this.initDb();
     this.prepareStmts();
+
+    // 每小时自动清理过期隐式记忆
+    this.cleanupTimer = setInterval(() => {
+      try {
+        const cleaned = this.cleanupExpired();
+        if (cleaned > 0) logger.debug(`memory pool cleanup: removed ${cleaned} expired entries`);
+      } catch (err) {
+        logger.warn(`memory pool cleanup error: ${err}`);
+      }
+    }, 60 * 60 * 1000);
   }
 
   private initDb(): void {
@@ -164,7 +176,7 @@ export class MemoryPoolManager {
         "DELETE FROM explicit_memories WHERE id = ?"
       ),
       searchExplicit: this.db.prepare(
-        "SELECT * FROM explicit_memories WHERE agent_id = ? AND (content LIKE ? OR tags LIKE ?) ORDER BY importance DESC LIMIT ?"
+        "SELECT * FROM explicit_memories WHERE agent_id = ? AND (content LIKE ? ESCAPE '\\' OR tags LIKE ? ESCAPE '\\') ORDER BY importance DESC LIMIT ?"
       ),
 
       // 隐式记忆池
@@ -198,7 +210,7 @@ export class MemoryPoolManager {
 
   /** 添加显式记忆 */
   addExplicit(entry: Omit<MemoryEntry, "id" | "source" | "createdAt" | "lastAccessedAt" | "accessCount">): MemoryEntry {
-    const id = `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = `exp_${randomUUID()}`;
     const now = new Date().toISOString();
 
     this.stmts.insertExplicit.run(
@@ -227,7 +239,8 @@ export class MemoryPoolManager {
 
   /** 搜索显式记忆 */
   searchExplicit(agentId: string, query: string, limit = 10): MemoryEntry[] {
-    const pattern = `%${query}%`;
+    const escaped = query.replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const pattern = `%${escaped}%`;
     return (this.stmts.searchExplicit.all(agentId, pattern, pattern, limit) as any[]).map((r: any) => this.rowToEntry(r));
   }
 
@@ -265,7 +278,7 @@ export class MemoryPoolManager {
       return null;
     }
 
-    const id = `imp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const id = `imp_${randomUUID()}`;
     const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + this.config.implicitTtlMs).toISOString();
 
@@ -424,6 +437,14 @@ export class MemoryPoolManager {
       this.db.prepare(
         "DELETE FROM explicit_memories WHERE agent_id = ? AND id IN (SELECT id FROM explicit_memories WHERE agent_id = ? ORDER BY importance ASC, created_at ASC LIMIT ?)"
       ).run(agentId, agentId, count - this.config.explicitMaxEntries);
+    }
+  }
+
+  /** 释放资源，停止后台清理定时器 */
+  dispose(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer);
+      this.cleanupTimer = null;
     }
   }
 }

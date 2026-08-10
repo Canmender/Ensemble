@@ -127,14 +127,19 @@ function AgentForm({ initial, onDone }: { initial?: Agent; onDone: () => void })
 
   async function save() {
     if (!form.id.trim() || !form.name.trim()) return;
-    // builtin 不带 local（避免空 command 触发 schema 校验 / 残留死配置）
-    const body = { ...form, model: activeModel, local: form.kind === "local" ? form.local : undefined };
-    if (initial) {
-      await api.put(`/agents/${initial.id}`, body);
-    } else {
-      await api.post("/agents", body);
+    try {
+      // builtin 不带 local（避免空 command 触发 schema 校验 / 残留死配置）
+      const body = { ...form, model: activeModel, local: form.kind === "local" ? form.local : undefined };
+      if (initial) {
+        await api.put(`/agents/${initial.id}`, body);
+      } else {
+        await api.post("/agents", body);
+      }
+      onDone();
+    } catch (e) {
+      console.error("保存 Agent 失败:", e);
+      showToast("保存 Agent 失败: " + (e as Error).message, "error");
     }
-    onDone();
   }
 
   return (

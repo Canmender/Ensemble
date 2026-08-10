@@ -73,18 +73,23 @@ function ProviderForm({ initial, onDone }: { initial?: ProviderConfig; onDone: (
 
   async function save() {
     if (!form.id.trim() || !form.name.trim()) return;
-    const body: any = {
-      id: form.id,
-      name: form.name,
-      type: form.type,
-      baseUrl: form.baseUrl || undefined,
-      defaultModel: form.defaultModel || undefined,
-      enabled: form.enabled,
-    };
-    if (form.apiKey) body.apiKey = form.apiKey;
-    if (initial) await api.put(`/providers/${initial.id}`, body);
-    else await api.post("/providers", body);
-    onDone();
+    try {
+      const body: any = {
+        id: form.id,
+        name: form.name,
+        type: form.type,
+        baseUrl: form.baseUrl || undefined,
+        defaultModel: form.defaultModel || undefined,
+        enabled: form.enabled,
+      };
+      if (form.apiKey) body.apiKey = form.apiKey;
+      if (initial) await api.put(`/providers/${initial.id}`, body);
+      else await api.post("/providers", body);
+      onDone();
+    } catch (e) {
+      console.error("保存 Provider 失败:", e);
+      showToast("保存 Provider 失败: " + (e as Error).message, "error");
+    }
   }
 
   async function test() {
@@ -174,30 +179,35 @@ function McpForm({ initial, onDone }: { initial?: McpServerConfig; onDone: () =>
 
   async function save() {
     if (!form.id.trim() || !form.name.trim()) return;
-    const body: any = {
-      id: form.id,
-      name: form.name,
-      transport: form.transport,
-      maxTools: Number(form.maxTools) || 25,
-      enabled: true,
-    };
-    if (form.transport === "stdio") {
-      body.command = form.command;
-      body.args = form.args.split(/\s+/).filter(Boolean);
-    } else {
-      body.url = form.url;
-      if (form.headers.trim()) {
-        try {
-          body.headers = JSON.parse(form.headers);
-        } catch {
-          setTestResult("headers JSON 解析失败");
-          return;
+    try {
+      const body: any = {
+        id: form.id,
+        name: form.name,
+        transport: form.transport,
+        maxTools: Number(form.maxTools) || 25,
+        enabled: true,
+      };
+      if (form.transport === "stdio") {
+        body.command = form.command;
+        body.args = form.args.split(/\s+/).filter(Boolean);
+      } else {
+        body.url = form.url;
+        if (form.headers.trim()) {
+          try {
+            body.headers = JSON.parse(form.headers);
+          } catch {
+            setTestResult("headers JSON 解析失败");
+            return;
+          }
         }
       }
+      if (initial) await api.put(`/mcp/${initial.id}`, body);
+      else await api.post("/mcp", body);
+      onDone();
+    } catch (e) {
+      console.error("保存 MCP Server 失败:", e);
+      showToast("保存 MCP Server 失败: " + (e as Error).message, "error");
     }
-    if (initial) await api.put(`/mcp/${initial.id}`, body);
-    else await api.post("/mcp", body);
-    onDone();
   }
 
   async function test() {
@@ -359,10 +369,15 @@ function SkillForm({ initial, onDone }: { initial?: SkillDef; onDone: () => void
 
   async function save() {
     if (!form.name.trim() || !form.description.trim() || !form.body.trim()) return;
-    const body = { name: form.name, description: form.description, body: form.body };
-    if (initial) await api.put(`/skills/${initial.name}`, body);
-    else await api.post("/skills", body);
-    onDone();
+    try {
+      const body = { name: form.name, description: form.description, body: form.body };
+      if (initial) await api.put(`/skills/${initial.name}`, body);
+      else await api.post("/skills", body);
+      onDone();
+    } catch (e) {
+      console.error("保存 Skill 失败:", e);
+      showToast("保存 Skill 失败: " + (e as Error).message, "error");
+    }
   }
 
   return (
