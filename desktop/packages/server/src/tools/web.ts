@@ -2,7 +2,7 @@ import type { AgentTool, ToolContext } from "./types";
 import { checkNetworkAllowed } from "./security";
 
 /** SSRF 防护：本地/内网地址判断 */
-function isPrivateHost(host: string): boolean {
+export function isPrivateHost(host: string): boolean {
   const h = host.toLowerCase().replace(/^\[|\]$/g, "");
   return (
     h === "localhost" ||

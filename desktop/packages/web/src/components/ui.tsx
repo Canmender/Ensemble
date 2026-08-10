@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { Search } from "lucide-react";
 
 export function cls(...parts: Array<string | false | null | undefined>): string {
@@ -143,6 +143,15 @@ export function Modal({
   children: React.ReactNode;
   wide?: boolean;
 }) {
+  useEffect(() => {
+    if (!open) return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
   return (
     <div

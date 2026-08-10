@@ -113,6 +113,16 @@ export class Store {
   }
 
   deleteTask(id: string): void {
+    // Cascade delete: child records reference tasks via foreign keys.
+    // Delete in order from deepest child to parent to respect FK constraints.
+    // chat_messages -> run_events -> jobs -> runs -> task
+    const runs = this.db.prepare("SELECT id FROM runs WHERE task_id = ?").all(id) as any[];
+    for (const run of runs) {
+      this.db.prepare("DELETE FROM chat_messages WHERE run_id = ?").run(run.id);
+      this.db.prepare("DELETE FROM run_events WHERE run_id = ?").run(run.id);
+      this.db.prepare("DELETE FROM jobs WHERE run_id = ?").run(run.id);
+    }
+    this.db.prepare("DELETE FROM runs WHERE task_id = ?").run(id);
     this.stmts.deleteTask.run(id);
   }
 

@@ -8,6 +8,7 @@ import type { Run, Task, AgentEvent, Job } from "@ensemble/shared";
 import type { OrchestrationEngine } from "./engine";
 import { adversarialCoding } from "./adversarial";
 import { logger } from "../util/logger";
+import { newId } from "../util/id";
 
 export class AdversarialMode {
   constructor(private engine: OrchestrationEngine) {}
@@ -23,7 +24,7 @@ export class AdversarialMode {
 
     // 创建 Job
     const job: Job = {
-      id: `job-${Date.now()}`,
+      id: newId("job"),
       runId: run.id,
       seq: 1,
       agentId: coderAgentId,

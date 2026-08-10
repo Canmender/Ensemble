@@ -186,6 +186,14 @@ export default function ChatPage() {
   const groupLive = useRunStore((s) => activeContact?.runId ? s.live[activeContact.runId] : undefined);
   const groupMessages = groupLive?.messages ?? [];
 
+  // 稳定的群聊时间戳基准：仅在消息数量变化时更新，避免每轮渲染产生新时间戳
+  const groupBaseTs = useRef(Date.now());
+  const prevGroupLen = useRef(groupMessages.length);
+  if (groupMessages.length !== prevGroupLen.current) {
+    groupBaseTs.current = Date.now();
+    prevGroupLen.current = groupMessages.length;
+  }
+
   // 当前显示的消息（单聊用本地 state，群聊用 store）—— memoized 避免每次渲染重新计算
   const messages = useMemo(() => {
     if (activeContact?.type === "group") {
@@ -195,7 +203,7 @@ export default function ChatPage() {
         content: m.content,
         sender: m.agentId === "user" ? "user" as const : "assistant" as const,
         agentId: m.agentId,
-        timestamp: Date.now(),
+        timestamp: groupBaseTs.current - (groupMessages.length - 1 - i) * 60000,
       }));
     }
     return singleMessages[activeContact?.id ?? ""] ?? [];

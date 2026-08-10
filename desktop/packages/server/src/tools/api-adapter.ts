@@ -10,6 +10,7 @@
 
 import type { AgentTool, ToolContext } from "./types";
 import { logger } from "../util/logger";
+import { isPrivateHost } from "./web";
 
 // ========== 类型定义 ==========
 
@@ -315,6 +316,20 @@ export async function loadToolsFromOpenApi(
   auth?: AuthConfig,
 ): Promise<AgentTool[]> {
   try {
+    // SSRF protection: reject private/internal network addresses
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(specUrl);
+    } catch {
+      throw new Error(`Invalid spec URL: ${specUrl}`);
+    }
+    if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+      throw new Error(`Unsupported protocol: ${parsedUrl.protocol}`);
+    }
+    if (isPrivateHost(parsedUrl.hostname)) {
+      throw new Error(`SSRF blocked: refusing to fetch spec from private host ${parsedUrl.hostname}`);
+    }
+
     const response = await fetch(specUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch OpenAPI spec: ${response.status}`);

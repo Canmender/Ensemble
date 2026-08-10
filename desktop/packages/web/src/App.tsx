@@ -8,6 +8,7 @@ import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
 import { useTheme, type Theme } from "./lib/theme";
 import { cls } from "./components/ui";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /* 路由级懒加载：首屏只加载当前页面，其余按需拆分 */
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -172,18 +173,20 @@ export default function App() {
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">
-        <Suspense fallback={<PageLoading />}>
-          <Routes>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/agents" element={<AgentsPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/runs/:id" element={<RunPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/memory" element={<MemoryPage />} />
-            <Route path="/workflows" element={<WorkflowsPage />} />
-            <Route path="/chat" element={<ChatPage />} />
-          </Routes>
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoading />}>
+            <Routes>
+              <Route path="/" element={<DashboardPage />} />
+              <Route path="/agents" element={<AgentsPage />} />
+              <Route path="/tasks" element={<TasksPage />} />
+              <Route path="/runs/:id" element={<RunPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/memory" element={<MemoryPage />} />
+              <Route path="/workflows" element={<WorkflowsPage />} />
+              <Route path="/chat" element={<ChatPage />} />
+            </Routes>
+          </Suspense>
+        </ErrorBoundary>
       </main>
     </div>
   );

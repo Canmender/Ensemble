@@ -1,9 +1,9 @@
-import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, readdirSync, statSync, mkdirSync, realpathSync } from "node:fs";
 import { resolve, join, normalize, isAbsolute, dirname } from "node:path";
 import type { AgentTool, ToolContext } from "./types";
 import { checkFileReadAllowed, checkFileWriteAllowed } from "./security";
 
-/** 路径安全：归一化后必须落在 workspaceRoot 内（防 .. 逃逸） */
+/** 路径安全：归一化后必须落在 workspaceRoot 内（防 .. 逃逸 + symlink 逃逸） */
 function safeResolve(workspaceRoot: string | undefined, userPath: string, cwd?: string): string {
   const root = normalize(workspaceRoot ?? cwd ?? process.cwd());
   const abs = isAbsolute(userPath) ? normalize(userPath) : resolve(root, userPath);
@@ -11,6 +11,27 @@ function safeResolve(workspaceRoot: string | undefined, userPath: string, cwd?: 
   const target = abs.split(/[\\/]/).join("/");
   if (!target.startsWith(rel + "/") && target !== rel) {
     throw new Error(`path outside workspace: ${userPath}`);
+  }
+  // Resolve symlinks to prevent symlink-based escape attacks.
+  // For new files that don't exist yet, resolve the parent directory instead.
+  let realPath: string;
+  try {
+    realPath = realpathSync(abs);
+  } catch (err: any) {
+    if (err.code === "ENOENT") {
+      const parentDir = dirname(abs);
+      try {
+        realPath = join(realpathSync(parentDir), abs.split(/[\\/]/).pop()!);
+      } catch {
+        return abs; // parent doesn't exist yet either, will be created by caller
+      }
+    } else {
+      throw err;
+    }
+  }
+  const realTarget = realPath.split(/[\\/]/).join("/");
+  if (!realTarget.startsWith(rel + "/") && realTarget !== rel) {
+    throw new Error(`symlink target outside workspace: ${userPath}`);
   }
   return abs;
 }

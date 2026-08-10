@@ -25,10 +25,19 @@ export default function MemoryPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     void (async () => {
-      setList(await api.get<AgentMemory[]>("/memory"));
-      setLoading(false);
+      try {
+        setList(await api.get<AgentMemory[]>("/memory"));
+        setError(null);
+      } catch (e) {
+        console.error("加载记忆失败:", e);
+        setError("加载记忆数据失败：" + (e as Error).message);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, []);
 
@@ -43,6 +52,14 @@ export default function MemoryPage() {
 
       {loading ? (
         <Spinner label="加载中" />
+      ) : error ? (
+        <Card>
+          <EmptyState
+            icon={<Brain className="h-8 w-8" />}
+            title="加载失败"
+            desc={error}
+          />
+        </Card>
       ) : list.length === 0 ? (
         <Card>
           <EmptyState
