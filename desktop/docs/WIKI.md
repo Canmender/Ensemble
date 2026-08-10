@@ -19,10 +19,11 @@
 
 合鸣是一个桌面原生的多 Agent 协作平台，支持：
 - 自定义创建 Agent（内置 LLM + 工具循环 / 本地 harness 接入）
-- 多 Agent 协作（单发 / 工作流 DAG / 群聊头脑风暴）
+- 多 Agent 协作（单发 / 工作流 DAG / 群聊头脑风暴 / 规划-执行-反思 / 对抗迭代）
 - 实时监控（WebSocket 推送 + 日志/时间线/画布三视图）
-- 分层记忆（长期 + 情境 + 全文检索）
+- 分层记忆（显式记忆池 + 隐式记忆池 + 全文检索）
 - 跨网络通信（局域网直连 + 云端中继）
+- 手机端联动（远程控制 + 实时同步 + 直接对话）
 
 ---
 
@@ -477,7 +478,42 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 
 ## 变更日志
 
-### v0.4.3 (2026-08-10) — 安全加固 + 画布修复 + 内部弹窗
+### v0.4.3 (2026-08-10) — 安全加固 + 画布修复 + 内部弹窗 + 移动端全面改进
+
+**桌面端安全加固（两轮深度审查，16 项高危修复）**
+- 命令注入防护：Shell 元字符检测 + 词边界黑名单 + MCP 命令审计
+- API Key AES-256-GCM 加密存储
+- WebSocket Token 认证 + timingSafeEqual
+- Electron CSP + will-navigate + 权限拒绝
+- SSRF 防护（私有 IP + 符号链接穿越 + OpenAPI loader）
+- 速率限制（API + WebSocket 双层）
+- 数据库级联删除 + 复合索引
+
+**桌面端新增功能**
+- 工具确认内部弹窗（ToolConfirmDialog，替代 native dialog）
+- ErrorBoundary 全局错误边界
+- LLM 指数退避重试（尊重 Retry-After）
+- RAGStore 持久化 + 中文 bigram 分词
+- CI/CD 流水线（GitHub Actions）
+- 58 个单元测试（vitest）
+
+**桌面端修复**
+- 协作画布：AgentNode 注册 + 历史事件绕过节流
+- 前端性能：Dashboard/ChatPage/TasksPage memo 优化
+- 编排引擎：错误传播 + DAG 死锁改进
+- 记忆池：LIKE 转义 + 过期清理 + ID 碰撞消除
+- 错误处理：silent catch → 日志 + toast 反馈
+- 无障碍：7 个页面 ARIA 属性
+
+**移动端全面改进**
+- 新增 RunPage：任务执行详情页（实时事件流、工具调用、取消操作）
+- ChatPage 改进：直接 Agent 对话 + Agent 选择器 + 错误反馈
+- API 服务：全面类型化 + 15s 超时 + 用户友好错误信息
+- 连接服务：事件发射器 + 指数退避重连 + 连接质量监控
+- DashboardPage：任务卡片可点击 + REST API 刷新 + 连接质量显示
+- SettingsPage：Ping 测试 + 连接历史 + 调试信息 + 中继认证
+- ErrorBoundary 全局错误边界
+- Store：事件订阅 + 类型化选择器 + 级联删除
 
 **安全加固（两轮深度审查，16 项高危修复）**
 - 命令注入防护：Shell 元字符检测 + 词边界黑名单 + MCP 命令审计
@@ -551,6 +587,61 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 - 实时监控 + 日志/时间线/画布
 - 分层记忆 + Skill 系统
 - Electron 桌面应用 + 自动更新
+
+---
+
+## 移动端
+
+### 架构
+
+```
+┌─────────────────────────────────────────────┐
+│  手机端 (Expo + React Native)               │
+│  ├─ DashboardPage: 看板 + 设备发现          │
+│  ├─ TasksPage: 任务管理 + 创建              │
+│  ├─ ChatPage: Agent 直接对话                │
+│  ├─ RunPage: 任务执行详情 (实时事件流)       │
+│  ├─ AgentsPage: Agent CRUD                  │
+│  └─ SettingsPage: 连接管理 + 调试           │
+├─────────────────────────────────────────────┤
+│  Services                                    │
+│  ├─ connection.ts: WebSocket + 事件发射器    │
+│  ├─ api.ts: REST API (类型化 + 超时)        │
+│  └─ discovery.ts: mDNS 设备发现             │
+├─────────────────────────────────────────────┤
+│  Store (Zustand)                             │
+│  ├─ deviceStore: 连接状态 + 质量 + 历史     │
+│  └─ taskStore: 任务/运行/Agent + 事件订阅   │
+└─────────────────────────────────────────────┘
+```
+
+### 通信协议
+
+| 方式 | 用途 | 说明 |
+|------|------|------|
+| mDNS | 设备发现 | 自动发现同网段桌面端 |
+| WebSocket | 实时通信 | socket.io，支持局域网和云端中继 |
+| REST API | 数据查询 | HTTP 请求桌面端 API |
+
+### 连接模式
+
+1. **局域网直连** — 同一 WiFi 下直接连接桌面端 IP
+2. **云端中继** — 通过阿里云服务器中继，支持跨网络
+
+### 连接质量监控
+
+- 延迟采样（10 次 ping/pong）
+- 等级：excellent (<50ms) / good (<150ms) / fair (<500ms) / poor (≥500ms)
+- 自动重连（指数退避 + 抖动，最大 10 次）
+
+### 构建 APK
+
+```bash
+cd mobile
+npm install
+cd android && ./gradlew assembleRelease
+# 输出: android/app/build/outputs/apk/release/app-release.apk
+```
 
 ---
 
