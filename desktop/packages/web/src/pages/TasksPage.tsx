@@ -16,7 +16,7 @@ function StatCard({ icon: Icon, label, value, color }: { icon: any; label: strin
   return (
     <Card className="flex items-center gap-3 p-4">
       <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color}`}>
-        <Icon className="h-5 w-5 text-white" />
+        <Icon className="h-5 w-5 text-primary-fg" />
       </div>
       <div>
         <div className="text-2xl font-bold text-fg">{value}</div>

@@ -568,7 +568,7 @@ export default function AgentsPage() {
               </div>
 
               {!a.providerId && (
-                <div className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+                <div className="mt-2 rounded-md bg-warning/10 px-2 py-1 text-[11px] text-warning">
                   未配置 provider，运行前请先到 设置 添加
                 </div>
               )}

@@ -114,8 +114,8 @@ function ContactItem({ contact, active, onClick }: { contact: Contact; active: b
         <div className={cls(
           "flex h-10 w-10 items-center justify-center rounded-full",
           contact.type === "agent" ? "bg-violet-500/10 text-violet-500" :
-          contact.type === "device" ? "bg-blue-500/10 text-blue-500" :
-          "bg-emerald-500/10 text-emerald-500",
+          contact.type === "device" ? "bg-primary/10 text-primary" :
+          "bg-success/10 text-success",
         )}>
           <Icon className="h-5 w-5" />
         </div>
@@ -131,7 +131,7 @@ function ContactItem({ contact, active, onClick }: { contact: Contact; active: b
         )}
       </div>
       {(contact.unread ?? 0) > 0 && (
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] text-white">
+        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] text-primary-fg">
           {contact.unread}
         </span>
       )}
@@ -301,8 +301,8 @@ export default function ChatPage() {
               <div className={cls(
                 "flex h-9 w-9 items-center justify-center rounded-full",
                 activeContact.type === "agent" ? "bg-violet-500/10 text-violet-500" :
-                activeContact.type === "device" ? "bg-blue-500/10 text-blue-500" :
-                "bg-emerald-500/10 text-emerald-500",
+                activeContact.type === "device" ? "bg-primary/10 text-primary" :
+                "bg-success/10 text-success",
               )}>
                 {activeContact.type === "agent" ? <Bot className="h-4 w-4" /> :
                  activeContact.type === "device" ? <Smartphone className="h-4 w-4" /> :
@@ -338,14 +338,14 @@ export default function ChatPage() {
                       className={cls(
                         "max-w-[70%] rounded-2xl px-4 py-2.5",
                         msg.sender === "user"
-                          ? "bg-primary text-white rounded-br-md"
+                          ? "bg-primary text-primary-fg rounded-br-md"
                           : "bg-muted/20 text-fg rounded-bl-md",
                       )}
                     >
                       <div className="text-sm">{msg.content}</div>
                       <div className={cls(
                         "mt-1 text-[10px]",
-                        msg.sender === "user" ? "text-white/70" : "text-muted",
+                        msg.sender === "user" ? "text-primary-fg/70" : "text-muted",
                       )}>
                         {new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
                       </div>
