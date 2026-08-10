@@ -2,6 +2,49 @@
 
 本项目采用语义化版本（SemVer）。所有值得注意的变更记录于此。
 
+## [0.3.0] - 2026-08-10
+
+多 Agent 架构大版本。实现完整的 Agent 编排框架。
+
+### 🎉 新增
+
+**编排模式**
+- Plan-Execute-Reflect 三阶段迭代（质量阈值 0.85，最大 5 轮）
+- Coder vs Tester 对抗式代码迭代（覆盖率驱动，最大 10 轮）
+- Planner / Critic / Summarizer 角色分工
+
+**工具系统**
+- RAG 知识库：BM25 + 向量混合检索，递归/语义分块
+- Function Calling 适配层：API 定义自动生成工具，OpenAPI Spec 解析
+- 预定义 GitHub API 适配器
+
+**网络优化**
+- WebSocket 消息批量发送（16ms 缓冲，帧数 ↓10-50x）
+- permessage-deflate 压缩 JSON 负载
+- 背压处理（bufferedAmount > 4MB 时仅发送关键消息）
+- 内存 seq 计数器（消除 SELECT MAX 查询）
+- LLM 模型列表缓存（5 分钟 TTL）
+- SSE 缓冲区保护（10MB 上限）
+- WS 重连抖动（防雷群效应）
+
+**容器化部署**
+- Docker Compose 完整配置（relay + nginx）
+- Nginx 反向代理（WebSocket 支持、Gzip 压缩）
+- 生产环境资源限制配置
+
+**UI 设计优化**
+- 深色模式色彩修复（语义化 token）
+- Modal 增强（role=dialog + 动画 + 焦点陷阱）
+- 自定义 ConfirmDialog / Toast 替换原生 confirm/alert
+- Checkbox 样式统一
+- 无障碍改进（aria-label、focus-visible）
+
+### 📚 文档
+
+- 新增 docs/MULTI_AGENT_ARCHITECTURE.md：多 Agent 架构设计手册（1200+ 行）
+- 更新 docs/WIKI.md：路线图进度、工具系统文档
+- 更新 docs/ARCHITECTURE.md：新增任务模式表格
+
 ## [0.2.0] - 2026-08-09
 
 性能优化大版本。参考 OpenCode (Go) 和 OpenClaw (TypeScript) 的架构模式。

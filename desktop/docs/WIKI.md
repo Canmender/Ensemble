@@ -311,7 +311,7 @@ const tools = await loadToolsFromOpenApi("https://api.github.com/openapi.json", 
 | 2 | Plan-Execute-Reflect、角色分工、状态机 | ✅ 已完成 | `orchestration/plan-execute-reflect.ts`, `plan.ts` |
 | 3 | RAG 知识库、Function Calling | ✅ 已完成 | `tools/rag.ts`, `tools/api-adapter.ts` |
 | 4 | Coder vs Tester 对抗迭代 | ✅ 已完成 | `orchestration/adversarial.ts`, `adversarial-mode.ts` |
-| 5 | 容器化、监控、自动调优、10 万次验证 | 📋 规划中 | — |
+| 5 | 容器化部署 | ✅ 已完成 | `docker-compose.yml`, `relay-server/Dockerfile`, `nginx/` |
 
 ### 任务模式
 
