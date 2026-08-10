@@ -11,6 +11,7 @@ import { settingsRouter } from "./api/routes/settings";
 import { mcpRouter } from "./api/routes/mcp";
 import { skillsRouter } from "./api/routes/skills";
 import { memoryRouter } from "./api/routes/memory";
+import { memoryPoolRouter } from "./api/routes/memory-pool";
 import { discoveryRouter } from "./api/routes/discovery";
 import { relayRouter } from "./api/routes/relay";
 
@@ -33,6 +34,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/mcp", mcpRouter(ctx));
   app.use("/api/skills", skillsRouter(ctx));
   app.use("/api/memory", memoryRouter(ctx));
+  app.use("/api/memory-pool", memoryPoolRouter(ctx));
   app.use("/api/discovery", discoveryRouter(ctx));
   app.use("/api/relay", relayRouter(ctx));
 

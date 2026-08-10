@@ -11,6 +11,7 @@ import { FileKeyStore, type KeyStore } from "./keychain";
 import { ToolRegistry } from "./tools/types";
 import { registerBuiltinTools } from "./tools";
 import { MemoryProviderImpl, type MemoryProvider } from "./memory/provider";
+import { MemoryPoolManager } from "./memory/pool";
 import { Mem0Backend } from "./memory/mem0";
 import { SqliteMemoryBackend } from "./memory/sql";
 import type { MemoryBackend } from "./memory/backend";
@@ -34,6 +35,7 @@ export interface AppContext {
   providerRegistry: ProviderRegistry;
   toolRegistry: ToolRegistry;
   memoryProvider: MemoryProvider;
+  memoryPoolManager: MemoryPoolManager;
   skillStore: SkillStore;
   mcpConfig: McpConfigStore;
   mcpManager: McpManager;
@@ -60,7 +62,17 @@ export function createAppContext(
   const keyStore = deps.keyStore ?? new FileKeyStore(resolve(env.configDir, "secrets.json"));
   const providerRegistry = new ProviderRegistry(keyStore);
   const toolRegistry = new ToolRegistry();
-  registerBuiltinTools(toolRegistry, () => config.getSettings());
+
+  // 初始化双记忆池管理器
+  const memoryPoolManager = new MemoryPoolManager(db, {
+    explicitMaxEntries: 1000,
+    implicitMaxEntries: 100,
+    implicitTtlMs: 24 * 60 * 60 * 1000, // 24h
+    injectMaxChars: 4000,
+    importanceThreshold: 0.5,
+  });
+
+  registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager);
 
   const dataDir = dirname(env.dbPath);
   // 外部记忆后端：默认本地 SQL（SQLite + FTS5，免服务）；配置 Mem0 时切换到 Mem0
@@ -83,7 +95,7 @@ export function createAppContext(
   const mcpManager = new McpManager(mcpConfig, toolRegistry);
   void mcpManager.reload();
 
-  // 每日维护：记忆 consolidate/轮转 + offload 清理
+  // 每日维护：记忆 consolidate/轮转 + offload 清理 + 隐式记忆池过期清理
   // offload 目录：与 executor 保持一致（工作区内 .ensemble-offload）
   const offloadDir = config.getSettings().workspaceRoot;
   const workspaceOffload = offloadDir ? new OffloadStore(join(offloadDir, ".ensemble-offload")) : undefined;
@@ -109,6 +121,12 @@ export function createAppContext(
         const wsOffload = new OffloadStore(join(wsRoot, ".ensemble-offload"));
         wsOffload.cleanup(a.id, 7 * 86_400_000);
       }
+    }
+
+    // 清理过期的隐式记忆池
+    const cleaned = memoryPoolManager.cleanupExpired();
+    if (cleaned > 0) {
+      logger.info(`memory pool: cleaned ${cleaned} expired implicit memories`);
     }
   }, 24 * 3600_000);
   maintenanceTimer.unref?.();
@@ -163,6 +181,7 @@ export function createAppContext(
     providerRegistry,
     toolRegistry,
     memoryProvider,
+    memoryPoolManager,
     skillStore,
     mcpConfig,
     mcpManager,
