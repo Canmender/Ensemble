@@ -4,14 +4,154 @@
  */
 
 import { useDeviceStore } from "../store/deviceStore";
+import type {
+  AgentConfig,
+  Task,
+  Run,
+  Job,
+  ChatMessage,
+  AgentEvent,
+  WorkflowDef,
+} from "@ensemble/shared-protocol";
 
-/** API 响应 */
-interface ApiResponse<T = unknown> {
-  data?: T;
-  error?: string;
+// ==================== 请求配置 ====================
+
+/** 默认请求超时（毫秒） */
+const DEFAULT_TIMEOUT_MS = 15_000;
+
+/** 文件上传超时（毫秒） */
+const UPLOAD_TIMEOUT_MS = 60_000;
+
+// ==================== 错误类型 ====================
+
+/** API 错误码 */
+export type ApiErrorCode =
+  | "NO_CONNECTION"
+  | "TIMEOUT"
+  | "NETWORK_ERROR"
+  | "SERVER_ERROR"
+  | "NOT_FOUND"
+  | "VALIDATION_ERROR"
+  | "UNKNOWN";
+
+/** 结构化 API 错误 */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly code: ApiErrorCode,
+    public readonly statusCode?: number,
+    public readonly detail?: string
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
 }
 
+// ==================== 响应类型 ====================
+
+/** API 响应 */
+export interface ApiResponse<T = unknown> {
+  data?: T;
+  error?: string;
+  errorCode?: ApiErrorCode;
+}
+
+/** 健康检查响应 */
+export interface HealthResponse {
+  status: string;
+  version: string;
+  uptime: number;
+  deviceId?: string;
+  deviceName?: string;
+  os?: string;
+  wsPort?: number;
+}
+
+/** Provider 配置 */
+export interface ProviderConfig {
+  id: string;
+  name: string;
+  type: string;
+  apiKey?: string;
+  baseUrl?: string;
+  models: string[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Provider 测试结果 */
+export interface ProviderTestResult {
+  success: boolean;
+  latencyMs?: number;
+  error?: string;
+  models?: string[];
+}
+
+/** 任务创建输入 */
+export interface CreateTaskInput {
+  title: string;
+  mode: "single" | "workflow" | "chat";
+  input: unknown;
+}
+
+/** 聊天创建输入 */
+export interface CreateChatInput {
+  title: string;
+  participantIds: string[];
+  maxRounds?: number;
+  prompt?: string;
+}
+
+/** 运行事件响应 */
+export interface RunEventsResponse {
+  runId: string;
+  events: AgentEvent[];
+  total: number;
+}
+
+/** 技能信息 */
+export interface SkillInfo {
+  name: string;
+  description: string;
+  parameters?: Record<string, unknown>;
+  enabled: boolean;
+}
+
+/** 记忆摘要 */
+export interface MemorySummary {
+  totalEntries: number;
+  recentEntries: number;
+  lastFlushAt?: string;
+  tokensUsed?: number;
+}
+
+// ==================== 请求参数 ====================
+
+/** 分页参数 */
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+}
+
+/** 运行事件查询参数 */
+export interface RunEventsParams extends PaginationParams {
+  jobId?: string;
+  type?: string;
+  since?: number;
+}
+
+// ==================== API 服务 ====================
+
 class ApiService {
+  /** 请求超时（毫秒） */
+  private timeoutMs = DEFAULT_TIMEOUT_MS;
+
+  /** 设置请求超时 */
+  setTimeoutMs(ms: number): void {
+    this.timeoutMs = ms;
+  }
+
   /** 获取当前连接的桌面端地址 */
   private getBaseUrl(): string | null {
     const { connectedDevice } = useDeviceStore.getState();
@@ -19,23 +159,60 @@ class ApiService {
     return `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
   }
 
+  /** 将 HTTP 状态码映射为用户友好的错误消息 */
+  private getErrorMessage(status: number, detail?: string): string {
+    const messages: Record<number, string> = {
+      400: "请求参数有误，请检查输入",
+      401: "认证失败，请重新连接",
+      403: "没有权限执行此操作",
+      404: "请求的资源不存在",
+      408: "请求超时，桌面端响应太慢",
+      409: "操作冲突，资源可能已被修改",
+      422: "输入数据验证失败，请检查参数",
+      429: "请求过于频繁，请稍后再试",
+      500: "桌面端内部错误",
+      502: "桌面端网关错误",
+      503: "桌面端暂时不可用",
+    };
+    return messages[status] || detail || `请求失败 (${status})`;
+  }
+
+  /** 将异常映射为 ApiErrorCode */
+  private getErrorCode(err: unknown): ApiErrorCode {
+    if (err instanceof ApiError) return err.code;
+    if (err instanceof DOMException && err.name === "AbortError") return "TIMEOUT";
+    if (err instanceof TypeError && err.message.includes("fetch")) return "NETWORK_ERROR";
+    if (err instanceof Error) {
+      if (err.message.includes("timeout") || err.message.includes("timed out")) return "TIMEOUT";
+      if (err.message.includes("network") || err.message.includes("Network")) return "NETWORK_ERROR";
+    }
+    return "UNKNOWN";
+  }
+
   /** 发起 API 请求 */
   private async request<T>(
     method: string,
     path: string,
-    body?: unknown
+    body?: unknown,
+    timeoutMs?: number
   ): Promise<ApiResponse<T>> {
     const baseUrl = this.getBaseUrl();
     if (!baseUrl) {
-      return { error: "未连接到桌面端" };
+      return { error: "未连接到桌面端", errorCode: "NO_CONNECTION" };
     }
+
+    const controller = new AbortController();
+    const timeout = timeoutMs ?? this.timeoutMs;
+    const timer = setTimeout(() => controller.abort(), timeout);
 
     try {
       const options: RequestInit = {
         method,
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
+        signal: controller.signal,
       };
 
       if (body) {
@@ -43,139 +220,195 @@ class ApiService {
       }
 
       const response = await fetch(`${baseUrl}${path}`, options);
-      const data = await response.json();
 
       if (!response.ok) {
-        return { error: data.error || `请求失败: ${response.status}` };
+        let detail: string | undefined;
+        try {
+          const errBody = await response.json();
+          detail = errBody.error || errBody.message;
+        } catch {
+          // 响应体不是 JSON，忽略
+        }
+
+        const message = this.getErrorMessage(response.status, detail);
+        return {
+          error: message,
+          errorCode: response.status === 404 ? "NOT_FOUND" : response.status >= 500 ? "SERVER_ERROR" : "VALIDATION_ERROR",
+        };
       }
 
+      const data = await response.json();
       return { data };
     } catch (err) {
-      return {
-        error: `网络错误: ${err instanceof Error ? err.message : String(err)}`,
-      };
+      const code = this.getErrorCode(err);
+      const message =
+        code === "TIMEOUT"
+          ? `请求超时 (${timeout / 1000}s)，桌面端可能无响应`
+          : code === "NETWORK_ERROR"
+          ? "网络连接失败，请检查桌面端是否在线"
+          : `请求异常: ${err instanceof Error ? err.message : String(err)}`;
+
+      return { error: message, errorCode: code };
+    } finally {
+      clearTimeout(timer);
     }
   }
 
   // ========== Agent API ==========
 
   /** 获取所有 Agent */
-  async getAgents() {
-    return this.request<any[]>("GET", "/api/agents");
+  async getAgents(): Promise<ApiResponse<AgentConfig[]>> {
+    return this.request<AgentConfig[]>("GET", "/api/agents");
   }
 
   /** 获取单个 Agent */
-  async getAgent(id: string) {
-    return this.request<any>("GET", `/api/agents/${id}`);
+  async getAgent(id: string): Promise<ApiResponse<AgentConfig>> {
+    return this.request<AgentConfig>("GET", `/api/agents/${id}`);
   }
 
   /** 创建 Agent */
-  async createAgent(agent: any) {
-    return this.request<any>("POST", "/api/agents", agent);
+  async createAgent(agent: Partial<AgentConfig>): Promise<ApiResponse<AgentConfig>> {
+    return this.request<AgentConfig>("POST", "/api/agents", agent);
   }
 
   /** 更新 Agent */
-  async updateAgent(id: string, updates: any) {
-    return this.request<any>(`PATCH`, `/api/agents/${id}`, updates);
+  async updateAgent(id: string, updates: Partial<AgentConfig>): Promise<ApiResponse<AgentConfig>> {
+    return this.request<AgentConfig>("PATCH", `/api/agents/${id}`, updates);
   }
 
   /** 删除 Agent */
-  async deleteAgent(id: string) {
+  async deleteAgent(id: string): Promise<ApiResponse<void>> {
     return this.request<void>("DELETE", `/api/agents/${id}`);
   }
 
   // ========== Provider API ==========
 
   /** 获取所有 Provider */
-  async getProviders() {
-    return this.request<any[]>("GET", "/api/providers");
+  async getProviders(): Promise<ApiResponse<ProviderConfig[]>> {
+    return this.request<ProviderConfig[]>("GET", "/api/providers");
   }
 
   /** 创建 Provider */
-  async createProvider(provider: any) {
-    return this.request<any>("POST", "/api/providers", provider);
+  async createProvider(provider: Partial<ProviderConfig>): Promise<ApiResponse<ProviderConfig>> {
+    return this.request<ProviderConfig>("POST", "/api/providers", provider);
   }
 
   /** 更新 Provider */
-  async updateProvider(id: string, updates: any) {
-    return this.request<any>(`PATCH`, `/api/providers/${id}`, updates);
+  async updateProvider(id: string, updates: Partial<ProviderConfig>): Promise<ApiResponse<ProviderConfig>> {
+    return this.request<ProviderConfig>("PATCH", `/api/providers/${id}`, updates);
   }
 
   /** 删除 Provider */
-  async deleteProvider(id: string) {
+  async deleteProvider(id: string): Promise<ApiResponse<void>> {
     return this.request<void>("DELETE", `/api/providers/${id}`);
   }
 
   /** 测试 Provider 连接 */
-  async testProvider(id: string) {
-    return this.request<any>("POST", `/api/providers/${id}/test`);
+  async testProvider(id: string): Promise<ApiResponse<ProviderTestResult>> {
+    return this.request<ProviderTestResult>("POST", `/api/providers/${id}/test`);
   }
 
   // ========== Task API ==========
 
   /** 获取所有任务 */
-  async getTasks() {
-    return this.request<any[]>("GET", "/api/tasks");
+  async getTasks(): Promise<ApiResponse<Task[]>> {
+    return this.request<Task[]>("GET", "/api/tasks");
   }
 
   /** 创建任务 */
-  async createTask(task: any) {
-    return this.request<any>("POST", "/api/tasks", task);
+  async createTask(task: CreateTaskInput): Promise<ApiResponse<{ task: Task; run?: Run }>> {
+    return this.request<{ task: Task; run?: Run }>("POST", "/api/tasks", task);
   }
 
   /** 删除任务 */
-  async deleteTask(id: string) {
+  async deleteTask(id: string): Promise<ApiResponse<void>> {
     return this.request<void>("DELETE", `/api/tasks/${id}`);
   }
 
   // ========== Run API ==========
 
   /** 获取所有运行 */
-  async getRuns() {
-    return this.request<any[]>("GET", "/api/runs");
+  async getRuns(): Promise<ApiResponse<Run[]>> {
+    return this.request<Run[]>("GET", "/api/runs");
   }
 
   /** 获取运行详情 */
-  async getRun(id: string) {
-    return this.request<any>("GET", `/api/runs/${id}`);
+  async getRun(id: string): Promise<ApiResponse<Run>> {
+    return this.request<Run>("GET", `/api/runs/${id}`);
+  }
+
+  /** 获取运行的事件流 */
+  async getRunEvents(runId: string, params?: RunEventsParams): Promise<ApiResponse<RunEventsResponse>> {
+    const searchParams = new URLSearchParams();
+    if (params?.jobId) searchParams.set("jobId", params.jobId);
+    if (params?.type) searchParams.set("type", params.type);
+    if (params?.since) searchParams.set("since", String(params.since));
+    if (params?.page) searchParams.set("page", String(params.page));
+    if (params?.limit) searchParams.set("limit", String(params.limit));
+
+    const qs = searchParams.toString();
+    const path = `/api/runs/${runId}/events${qs ? `?${qs}` : ""}`;
+    return this.request<RunEventsResponse>("GET", path);
+  }
+
+  /** 获取运行的 Job 列表 */
+  async getRunJobs(runId: string): Promise<ApiResponse<Job[]>> {
+    return this.request<Job[]>(`GET`, `/api/runs/${runId}/jobs`);
   }
 
   // ========== Workflow API ==========
 
   /** 获取所有工作流 */
-  async getWorkflows() {
-    return this.request<any[]>("GET", "/api/workflows");
+  async getWorkflows(): Promise<ApiResponse<WorkflowDef[]>> {
+    return this.request<WorkflowDef[]>("GET", "/api/workflows");
   }
 
   /** 创建工作流 */
-  async createWorkflow(workflow: any) {
-    return this.request<any>("POST", "/api/workflows", workflow);
+  async createWorkflow(workflow: Partial<WorkflowDef>): Promise<ApiResponse<WorkflowDef>> {
+    return this.request<WorkflowDef>("POST", "/api/workflows", workflow);
   }
 
   /** 删除工作流 */
-  async deleteWorkflow(id: string) {
+  async deleteWorkflow(id: string): Promise<ApiResponse<void>> {
     return this.request<void>("DELETE", `/api/workflows/${id}`);
+  }
+
+  // ========== Chat API ==========
+
+  /** 创建群聊任务 */
+  async createChat(input: CreateChatInput): Promise<ApiResponse<{ task: Task; run: Run }>> {
+    return this.request<{ task: Task; run: Run }>("POST", "/api/chat", input);
+  }
+
+  /** 获取群聊消息 */
+  async getChatMessages(runId: string): Promise<ApiResponse<ChatMessage[]>> {
+    return this.request<ChatMessage[]>(`GET`, `/api/chat/${runId}/messages`);
   }
 
   // ========== Memory API ==========
 
   /** 获取记忆摘要 */
-  async getMemory() {
-    return this.request<any>("GET", "/api/memory");
+  async getMemory(): Promise<ApiResponse<MemorySummary>> {
+    return this.request<MemorySummary>("GET", "/api/memory");
+  }
+
+  /** 获取 Agent 的记忆条目 */
+  async getAgentMemory(agentId: string): Promise<ApiResponse<unknown[]>> {
+    return this.request<unknown[]>("GET", `/api/memory/${agentId}`);
   }
 
   // ========== Skill API ==========
 
   /** 获取所有技能 */
-  async getSkills() {
-    return this.request<any[]>("GET", "/api/skills");
+  async getSkills(): Promise<ApiResponse<SkillInfo[]>> {
+    return this.request<SkillInfo[]>("GET", "/api/skills");
   }
 
   // ========== Health API ==========
 
   /** 健康检查 */
-  async getHealth() {
-    return this.request<any>("GET", "/api/health");
+  async getHealth(): Promise<ApiResponse<HealthResponse>> {
+    return this.request<HealthResponse>("GET", "/api/health");
   }
 }
 

@@ -1,9 +1,9 @@
 /**
- * 看板页面
- * 显示任务状态和实时更新
+ * Dashboard page
+ * Task stats, connection status, connection quality indicator, sync info.
  */
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -16,13 +16,22 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useTaskStore } from "../store/taskStore";
 import { discoveryService } from "../services/discovery";
 import { connectionService } from "../services/connection";
+import { api } from "../services/api";
 
-export default function DashboardPage() {
-  const { connectedDevice, connectionState, discoveredDevices } = useDeviceStore();
-  const { tasks, runs, loading, lastSyncTs } = useTaskStore();
+type ConnectionQuality = "excellent" | "good" | "poor" | "unknown";
+
+export default function DashboardPage({ navigation }: { navigation: any }) {
+  const { connectedDevice, connectionState, discoveredDevices } =
+    useDeviceStore();
+  const { tasks, runs, loading, lastSyncTs, setTasks, setRuns, setAgents } =
+    useTaskStore();
   const [refreshing, setRefreshing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [connectionQuality, setConnectionQuality] =
+    useState<ConnectionQuality>("unknown");
+  const lastPingTime = useRef<number | null>(null);
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 统计数据
   const stats = {
     totalTasks: tasks.length,
     runningRuns: runs.filter((r) => r.status === "running").length,
@@ -30,7 +39,7 @@ export default function DashboardPage() {
     errorRuns: runs.filter((r) => r.status === "error").length,
   };
 
-  // 初始化扫描
+  // Start device discovery on mount
   useEffect(() => {
     discoveryService.startScan();
     return () => {
@@ -38,14 +47,96 @@ export default function DashboardPage() {
     };
   }, []);
 
-  // 下拉刷新
-  const onRefresh = async () => {
-    setRefreshing(true);
-    connectionService.requestSync(lastSyncTs || undefined);
-    setTimeout(() => setRefreshing(false), 1000);
-  };
+  /** Fetch data via REST API */
+  const fetchData = useCallback(async () => {
+    const isConnected = connectionState === "connected";
+    if (!isConnected) return;
 
-  // 连接状态颜色
+    try {
+      const [tasksRes, runsRes, agentsRes] = await Promise.all([
+        api.getTasks(),
+        api.getRuns(),
+        api.getAgents(),
+      ]);
+
+      if (tasksRes.data) setTasks(tasksRes.data);
+      if (runsRes.data) setRuns(runsRes.data);
+      if (agentsRes.data) setAgents(agentsRes.data);
+    } catch (err) {
+      console.error("[DashboardPage] Fetch data failed:", err);
+    }
+  }, [connectionState, setTasks, setRuns, setAgents]);
+
+  /** Measure connection quality via health endpoint */
+  const measureConnectionQuality = useCallback(async () => {
+    if (connectionState !== "connected" || !connectedDevice) {
+      setConnectionQuality("unknown");
+      return;
+    }
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const start = Date.now();
+      const response = await fetch(
+        `http://${connectedDevice.ip}:${connectedDevice.httpPort}/api/health`,
+        { method: "GET", signal: controller.signal }
+      );
+      clearTimeout(timeoutId);
+      const latency = Date.now() - start;
+
+      if (!response.ok) {
+        setConnectionQuality("poor");
+      } else if (latency < 100) {
+        setConnectionQuality("excellent");
+      } else if (latency < 500) {
+        setConnectionQuality("good");
+      } else {
+        setConnectionQuality("poor");
+      }
+      lastPingTime.current = latency;
+    } catch {
+      setConnectionQuality("poor");
+      lastPingTime.current = null;
+    }
+  }, [connectionState, connectedDevice]);
+
+  // Periodically measure connection quality when connected
+  useEffect(() => {
+    if (connectionState === "connected") {
+      measureConnectionQuality();
+      pingIntervalRef.current = setInterval(measureConnectionQuality, 30000);
+    } else {
+      setConnectionQuality("unknown");
+      lastPingTime.current = null;
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+    }
+    return () => {
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+      }
+    };
+  }, [connectionState, measureConnectionQuality]);
+
+  /** Pull-to-refresh with error handling */
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setSyncError(null);
+    try {
+      connectionService.requestSync(lastSyncTs || undefined);
+      await fetchData();
+      await measureConnectionQuality();
+    } catch (err) {
+      setSyncError(
+        err instanceof Error ? err.message : "同步失败，请检查连接"
+      );
+    }
+    setTimeout(() => setRefreshing(false), 500);
+  }, [fetchData, lastSyncTs, measureConnectionQuality]);
+
   const getStatusColor = () => {
     switch (connectionState) {
       case "connected":
@@ -60,7 +151,6 @@ export default function DashboardPage() {
     }
   };
 
-  // 连接状态文本
   const getStatusText = () => {
     switch (connectionState) {
       case "connected":
@@ -76,19 +166,133 @@ export default function DashboardPage() {
     }
   };
 
+  const getQualityColor = (quality: ConnectionQuality) => {
+    switch (quality) {
+      case "excellent":
+        return "#10b981";
+      case "good":
+        return "#f59e0b";
+      case "poor":
+        return "#ef4444";
+      default:
+        return "#6b7280";
+    }
+  };
+
+  const getQualityText = (quality: ConnectionQuality) => {
+    switch (quality) {
+      case "excellent":
+        return "优秀";
+      case "good":
+        return "良好";
+      case "poor":
+        return "较差";
+      default:
+        return "未知";
+    }
+  };
+
+  /** Format relative time for last sync */
+  const formatSyncTime = (ts: number | null) => {
+    if (!ts) return "从未同步";
+    const diff = Date.now() - ts;
+    if (diff < 60000) return "刚刚";
+    if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`;
+    return new Date(ts).toLocaleDateString();
+  };
+
+  const navigateToRun = (taskId: string) => {
+    const taskRuns = runs.filter((r) => r.taskId === taskId);
+    const latestRun = taskRuns[0];
+    if (latestRun) {
+      navigation.navigate("Run", { runId: latestRun.id });
+    }
+  };
+
+  const getRunStatusColor = (status: string) => {
+    switch (status) {
+      case "success":
+        return "#10b981";
+      case "running":
+        return "#f59e0b";
+      case "error":
+        return "#ef4444";
+      case "cancelled":
+        return "#6b7280";
+      case "queued":
+        return "#6366f1";
+      default:
+        return "#374151";
+    }
+  };
+
+  const getRunStatusText = (status: string) => {
+    switch (status) {
+      case "success":
+        return "已完成";
+      case "running":
+        return "运行中";
+      case "error":
+        return "错误";
+      case "cancelled":
+        return "已取消";
+      case "queued":
+        return "排队中";
+      default:
+        return status;
+    }
+  };
+
   return (
     <ScrollView
       style={styles.container}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor="#10b981"
+          colors={["#10b981"]}
+        />
       }
     >
-      {/* 连接状态 */}
+      {/* Connection status */}
       <View style={styles.statusCard}>
         <View style={styles.statusHeader}>
-          <View style={[styles.statusDot, { backgroundColor: getStatusColor() }]} />
+          <View
+            style={[styles.statusDot, { backgroundColor: getStatusColor() }]}
+          />
           <Text style={styles.statusText}>{getStatusText()}</Text>
         </View>
+
+        {/* Connection quality indicator */}
+        {connectionState === "connected" && (
+          <View style={styles.qualityRow}>
+            <View
+              style={[
+                styles.qualityDot,
+                { backgroundColor: getQualityColor(connectionQuality) },
+              ]}
+            />
+            <Text style={styles.qualityText}>
+              连接质量: {getQualityText(connectionQuality)}
+              {lastPingTime.current !== null && ` (${lastPingTime.current}ms)`}
+            </Text>
+          </View>
+        )}
+
+        {/* Sync info */}
+        <View style={styles.syncRow}>
+          <Text style={styles.syncLabel}>最后同步:</Text>
+          <Text style={styles.syncValue}>{formatSyncTime(lastSyncTs)}</Text>
+        </View>
+
+        {/* Sync error */}
+        {syncError && (
+          <View style={styles.syncErrorRow}>
+            <Text style={styles.syncErrorText}>{syncError}</Text>
+          </View>
+        )}
 
         {connectionState === "disconnected" && discoveredDevices.length > 0 && (
           <View style={styles.deviceList}>
@@ -109,7 +313,7 @@ export default function DashboardPage() {
         )}
       </View>
 
-      {/* 统计卡片 */}
+      {/* Stats */}
       <View style={styles.statsContainer}>
         <View style={[styles.statCard, { backgroundColor: "#1e3a5f" }]}>
           <Text style={styles.statNumber}>{stats.totalTasks}</Text>
@@ -129,7 +333,7 @@ export default function DashboardPage() {
         </View>
       </View>
 
-      {/* 最近任务 */}
+      {/* Recent tasks */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>最近任务</Text>
         {tasks.length === 0 ? (
@@ -138,9 +342,18 @@ export default function DashboardPage() {
           tasks.slice(0, 5).map((task) => {
             const taskRuns = runs.filter((r) => r.taskId === task.id);
             const latestRun = taskRuns[0];
+            const hasRun = !!latestRun;
 
             return (
-              <View key={task.id} style={styles.taskCard}>
+              <TouchableOpacity
+                key={task.id}
+                style={[
+                  styles.taskCard,
+                  hasRun && styles.taskCardTouchable,
+                ]}
+                onPress={() => hasRun && navigateToRun(task.id)}
+                activeOpacity={hasRun ? 0.7 : 1}
+              >
                 <View style={styles.taskHeader}>
                   <Text style={styles.taskTitle}>{task.title}</Text>
                   <Text style={styles.taskMode}>{task.mode}</Text>
@@ -151,35 +364,37 @@ export default function DashboardPage() {
                       style={[
                         styles.statusBadge,
                         {
-                          backgroundColor:
-                            latestRun.status === "success"
-                              ? "#10b981"
-                              : latestRun.status === "running"
-                              ? "#f59e0b"
-                              : latestRun.status === "error"
-                              ? "#ef4444"
-                              : "#6b7280",
+                          backgroundColor: getRunStatusColor(latestRun.status),
                         },
                       ]}
                     />
-                    <Text style={styles.taskStatusText}>{latestRun.status}</Text>
+                    <Text style={styles.taskStatusText}>
+                      {getRunStatusText(latestRun.status)}
+                    </Text>
+                    {latestRun.status === "running" && (
+                      <Text style={styles.runningIndicator}>
+                        {" "}
+                        (实时更新中)
+                      </Text>
+                    )}
                   </View>
                 )}
-                <Text style={styles.taskTime}>
-                  {new Date(task.createdAt).toLocaleString()}
-                </Text>
-              </View>
+                <View style={styles.taskFooter}>
+                  <Text style={styles.taskTime}>
+                    {new Date(task.createdAt).toLocaleString()}
+                  </Text>
+                  {hasRun && (
+                    <Text style={styles.viewDetail}>查看详情</Text>
+                  )}
+                </View>
+              </TouchableOpacity>
             );
           })
         )}
       </View>
 
-      {/* 同步状态 */}
-      {lastSyncTs && (
-        <Text style={styles.syncText}>
-          最后同步: {new Date(lastSyncTs).toLocaleTimeString()}
-        </Text>
-      )}
+      {/* Bottom spacing */}
+      <View style={{ height: 20 }} />
     </ScrollView>
   );
 }
@@ -210,6 +425,48 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "500",
+  },
+  qualityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: "#374151",
+  },
+  qualityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  qualityText: {
+    color: "#9ca3af",
+    fontSize: 13,
+  },
+  syncRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+  },
+  syncLabel: {
+    color: "#6b7280",
+    fontSize: 12,
+    marginRight: 4,
+  },
+  syncValue: {
+    color: "#9ca3af",
+    fontSize: 12,
+  },
+  syncErrorRow: {
+    marginTop: 8,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 6,
+    padding: 8,
+  },
+  syncErrorText: {
+    color: "#ef4444",
+    fontSize: 12,
   },
   deviceList: {
     marginTop: 12,
@@ -280,6 +537,10 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
+  taskCardTouchable: {
+    borderLeftWidth: 3,
+    borderLeftColor: "#10b981",
+  },
   taskHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -314,10 +575,25 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     fontSize: 12,
   },
+  runningIndicator: {
+    color: "#f59e0b",
+    fontSize: 11,
+    fontStyle: "italic",
+  },
+  taskFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+  },
   taskTime: {
     color: "#6b7280",
     fontSize: 11,
-    marginTop: 4,
+  },
+  viewDetail: {
+    color: "#10b981",
+    fontSize: 12,
+    fontWeight: "500",
   },
   syncText: {
     color: "#6b7280",

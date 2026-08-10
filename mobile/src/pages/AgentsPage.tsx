@@ -1,6 +1,6 @@
 /**
- * Agent 管理页面
- * 支持查看、创建、编辑、删除 Agent
+ * Agent management page
+ * View, create, edit, delete Agents with proper error handling.
  */
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -22,7 +22,6 @@ import { useDeviceStore } from "../store/deviceStore";
 import { api } from "../services/api";
 import type { AgentConfig } from "@ensemble/shared-protocol";
 
-// Agent 表单数据
 interface AgentFormData {
   name: string;
   kind: "builtin" | "local";
@@ -49,7 +48,6 @@ const defaultFormData: AgentFormData = {
   enabled: true,
 };
 
-// 可用工具列表
 const AVAILABLE_TOOLS = [
   "read_file",
   "write_file",
@@ -67,28 +65,45 @@ export default function AgentsPage() {
   const isConnected = connectionState === "connected";
 
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentConfig | null>(null);
   const [formData, setFormData] = useState<AgentFormData>(defaultFormData);
   const [providers, setProviders] = useState<any[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // 加载 Agent 列表
+  // Load agents
   const loadAgents = useCallback(async () => {
     if (!isConnected) return;
     setLoading(true);
-    const result = await api.getAgents();
-    if (result.data) {
-      setAgents(result.data);
+    setLoadError(null);
+    try {
+      const result = await api.getAgents();
+      if (result.error) {
+        setLoadError(result.error);
+      } else if (result.data) {
+        setAgents(result.data);
+      }
+    } catch (err) {
+      setLoadError(
+        err instanceof Error ? err.message : "加载 Agent 列表失败"
+      );
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [isConnected, setAgents]);
 
-  // 加载 Provider 列表
+  // Load providers
   const loadProviders = useCallback(async () => {
     if (!isConnected) return;
-    const result = await api.getProviders();
-    if (result.data) {
-      setProviders(result.data);
+    try {
+      const result = await api.getProviders();
+      if (result.data) {
+        setProviders(result.data);
+      }
+    } catch (err) {
+      console.error("[AgentsPage] Failed to load providers:", err);
     }
   }, [isConnected]);
 
@@ -97,14 +112,12 @@ export default function AgentsPage() {
     loadProviders();
   }, [loadAgents, loadProviders]);
 
-  // 打开创建模态框
   const handleCreate = () => {
     setEditingAgent(null);
     setFormData(defaultFormData);
     setShowModal(true);
   };
 
-  // 打开编辑模态框
   const handleEdit = (agent: AgentConfig) => {
     setEditingAgent(agent);
     setFormData({
@@ -122,37 +135,41 @@ export default function AgentsPage() {
     setShowModal(true);
   };
 
-  // 保存 Agent
   const handleSave = async () => {
     if (!formData.name.trim()) {
       Alert.alert("错误", "请输入 Agent 名称");
       return;
     }
 
-    setLoading(true);
-    let result;
+    setSaving(true);
+    try {
+      let result;
+      if (editingAgent) {
+        result = await api.updateAgent(editingAgent.id, formData);
+      } else {
+        result = await api.createAgent({
+          ...formData,
+          id: `agent-${Date.now()}`,
+        });
+      }
 
-    if (editingAgent) {
-      // 更新
-      result = await api.updateAgent(editingAgent.id, formData);
-    } else {
-      // 创建
-      result = await api.createAgent({
-        ...formData,
-        id: `agent-${Date.now()}`,
-      });
+      if (result.error) {
+        Alert.alert("保存失败", result.error);
+      } else {
+        setShowModal(false);
+        Alert.alert("成功", editingAgent ? "Agent 已更新" : "Agent 已创建");
+        loadAgents();
+      }
+    } catch (err) {
+      Alert.alert(
+        "保存失败",
+        err instanceof Error ? err.message : "网络错误，请检查连接"
+      );
+    } finally {
+      setSaving(false);
     }
-
-    if (result.error) {
-      Alert.alert("错误", result.error);
-    } else {
-      setShowModal(false);
-      loadAgents();
-    }
-    setLoading(false);
   };
 
-  // 删除 Agent
   const handleDelete = (agent: AgentConfig) => {
     Alert.alert("确认删除", `确定要删除 Agent "${agent.name}" 吗？`, [
       { text: "取消", style: "cancel" },
@@ -160,20 +177,28 @@ export default function AgentsPage() {
         text: "删除",
         style: "destructive",
         onPress: async () => {
-          setLoading(true);
-          const result = await api.deleteAgent(agent.id);
-          if (result.error) {
-            Alert.alert("错误", result.error);
-          } else {
-            loadAgents();
+          setDeleting(agent.id);
+          try {
+            const result = await api.deleteAgent(agent.id);
+            if (result.error) {
+              Alert.alert("删除失败", result.error);
+            } else {
+              Alert.alert("成功", "Agent 已删除");
+              loadAgents();
+            }
+          } catch (err) {
+            Alert.alert(
+              "删除失败",
+              err instanceof Error ? err.message : "网络错误，请检查连接"
+            );
+          } finally {
+            setDeleting(null);
           }
-          setLoading(false);
         },
       },
     ]);
   };
 
-  // 切换工具选择
   const toggleTool = (tool: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -183,24 +208,23 @@ export default function AgentsPage() {
     }));
   };
 
-  // Agent 类型图标
   const getAgentIcon = (kind: string) => {
     switch (kind) {
       case "builtin":
-        return "🤖";
+        return "\u{1F916}";
       case "local":
-        return "💻";
+        return "\u{1F4BB}";
       default:
-        return "🔧";
+        return "\u{1F527}";
     }
   };
 
-  // 渲染 Agent 项
   const renderAgentItem = ({ item }: { item: AgentConfig }) => (
     <TouchableOpacity
       style={styles.agentItem}
       onPress={() => handleEdit(item)}
       onLongPress={() => handleDelete(item)}
+      disabled={deleting === item.id}
     >
       <View style={styles.agentHeader}>
         <Text style={styles.agentIcon}>{getAgentIcon(item.kind)}</Text>
@@ -210,12 +234,16 @@ export default function AgentsPage() {
             {item.kind === "builtin" ? "内置 Agent" : "本地 Agent"}
           </Text>
         </View>
-        <View
-          style={[
-            styles.statusDot,
-            { backgroundColor: item.enabled ? "#10b981" : "#6b7280" },
-          ]}
-        />
+        {deleting === item.id ? (
+          <ActivityIndicator size="small" color="#ef4444" />
+        ) : (
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: item.enabled ? "#10b981" : "#6b7280" },
+            ]}
+          />
+        )}
       </View>
 
       {item.description && (
@@ -226,7 +254,9 @@ export default function AgentsPage() {
 
       <View style={styles.agentMeta}>
         <Text style={styles.agentModel}>{item.model || "未配置模型"}</Text>
-        <Text style={styles.agentProvider}>{item.providerId || "未配置提供商"}</Text>
+        <Text style={styles.agentProvider}>
+          {item.providerId || "未配置提供商"}
+        </Text>
       </View>
 
       <View style={styles.agentTools}>
@@ -242,7 +272,6 @@ export default function AgentsPage() {
     </TouchableOpacity>
   );
 
-  // 渲染表单模态框
   const renderFormModal = () => (
     <Modal
       visible={showModal}
@@ -258,15 +287,18 @@ export default function AgentsPage() {
           <Text style={styles.modalTitle}>
             {editingAgent ? "编辑 Agent" : "创建 Agent"}
           </Text>
-          <TouchableOpacity onPress={handleSave} disabled={loading}>
-            <Text style={[styles.modalSave, loading && styles.modalSaveDisabled]}>
-              保存
-            </Text>
+          <TouchableOpacity onPress={handleSave} disabled={saving}>
+            {saving ? (
+              <ActivityIndicator size="small" color="#10b981" />
+            ) : (
+              <Text style={[styles.modalSave, saving && styles.modalSaveDisabled]}>
+                保存
+              </Text>
+            )}
           </TouchableOpacity>
         </View>
 
         <ScrollView style={styles.modalContent}>
-          {/* 名称 */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>名称 *</Text>
             <TextInput
@@ -278,7 +310,6 @@ export default function AgentsPage() {
             />
           </View>
 
-          {/* 类型 */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>类型</Text>
             <View style={styles.kindSelector}>
@@ -295,7 +326,7 @@ export default function AgentsPage() {
                     formData.kind === "builtin" && styles.kindTextActive,
                   ]}
                 >
-                  🤖 内置
+                  内置
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -311,13 +342,12 @@ export default function AgentsPage() {
                     formData.kind === "local" && styles.kindTextActive,
                   ]}
                 >
-                  💻 本地
+                  本地
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* 描述 */}
           <View style={styles.formGroup}>
             <Text style={styles.formLabel}>描述</Text>
             <TextInput
@@ -333,7 +363,6 @@ export default function AgentsPage() {
             />
           </View>
 
-          {/* Provider */}
           {formData.kind === "builtin" && (
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>Provider</Text>
@@ -365,7 +394,6 @@ export default function AgentsPage() {
             </View>
           )}
 
-          {/* 模型 */}
           {formData.kind === "builtin" && (
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>模型</Text>
@@ -381,7 +409,6 @@ export default function AgentsPage() {
             </View>
           )}
 
-          {/* System Prompt */}
           {formData.kind === "builtin" && (
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>System Prompt</Text>
@@ -399,7 +426,6 @@ export default function AgentsPage() {
             </View>
           )}
 
-          {/* Temperature */}
           {formData.kind === "builtin" && (
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>
@@ -420,7 +446,6 @@ export default function AgentsPage() {
             </View>
           )}
 
-          {/* 工具 */}
           {formData.kind === "builtin" && (
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>工具</Text>
@@ -449,7 +474,6 @@ export default function AgentsPage() {
             </View>
           )}
 
-          {/* 启用状态 */}
           <View style={styles.formGroup}>
             <View style={styles.switchRow}>
               <Text style={styles.formLabel}>启用</Text>
@@ -470,7 +494,6 @@ export default function AgentsPage() {
 
   return (
     <View style={styles.container}>
-      {/* 头部 */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>Agent 管理</Text>
@@ -485,35 +508,45 @@ export default function AgentsPage() {
         )}
       </View>
 
-      {/* 加载状态 */}
       {loading && (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color="#10b981" />
+          <Text style={styles.loadingText}>加载中...</Text>
         </View>
       )}
 
-      {/* Agent 列表 */}
+      {loadError && !loading && (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{loadError}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={loadAgents}>
+            <Text style={styles.retryButtonText}>重试</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {!isConnected ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>🔌</Text>
+          <Text style={styles.emptyIcon}>{"\u{1F50C}"}</Text>
           <Text style={styles.emptyText}>未连接到桌面端</Text>
-          <Text style={styles.emptySubtext}>请先在看板页面连接到桌面端</Text>
+          <Text style={styles.emptySubtext}>请先在设置页面连接到桌面端</Text>
         </View>
-      ) : agents.length === 0 && !loading ? (
+      ) : !loadError && agents.length === 0 && !loading ? (
         <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>🤖</Text>
+          <Text style={styles.emptyIcon}>{"\u{1F916}"}</Text>
           <Text style={styles.emptyText}>暂无 Agent</Text>
           <Text style={styles.emptySubtext}>点击右上角创建第一个 Agent</Text>
         </View>
       ) : (
-        <FlatList
-          data={agents}
-          renderItem={renderAgentItem}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          refreshing={loading}
-          onRefresh={loadAgents}
-        />
+        !loadError && (
+          <FlatList
+            data={agents}
+            renderItem={renderAgentItem}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.listContent}
+            refreshing={loading}
+            onRefresh={loadAgents}
+          />
+        )
       )}
 
       {renderFormModal()}
@@ -558,6 +591,37 @@ const styles = StyleSheet.create({
   loadingContainer: {
     padding: 16,
     alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center",
+  },
+  loadingText: {
+    color: "#9ca3af",
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  errorContainer: {
+    margin: 16,
+    backgroundColor: "rgba(239, 68, 68, 0.1)",
+    borderRadius: 8,
+    padding: 16,
+    alignItems: "center",
+  },
+  errorText: {
+    color: "#ef4444",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 12,
+  },
+  retryButton: {
+    backgroundColor: "#374151",
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  retryButtonText: {
+    color: "#10b981",
+    fontSize: 14,
+    fontWeight: "500",
   },
   listContent: {
     padding: 16,
@@ -659,7 +723,6 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     textAlign: "center",
   },
-  // Modal styles
   modalContainer: {
     flex: 1,
     backgroundColor: "#111827",
