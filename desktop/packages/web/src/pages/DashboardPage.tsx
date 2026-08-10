@@ -249,13 +249,22 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
   const live = useRunStore((s) => s.live[run.id]);
   const status = live?.status ?? run.status;
   const finalResult = live?.finalResult ?? run.finalResult;
-  const jobs = Object.values(live?.jobs ?? {});
-  const agents = jobs.map((j) => j.agentName).filter((v, i, a) => a.indexOf(v) === i);
+  const jobs = useMemo(() => Object.values(live?.jobs ?? {}), [live?.jobs]);
+  const agents = useMemo(
+    () => jobs.map((j) => j.agentName).filter((v, i, a) => a.indexOf(v) === i),
+    [jobs],
+  );
 
-  const activeJobs = jobs.filter((j) => j.status === "running" || j.status === "thinking" || j.status === "starting");
-  const activeAgents = [...new Set(activeJobs.map((j) => j.agentName))];
-  const waitingInput = live?.events.some(
-    (e) => e.event.type === "status" && String(e.event.detail ?? "").includes("等待用户确认"),
+  const activeJobs = useMemo(
+    () => jobs.filter((j) => j.status === "running" || j.status === "thinking" || j.status === "starting"),
+    [jobs],
+  );
+  const activeAgents = useMemo(() => [...new Set(activeJobs.map((j) => j.agentName))], [activeJobs]);
+  const waitingInput = useMemo(
+    () => live?.events.some(
+      (e) => e.event.type === "status" && String(e.event.detail ?? "").includes("等待用户确认"),
+    ),
+    [live?.events],
   );
   const statusBorder =
     status === "success"
@@ -431,21 +440,15 @@ export default function DashboardPage() {
     [],
   );
 
-  const liveAll = useRunStore((s) => s.live);
   const columns = useMemo(() => {
-    const waiting = (r: Run) =>
-      liveAll[r.id]?.events.some(
-        (e) => e.event.type === "status" && String(e.event.detail ?? "").includes("等待用户确认"),
-      );
     return [
       { key: "queued", title: "准备中", color: "text-muted", runs: runs.filter((r) => r.status === "queued") },
-      { key: "running", title: "进行中", color: "text-primary", runs: runs.filter((r) => r.status === "running" && !waiting(r)) },
-      { key: "review", title: "审核中", color: "text-warning", runs: runs.filter((r) => r.status === "running" && waiting(r)) },
+      { key: "running", title: "进行中", color: "text-primary", runs: runs.filter((r) => r.status === "running") },
       { key: "done", title: "已完成", color: "text-success", runs: runs.filter((r) => ["success", "error", "cancelled"].includes(r.status)) },
     ];
-  }, [runs, liveAll]);
+  }, [runs]);
 
-  const active = columns[1].runs.length + columns[2].runs.length;
+  const active = columns[1].runs.length;
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -483,12 +486,12 @@ export default function DashboardPage() {
         </Card>
         <Card className="p-4">
           <div className="flex items-center gap-1 text-xs text-muted"><CheckCircle2 className="h-3 w-3" /> 已完成</div>
-          <div className="mt-1 text-2xl font-bold text-success">{columns[3].runs.length}</div>
+          <div className="mt-1 text-2xl font-bold text-success">{columns[2].runs.length}</div>
         </Card>
       </div>
 
       {/* Kanban columns */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         {columns.map((col) => (
           <div key={col.key} className="min-h-[40vh]">
             <div className="mb-2 flex items-center gap-2 px-1">
@@ -498,7 +501,7 @@ export default function DashboardPage() {
             <div className="space-y-2.5">
               {col.runs.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border p-6 text-center text-xs text-muted">
-                  {col.key === "queued" ? "暂无准备中的任务" : col.key === "review" ? "暂无待审核的任务" : "暂无"}
+                  {col.key === "queued" ? "暂无准备中的任务" : "暂无"}
                 </div>
               ) : (
                 col.runs.map((r) => (

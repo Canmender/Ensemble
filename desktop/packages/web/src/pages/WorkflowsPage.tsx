@@ -265,7 +265,7 @@ function AgentNode({ data }: { data: any }) {
 /** 协作画布 */
 function CollaborationCanvas({ runId }: { runId: string }) {
   const live = useRunStore((s) => s.live[runId]);
-  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
 
   const jobs = useMemo(() => Object.values(live?.jobs ?? {}), [live?.jobs]);
   const events = useMemo(() => (live?.events ?? []).slice().sort((a, b) => a.seq - b.seq), [live?.events]);
@@ -301,14 +301,12 @@ function CollaborationCanvas({ runId }: { runId: string }) {
         data: {
           job,
           events: jobEvents,
-          isExpanded: expandedNodes.has(job.id),
+          isExpanded: !!expandedNodes[job.id],
           onToggle: () => {
-            setExpandedNodes((prev) => {
-              const next = new Set(prev);
-              if (next.has(job.id)) next.delete(job.id);
-              else next.add(job.id);
-              return next;
-            });
+            setExpandedNodes((prev) => ({
+              ...prev,
+              [job.id]: !prev[job.id],
+            }));
           },
         },
         style: { padding: 0, width: nodeWidth },

@@ -10,6 +10,8 @@
 
 import type { AgentTool, ToolContext } from "./types";
 import { logger } from "../util/logger";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 
 // ========== 类型定义 ==========
 
@@ -200,7 +202,9 @@ export function cosineSimilarity(a: number[], b: number[]): number {
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  const denominator = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denominator === 0) return 0;
+  return dotProduct / denominator;
 }
 
 // ========== BM25 检索 ==========
@@ -211,13 +215,50 @@ interface BM25Index {
   avgDl: number;
 }
 
+/** Detect whether a character is a CJK unified ideograph. */
+function isCJK(ch: string): boolean {
+  const code = ch.charCodeAt(0);
+  return code >= 0x4e00 && code <= 0x9fff;
+}
+
 function tokenize(text: string): string[] {
-  // 简单分词：中文按字，英文按单词
-  return text
-    .toLowerCase()
-    .replace(/[^\w一-鿿]/g, " ")
-    .split(/\s+/)
-    .filter((t) => t.length > 0);
+  // Phase 1: split into segments — CJK runs vs non-CJK (Latin/digits/etc.)
+  const tokens: string[] = [];
+  let cjkBuf = "";
+  let latinBuf = "";
+
+  const flushCJK = () => {
+    if (!cjkBuf) return;
+    // Emit individual characters as unigrams
+    for (const ch of cjkBuf) tokens.push(ch);
+    // Emit bigrams for semantic cohesion (e.g. "机器学习" → "机器","器学","学习")
+    if (cjkBuf.length >= 2) {
+      for (let i = 0; i < cjkBuf.length - 1; i++) {
+        tokens.push(cjkBuf[i] + cjkBuf[i + 1]);
+      }
+    }
+    cjkBuf = "";
+  };
+
+  const flushLatin = () => {
+    if (!latinBuf) return;
+    tokens.push(...latinBuf.toLowerCase().split(/\s+/).filter((t) => t.length > 0));
+    latinBuf = "";
+  };
+
+  for (const ch of text) {
+    if (isCJK(ch)) {
+      flushLatin();
+      cjkBuf += ch;
+    } else {
+      flushCJK();
+      latinBuf += ch;
+    }
+  }
+  flushCJK();
+  flushLatin();
+
+  return tokens;
 }
 
 function buildBM25Index(documents: Array<{ id: string; content: string }>): BM25Index {
@@ -297,6 +338,8 @@ export class RAGStore {
   private chunks: Map<string, Chunk> = new Map();
   private bm25Index: BM25Index | null = null;
   private config: RAGConfig;
+  private persistTimer: ReturnType<typeof setInterval> | null = null;
+  private dirty = false;
 
   constructor(config: RAGConfig) {
     this.config = {
@@ -305,6 +348,18 @@ export class RAGStore {
       topK: 5,
       ...config,
     };
+
+    // Attempt to load persisted data on startup
+    if (this.config.storagePath) {
+      this.load();
+      // Persist periodically (every 60 s) if there are changes
+      this.persistTimer = setInterval(() => {
+        if (this.dirty) {
+          this.persist();
+          this.dirty = false;
+        }
+      }, 60_000);
+    }
   }
 
   /** 添加文档并分块 */
@@ -337,6 +392,7 @@ export class RAGStore {
     this.rebuildBM25Index();
 
     logger.info(`RAG: added document ${doc.id}, ${chunks.length} chunks created`);
+    this.dirty = true;
   }
 
   /** 批量添加文档 */
@@ -356,6 +412,57 @@ export class RAGStore {
       }
     }
     this.rebuildBM25Index();
+    this.dirty = true;
+  }
+
+  // ========== 持久化 ==========
+
+  /** Persist documents and chunks to the storage path as JSON. */
+  persist(): void {
+    const storagePath = this.config.storagePath;
+    if (!storagePath) return;
+
+    try {
+      const dir = dirname(storagePath);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+
+      const payload = {
+        documents: Array.from(this.documents.entries()),
+        chunks: Array.from(this.chunks.entries()),
+      };
+      writeFileSync(storagePath, JSON.stringify(payload), "utf8");
+      this.dirty = false;
+      logger.info(`RAG: persisted ${this.documents.size} documents, ${this.chunks.size} chunks`);
+    } catch (err) {
+      logger.error("RAG: persist failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  /** Load documents and chunks from the storage path. */
+  load(): void {
+    const storagePath = this.config.storagePath;
+    if (!storagePath || !existsSync(storagePath)) return;
+
+    try {
+      const raw = JSON.parse(readFileSync(storagePath, "utf8"));
+      this.documents = new Map(raw.documents);
+      this.chunks = new Map(raw.chunks);
+      this.rebuildBM25Index();
+      logger.info(`RAG: loaded ${this.documents.size} documents, ${this.chunks.size} chunks from disk`);
+    } catch (err) {
+      logger.error("RAG: load failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  /** Flush pending changes and stop the periodic timer. Call on shutdown. */
+  shutdown(): void {
+    if (this.persistTimer) {
+      clearInterval(this.persistTimer);
+      this.persistTimer = null;
+    }
+    if (this.dirty) {
+      this.persist();
+    }
   }
 
   /** 混合检索：向量 + BM25 */

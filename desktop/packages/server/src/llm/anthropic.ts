@@ -7,7 +7,8 @@ import type {
   LLMToolCall,
   ProviderRuntimeConfig,
 } from "./types";
-import { parseSse, throwOnHttpError } from "./sse";
+import { parseSse } from "./sse";
+import { fetchWithRetry } from "./retry";
 import type { Usage } from "@ensemble/shared";
 
 const ANTHROPIC_DEFAULT_MODELS = [
@@ -61,13 +62,12 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async chat(req: LLMRequest): Promise<LLMResult> {
-    const res = await fetch(`${this.baseUrl}/v1/messages`, {
+    const res = await fetchWithRetry(`${this.baseUrl}/v1/messages`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(this.buildBody(req, false)),
       signal: req.signal,
-    });
-    await throwOnHttpError(res, "anthropic");
+    }, "anthropic");
     const data = (await res.json()) as any;
 
     const text = (data.content ?? [])
@@ -88,13 +88,12 @@ export class AnthropicProvider implements LLMProvider {
   }
 
   async *stream(req: LLMRequest): AsyncGenerator<LLMStreamEvent> {
-    const res = await fetch(`${this.baseUrl}/v1/messages`, {
+    const res = await fetchWithRetry(`${this.baseUrl}/v1/messages`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(this.buildBody(req, true)),
       signal: req.signal,
-    });
-    await throwOnHttpError(res, "anthropic");
+    }, "anthropic");
 
     // tool call 累积：index → { id, name, inputJson }
     const toolBuf = new Map<number, { id: string; name: string; inputJson: string }>();

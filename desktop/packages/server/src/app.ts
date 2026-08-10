@@ -21,9 +21,54 @@ export interface CreateAppOptions {
   staticDir?: string;
 }
 
+/** 简单的内存速率限制中间件（仅限写入端点） */
+function createWriteRateLimiter(windowMs: number = 60_000, max: number = 60) {
+  const store = new Map<string, { count: number; resetAt: number }>();
+
+  // 定期清理过期条目
+  const timer = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of store.entries()) {
+      if (now >= entry.resetAt) store.delete(key);
+    }
+  }, 5 * 60_000);
+
+  // 允许 Node 在进程退出时清理定时器（避免测试泄漏）
+  if (timer.unref) timer.unref();
+
+  const middleware = (req: Request, res: Response, next: NextFunction) => {
+    const ip = req.ip || req.socket?.remoteAddress || "unknown";
+    const now = Date.now();
+    let entry = store.get(ip);
+
+    if (!entry || now >= entry.resetAt) {
+      entry = { count: 0, resetAt: now + windowMs };
+      store.set(ip, entry);
+    }
+
+    entry.count++;
+
+    if (entry.count > max) {
+      res.status(429).json({
+        error: { code: "rate_limited", message: "请求过于频繁，请稍后再试" },
+      });
+      return;
+    }
+
+    next();
+  };
+
+  return middleware;
+}
+
 export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express.Express {
   const app = express();
   app.use(express.json({ limit: "2mb" }));
+
+  // 写入端点速率限制（每分钟最多 60 次请求）
+  const writeRateLimiter = createWriteRateLimiter();
+  app.use("/api/tasks", writeRateLimiter);
+  app.use("/api/chat", writeRateLimiter);
 
   app.use("/api/agents", agentsRouter(ctx));
   app.use("/api/tasks", tasksRouter(ctx));

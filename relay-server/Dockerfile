@@ -14,7 +14,7 @@ COPY --from=builder /app/package.json ./
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:${PORT:-3001}/health || exit 1
+  CMD curl -f http://localhost:${PORT:-8888}/health || exit 1
 
-EXPOSE ${PORT:-3001}
+EXPOSE ${PORT:-8888}
 CMD ["node", "dist/index.js"]
