@@ -341,7 +341,14 @@ export class OrchestrationEngine {
   private withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
     const prev = this.agentChains.get(agentId) ?? Promise.resolve();
     const next = prev.then(fn, fn);
-    this.agentChains.set(agentId, next.catch(() => {}));
+    // Store the raw promise so errors propagate through the chain to callers.
+    // `.then(fn, fn)` already handles the rejection case (runs fn regardless),
+    // so a rejecting `next` does not break chain serialisation.
+    // Attach a fire-and-forget `.catch` to prevent Node's unhandled-rejection
+    // warning — the *result* of that catch is discarded; `next` itself still
+    // carries the rejection to the awaiting caller.
+    next.catch(() => { /* suppress unhandled-rejection only */ });
+    this.agentChains.set(agentId, next);
     return next;
   }
 }

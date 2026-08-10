@@ -23,6 +23,60 @@ const PORT = parseInt(process.env.PORT || "8888", 10);
 const OFFLINE_MESSAGE_EXPIRY = 24 * 60 * 60 * 1000; // 24 小时
 const MAX_OFFLINE_MESSAGES_PER_DEVICE = 100; // 每个设备最多暂存消息数
 
+// Rate limiting 配置
+const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW || String(15 * 60 * 1000), 10); // 默认 15 分钟
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX || "100", 10); // 默认 100 次
+
+// ==================== 速率限制 ====================
+
+interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+/** 简单的内存速率限制中间件 */
+function rateLimiter(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  const now = Date.now();
+
+  let entry = rateLimitStore.get(ip);
+
+  // 首次请求或窗口已过期，重置计数
+  if (!entry || now >= entry.resetAt) {
+    entry = { count: 0, resetAt: now + RATE_LIMIT_WINDOW };
+    rateLimitStore.set(ip, entry);
+  }
+
+  entry.count++;
+
+  // 设置速率限制响应头
+  res.setHeader("RateLimit-Limit", RATE_LIMIT_MAX);
+  res.setHeader("RateLimit-Remaining", Math.max(0, RATE_LIMIT_MAX - entry.count));
+  res.setHeader("RateLimit-Reset", Math.ceil(entry.resetAt / 1000));
+
+  if (entry.count > RATE_LIMIT_MAX) {
+    res.status(429).json({
+      error: "请求过于频繁，请稍后再试",
+      retryAfter: Math.ceil((entry.resetAt - now) / 1000),
+    });
+    return;
+  }
+
+  next();
+}
+
+// 每分钟清理过期的速率限制条目
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitStore.entries()) {
+    if (now >= entry.resetAt) {
+      rateLimitStore.delete(ip);
+    }
+  }
+}, 60 * 1000);
+
 // ==================== 类型定义 ====================
 
 interface DeviceInfo {
@@ -58,6 +112,7 @@ const socketToDevice = new Map<string, string>();
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(rateLimiter);
 
 // 健康检查
 app.get("/health", (req, res) => {

@@ -7,7 +7,7 @@
  * 单聊消息：本地 state 管理（实时对话，不持久化）。
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain
 } from "lucide-react";
@@ -183,17 +183,20 @@ export default function ChatPage() {
   const groupLive = useRunStore((s) => activeContact?.runId ? s.live[activeContact.runId] : undefined);
   const groupMessages = groupLive?.messages ?? [];
 
-  // 当前显示的消息（单聊用本地 state，群聊用 store）
-  const messages = activeContact?.type === "group"
-    ? groupMessages.map((m, i) => ({
+  // 当前显示的消息（单聊用本地 state，群聊用 store）—— memoized 避免每次渲染重新计算
+  const messages = useMemo(() => {
+    if (activeContact?.type === "group") {
+      return groupMessages.map((m, i) => ({
         id: `group-${i}`,
         contactId: activeContact.id,
         content: m.content,
         sender: m.agentId === "user" ? "user" as const : "assistant" as const,
         agentId: m.agentId,
         timestamp: Date.now(),
-      }))
-    : singleMessages[activeContact?.id ?? ""] ?? [];
+      }));
+    }
+    return singleMessages[activeContact?.id ?? ""] ?? [];
+  }, [activeContact?.type, activeContact?.id, groupMessages, singleMessages]);
 
   // 加载联系人
   useEffect(() => {

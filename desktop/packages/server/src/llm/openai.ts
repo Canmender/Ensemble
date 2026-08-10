@@ -7,7 +7,8 @@ import type {
   LLMToolCall,
   ProviderRuntimeConfig,
 } from "./types";
-import { parseSse, throwOnHttpError } from "./sse";
+import { parseSse } from "./sse";
+import { fetchWithRetry } from "./retry";
 import type { Usage } from "@ensemble/shared";
 
 /**
@@ -66,13 +67,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   async chat(req: LLMRequest): Promise<LLMResult> {
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+    const res = await fetchWithRetry(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(this.buildBody(req, false)),
       signal: req.signal,
-    });
-    await throwOnHttpError(res, "openai");
+    }, "openai");
     const data = (await res.json()) as any;
     const choice = data.choices?.[0];
     const msg = choice?.message;
@@ -90,13 +90,12 @@ export class OpenAICompatibleProvider implements LLMProvider {
   }
 
   async *stream(req: LLMRequest): AsyncGenerator<LLMStreamEvent> {
-    const res = await fetch(`${this.baseUrl}/chat/completions`, {
+    const res = await fetchWithRetry(`${this.baseUrl}/chat/completions`, {
       method: "POST",
       headers: this.headers(),
       body: JSON.stringify(this.buildBody(req, true)),
       signal: req.signal,
-    });
-    await throwOnHttpError(res, "openai");
+    }, "openai");
 
     // tool call 累积：index → { id, name, argsJson }
     const toolBuf = new Map<number, { id: string; name: string; argsJson: string }>();
