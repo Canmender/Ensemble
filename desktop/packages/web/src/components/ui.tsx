@@ -152,13 +152,13 @@ export function Modal({
       aria-label={title}
     >
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in anim-dur-200"
         onClick={onClose}
       />
       <div
         className={cls(
           "relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl",
-          "animate-in fade-in zoom-in-95 duration-200",
+          "animate-in fade-in zoom-in-95 anim-dur-200",
           wide ? "max-w-2xl" : "max-w-lg",
         )}
       >
