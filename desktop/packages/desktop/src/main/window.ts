@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, app, shell } from "electron";
+import { BrowserWindow, dialog, ipcMain, app, shell, session } from "electron";
 import { join } from "node:path";
 import { IPC } from "../shared/ipc";
 
@@ -21,6 +21,42 @@ export function createWindow(loadUrl: string): BrowserWindow {
 
   // 后台标签页降频：窗口最小化/隐藏时降低渲染帧率，节省 CPU/GPU
   win.webContents.setBackgroundThrottling(true);
+
+  // ── 安全加固 ──────────────────────────────────────────────────────
+
+  // 1. Content-Security-Policy — 限制资源来源
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        "Content-Security-Policy": [
+          "default-src 'self'; " +
+            "script-src 'self'; " +
+            "style-src 'self' 'unsafe-inline'; " +
+            "connect-src 'self' ws://127.0.0.1:*; " +
+            "img-src 'self' data:; " +
+            "object-src 'none'; " +
+            "base-uri 'self'",
+        ],
+      },
+    });
+  });
+
+  // 2. will-navigate 守卫 — 阻止页面导航到外部地址
+  win.webContents.on("will-navigate", (event, url) => {
+    const parsed = new URL(url);
+    const isLocal =
+      parsed.protocol === "file:" ||
+      (parsed.hostname === "127.0.0.1" && parsed.port !== "");
+    if (!isLocal) {
+      event.preventDefault();
+    }
+  });
+
+  // 3. 权限请求拦截 — 拒绝不必要的浏览器权限
+  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
+    callback(false);
+  });
 
   // 外部链接用系统浏览器打开（防止应用内跳走）
   win.webContents.setWindowOpenHandler(({ url }) => {

@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import type { AgentTool, ToolContext } from "./types";
-import { checkCommandAllowed } from "./security";
+import { checkCommandAllowed, hasShellMetacharacters } from "./security";
 
 const OUTPUT_LIMIT = 8000;
 
@@ -50,6 +50,13 @@ export async function runCommand(
   signal?: AbortSignal,
   timeoutMs = 60_000,
 ): Promise<string> {
+  // Defense-in-depth: re-validate even if checkCommandAllowed already ran,
+  // because runCommand is exported and may be called from other paths.
+  const meta = hasShellMetacharacters(command);
+  if (meta) {
+    return `[blocked: command contains shell metacharacter: ${meta}]`;
+  }
+
   return new Promise((resolvePromise) => {
     const child = spawn(command, {
       cwd,

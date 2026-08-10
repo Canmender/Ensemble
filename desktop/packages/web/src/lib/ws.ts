@@ -33,11 +33,30 @@ class WsClient {
   private reconnectDelay = 1000;
   private reconnectTimer?: number;
   private localSeq = new Map<string, number>();
+  private wsToken?: string;
 
-  connect(): void {
+  /** Fetch the session token from the server, then connect the WebSocket. */
+  async connect(): Promise<void> {
     if (this.ws?.readyState === WebSocket.OPEN) return;
+
+    // Fetch session token if we don't have one yet
+    if (!this.wsToken) {
+      try {
+        const res = await fetch("/api/ws-token");
+        if (res.ok) {
+          const data = await res.json();
+          this.wsToken = data.token;
+        } else {
+          console.warn("[ws] failed to fetch ws-token, status:", res.status);
+        }
+      } catch (err) {
+        console.warn("[ws] failed to fetch ws-token:", err);
+      }
+    }
+
     const proto = location.protocol === "https:" ? "wss" : "ws";
-    const ws = new WebSocket(`${proto}://${location.host}/ws`);
+    const tokenParam = this.wsToken ? `?token=${this.wsToken}` : "";
+    const ws = new WebSocket(`${proto}://${location.host}/ws${tokenParam}`);
     this.ws = ws;
 
     ws.onopen = () => {
@@ -56,7 +75,11 @@ class WsClient {
       this.apply(env);
     };
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      // Clear token on abnormal close so it gets re-fetched (handles server restarts)
+      if (e.code !== 1000) {
+        this.wsToken = undefined;
+      }
       this.scheduleReconnect();
     };
 
@@ -160,7 +183,7 @@ class WsClient {
     const delay = this.reconnectDelay + jitter;
     this.reconnectTimer = window.setTimeout(() => {
       this.reconnectTimer = undefined;
-      this.connect();
+      void this.connect();
     }, delay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
   }
