@@ -2,6 +2,9 @@
  * IM 即时通讯页面
  * - 左侧：联系人列表（智能体 + 我的设备 + 群聊）
  * - 右侧：聊天窗口
+ *
+ * 群聊消息持久化：关联后端 chat 模式 Run，消息存储在 useRunStore + SQLite。
+ * 单聊消息：本地 state 管理（实时对话，不持久化）。
  */
 
 import { useEffect, useRef, useState } from "react";
@@ -11,11 +14,21 @@ import {
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
-import type { Agent, Run } from "../types";
-import { Button, Card, Input, Label, Modal, Spinner, Textarea, cls } from "../components/ui";
+import type { Agent } from "../types";
+import { Button, Card, Input, Label, Modal, Spinner, cls } from "../components/ui";
 
 /** 联系人类型 */
 type ContactType = "agent" | "device" | "group";
+
+/** 聊天消息 */
+interface ChatMessage {
+  id: string;
+  contactId: string;
+  content: string;
+  sender: "user" | "assistant";
+  agentId?: string; // 群聊时标识是哪个智能体
+  timestamp: number;
+}
 
 /** 联系人 */
 interface Contact {
@@ -27,15 +40,10 @@ interface Contact {
   lastMessage?: string;
   lastTime?: string;
   unread?: number;
-}
-
-/** 聊天消息 */
-interface ChatMessage {
-  id: string;
-  contactId: string;
-  content: string;
-  sender: "user" | "assistant";
-  timestamp: number;
+  /** 群聊关联的 Run ID（用于消息持久化和 WebSocket 订阅） */
+  runId?: string;
+  /** 群聊参与者 agent ID 列表 */
+  participantIds?: string[];
 }
 
 /** 创建群聊对话框 */
@@ -43,6 +51,7 @@ function CreateGroupDialog({ onClose, onCreated }: { onClose: () => void; onCrea
   const [name, setName] = useState("");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     void api.get<Agent[]>("/agents").then(setAgents);
@@ -52,15 +61,34 @@ function CreateGroupDialog({ onClose, onCreated }: { onClose: () => void; onCrea
     setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   }
 
-  function create() {
+  async function create() {
     if (!name.trim() || selected.length < 2) return;
-    onCreated({
-      id: `group-${Date.now()}`,
-      type: "group",
-      name,
-      status: "online",
-    });
-    onClose();
+    setCreating(true);
+    try {
+      // 创建 chat 模式的 Run
+      const run = await api.post<any>("/tasks", {
+        title: name,
+        input: {
+          mode: "chat",
+          prompt: `群聊「${name}」已创建，请开始讨论。`,
+          participantIds: selected,
+          maxRounds: 10,
+        },
+      });
+      onCreated({
+        id: `group-${Date.now()}`,
+        type: "group",
+        name,
+        status: "online",
+        runId: run.id,
+        participantIds: selected,
+      });
+      onClose();
+    } catch (e) {
+      console.error("创建群聊失败:", e);
+    } finally {
+      setCreating(false);
+    }
   }
 
   return (
@@ -90,7 +118,9 @@ function CreateGroupDialog({ onClose, onCreated }: { onClose: () => void; onCrea
       </div>
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onClose}>取消</Button>
-        <Button onClick={create} disabled={!name.trim() || selected.length < 2}>创建群聊</Button>
+        <Button onClick={create} disabled={!name.trim() || selected.length < 2 || creating}>
+          {creating ? <Spinner /> : "创建群聊"}
+        </Button>
       </div>
     </div>
   );
@@ -142,16 +172,65 @@ function ContactItem({ contact, active, onClick }: { contact: Contact; active: b
 export default function ChatPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // 单聊消息（本地管理）
+  const [singleMessages, setSingleMessages] = useState<Record<string, ChatMessage[]>>({});
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // 从 Zustand store 读取群聊消息
+  const groupLive = useRunStore((s) => activeContact?.runId ? s.live[activeContact.runId] : undefined);
+  const groupMessages = groupLive?.messages ?? [];
+
+  // 当前显示的消息（单聊用本地 state，群聊用 store）
+  const messages = activeContact?.type === "group"
+    ? groupMessages.map((m, i) => ({
+        id: `group-${i}`,
+        contactId: activeContact.id,
+        content: m.content,
+        sender: m.agentId === "user" ? "user" as const : "assistant" as const,
+        agentId: m.agentId,
+        timestamp: Date.now(),
+      }))
+    : singleMessages[activeContact?.id ?? ""] ?? [];
+
   // 加载联系人
   useEffect(() => {
     void loadContacts();
   }, []);
+
+  // 滚动到底部
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
+
+  // 切换群聊联系人时：订阅 WebSocket + 加载历史消息
+  useEffect(() => {
+    if (!activeContact?.runId) return;
+    const runId = activeContact.runId;
+
+    // 订阅 WebSocket
+    wsClient.subscribe(runId);
+
+    // 加载历史消息（如果 store 中还没有）
+    const store = useRunStore.getState();
+    const existing = store.live[runId];
+    if (!existing || existing.messages.length === 0) {
+      void api.get<any>(`/runs/${runId}`).then((d) => {
+        store.getOrCreate(runId);
+        store.setStatus(runId, d.run.status);
+        if (d.run.finalResult) store.setFinal(runId, d.run.finalResult, d.run.error);
+        for (const m of d.chatMessages ?? []) {
+          store.appendMessage(runId, { jobId: m.jobId, agentId: m.agentId, content: m.content });
+        }
+      });
+    }
+
+    return () => {
+      wsClient.unsubscribe(runId);
+    };
+  }, [activeContact?.runId]);
 
   async function loadContacts() {
     const agents = await api.get<Agent[]>("/agents");
@@ -170,43 +249,67 @@ export default function ChatPage() {
     setContacts([...deviceContacts, ...agentContacts]);
   }
 
-  // 滚动到底部
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
   // 发送消息
   async function sendMessage() {
     if (!inputText.trim() || !activeContact || sending) return;
+    const text = inputText;
+    setInputText("");
+    setSending(true);
 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       contactId: activeContact.id,
-      content: inputText,
+      content: text,
       sender: "user",
       timestamp: Date.now(),
     };
 
-    setMessages((prev) => [...prev, userMsg]);
-    setInputText("");
-    setSending(true);
-
     try {
-      // 调用 API 获取智能体回复
-      const response = await api.post<{ reply: string }>("/chat", {
-        agentId: activeContact.id,
-        message: inputText,
-      });
+      if (activeContact.type === "group" && activeContact.runId) {
+        // 群聊：通过 WS steer 发送，触发后端继续对话
+        // 同时本地立即显示用户消息
+        const store = useRunStore.getState();
+        store.appendMessage(activeContact.runId, {
+          agentId: "user",
+          content: text,
+        });
+        wsClient.steer(activeContact.runId, text);
+      } else if (activeContact.type === "agent") {
+        // 单聊：立即显示用户消息
+        setSingleMessages((prev) => ({
+          ...prev,
+          [activeContact.id]: [...(prev[activeContact.id] ?? []), userMsg],
+        }));
 
-      if (response?.reply) {
-        const agentMsg: ChatMessage = {
-          id: `msg-${Date.now()}-agent`,
-          contactId: activeContact.id,
-          content: response.reply,
-          sender: "assistant",
-          timestamp: Date.now(),
-        };
-        setMessages((prev) => [...prev, agentMsg]);
+        // 调用 API 获取智能体回复
+        const response = await api.post<{ reply: string; agentId: string }>("/chat", {
+          agentId: activeContact.id,
+          message: text,
+        });
+
+        if (response?.reply) {
+          const agentMsg: ChatMessage = {
+            id: `msg-${Date.now()}-agent`,
+            contactId: activeContact.id,
+            content: response.reply,
+            sender: "assistant",
+            agentId: response.agentId,
+            timestamp: Date.now(),
+          };
+          setSingleMessages((prev) => ({
+            ...prev,
+            [activeContact.id]: [...(prev[activeContact.id] ?? []), agentMsg],
+          }));
+
+          // 更新联系人最后消息
+          setContacts((prev) =>
+            prev.map((c) =>
+              c.id === activeContact.id
+                ? { ...c, lastMessage: response.reply.slice(0, 50), lastTime: new Date().toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" }) }
+                : c
+            )
+          );
+        }
       }
     } catch (e) {
       console.error("发送失败:", e);
@@ -214,9 +317,6 @@ export default function ChatPage() {
       setSending(false);
     }
   }
-
-  // 当前联系人的消息
-  const activeMessages = activeContact ? messages.filter((m) => m.contactId === activeContact.id) : [];
 
   // 联系人分组
   const deviceContacts = contacts.filter((c) => c.type === "device");
@@ -312,13 +412,16 @@ export default function ChatPage() {
                 <div className="text-sm font-semibold text-fg">{activeContact.name}</div>
                 <div className="text-xs text-muted">
                   {activeContact.status === "online" ? "在线" : activeContact.status === "busy" ? "忙碌" : "离线"}
+                  {activeContact.type === "group" && activeContact.participantIds && (
+                    <span> · {activeContact.participantIds.length} 位参与者</span>
+                  )}
                 </div>
               </div>
             </div>
 
             {/* 消息列表 */}
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-              {activeMessages.length === 0 ? (
+              {messages.length === 0 ? (
                 <div className="flex h-full items-center justify-center">
                   <div className="text-center">
                     <MessageSquare className="mx-auto h-12 w-12 text-muted/30" />
@@ -326,7 +429,7 @@ export default function ChatPage() {
                   </div>
                 </div>
               ) : (
-                activeMessages.map((msg) => (
+                messages.map((msg) => (
                   <div
                     key={msg.id}
                     className={cls(
@@ -342,7 +445,10 @@ export default function ChatPage() {
                           : "bg-muted/20 text-fg rounded-bl-md",
                       )}
                     >
-                      <div className="text-sm">{msg.content}</div>
+                      {activeContact.type === "group" && msg.agentId && msg.agentId !== "user" && (
+                        <div className="mb-1 text-[11px] font-semibold text-violet-600">@{msg.agentId}</div>
+                      )}
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
                       <div className={cls(
                         "mt-1 text-[10px]",
                         msg.sender === "user" ? "text-primary-fg/70" : "text-muted",
@@ -352,6 +458,12 @@ export default function ChatPage() {
                     </div>
                   </div>
                 ))
+              )}
+              {/* 群聊运行中提示 */}
+              {activeContact.type === "group" && groupLive?.status === "running" && (
+                <div className="flex items-center gap-2 text-muted">
+                  <Spinner label="Agent 们正在对话…" />
+                </div>
               )}
               <div ref={messagesEndRef} />
             </div>

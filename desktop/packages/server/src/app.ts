@@ -14,6 +14,7 @@ import { memoryRouter } from "./api/routes/memory";
 import { memoryPoolRouter } from "./api/routes/memory-pool";
 import { discoveryRouter } from "./api/routes/discovery";
 import { relayRouter } from "./api/routes/relay";
+import { chatRouter } from "./api/routes/chat";
 
 export interface CreateAppOptions {
   /** 托管前端静态资源目录（桌面 prod 同源加载） */
@@ -37,6 +38,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/memory-pool", memoryPoolRouter(ctx));
   app.use("/api/discovery", discoveryRouter(ctx));
   app.use("/api/relay", relayRouter(ctx));
+  app.use("/api/chat", chatRouter(ctx));
 
   // 托管前端静态资源 + SPA fallback（仅非 /api /ws 路径）
   const staticDir = opts.staticDir;
