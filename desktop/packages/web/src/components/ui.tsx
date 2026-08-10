@@ -198,3 +198,72 @@ export function EmptyState({
     </div>
   );
 }
+
+// ---------- ConfirmDialog ----------
+export function ConfirmDialog({
+  open,
+  onClose,
+  onConfirm,
+  title,
+  message,
+  confirmLabel = "确认",
+  danger = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  danger?: boolean;
+}) {
+  return (
+    <Modal open={open} onClose={onClose} title={title}>
+      <p className="mb-6 text-sm text-muted">{message}</p>
+      <div className="flex justify-end gap-3">
+        <Button variant="secondary" onClick={onClose}>
+          取消
+        </Button>
+        <Button
+          variant={danger ? "danger" : "primary"}
+          onClick={() => {
+            onConfirm();
+            onClose();
+          }}
+        >
+          {confirmLabel}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------- Toast (简易版) ----------
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+export function showToast(message: string, type: "success" | "error" = "success") {
+  // 移除已有 toast
+  document.querySelectorAll(".ensemble-toast").forEach((el) => el.remove());
+
+  const toast = document.createElement("div");
+  toast.className = "ensemble-toast";
+  toast.style.cssText = `
+    position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+    padding: 12px 20px; border-radius: 12px;
+    font-size: 14px; font-weight: 500;
+    animation: fadeIn 0.2s ease;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    ${type === "success"
+      ? "background: #10b981; color: white;"
+      : "background: #ef4444; color: white;"
+    }
+  `;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.style.opacity = "0";
+    toast.style.transition = "opacity 0.3s";
+    setTimeout(() => toast.remove(), 300);
+  }, 3000);
+}
