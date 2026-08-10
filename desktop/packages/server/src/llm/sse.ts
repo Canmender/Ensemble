@@ -1,12 +1,18 @@
 /**
  * 极简 SSE 解析器：从 fetch Response 的 body reader 按 \n\n 分帧，产出 { event?, data }。
  * 兼容 Anthropic / OpenAI 两种流式格式的 data 行。
+ *
+ * 性能优化：
+ * - 缓冲区增长保护：防止畸形流导致内存溢出
+ * - AbortSignal 联动：中断时立即取消 reader
  */
 
 export interface SseFrame {
   event?: string;
   data: string;
 }
+
+const MAX_BUFFER_SIZE = 10 * 1024 * 1024; // 10MB 缓冲区上限
 
 export async function* parseSse(
   body: ReadableStream<Uint8Array> | null,
@@ -17,12 +23,32 @@ export async function* parseSse(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  // AbortSignal 联动：中断时立即取消 reader
+  if (signal) {
+    signal.addEventListener("abort", () => {
+      reader.cancel().catch(() => {});
+    }, { once: true });
+  }
+
   try {
     for (;;) {
       if (signal?.aborted) throw new AbortError("stream aborted");
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+
+      // 缓冲区增长保护
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        // 尝试找到最后一个完整的帧边界
+        const lastFrameEnd = buffer.lastIndexOf("\n\n");
+        if (lastFrameEnd > 0) {
+          // 保留最后一个不完整帧，丢弃之前的
+          buffer = buffer.slice(lastFrameEnd + 2);
+        } else {
+          // 没有完整帧，清空缓冲区（畸形流）
+          buffer = "";
+        }
+      }
 
       let idx: number;
       while ((idx = buffer.indexOf("\n\n")) !== -1) {

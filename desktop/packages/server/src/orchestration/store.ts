@@ -18,6 +18,10 @@ import { logger } from "../util/logger";
  * 避免每次操作重复解析 SQL。
  */
 export class Store {
+  // 内存 seq 计数器（避免每次 appendRunEvent 查询 SELECT MAX）
+  private eventSeqCounters = new Map<string, number>();
+  private jobSeqCounters = new Map<string, number>();
+
   // 预编译语句（构造时 prepare，生命周期内复用）
   private stmts: {
     // Tasks
@@ -154,6 +158,11 @@ export class Store {
       job.id, job.runId, job.seq, job.agentId, job.agentName, job.prompt,
       job.status, job.parentJobId ?? null, job.startedAt ?? new Date().toISOString(),
     );
+    // 更新 job seq 计数器
+    const currentMax = this.jobSeqCounters.get(job.runId) ?? 0;
+    if (job.seq > currentMax) {
+      this.jobSeqCounters.set(job.runId, job.seq);
+    }
   }
 
   updateJob(id: string, patch: Partial<Job>): void {
@@ -200,14 +209,28 @@ export class Store {
 
   // ---------- Run events ----------
   nextEventSeq(runId: string): number {
+    // 优先使用内存计数器（避免 SELECT MAX 查询）
+    const cached = this.eventSeqCounters.get(runId);
+    if (cached !== undefined) {
+      return cached + 1;
+    }
+    // 首次查询，初始化计数器
     const r = this.stmts.nextEventSeq.get(runId) as any;
-    return Number(r?.max_seq ?? 0) + 1;
+    const seq = Number(r?.max_seq ?? 0);
+    this.eventSeqCounters.set(runId, seq);
+    return seq + 1;
   }
 
   /** run 内下一个 job 序号 */
   nextJobSeq(runId: string): number {
+    const cached = this.jobSeqCounters.get(runId);
+    if (cached !== undefined) {
+      return cached + 1;
+    }
     const r = this.stmts.nextJobSeq.get(runId) as any;
-    return Number(r?.s ?? 0) + 1;
+    const seq = Number(r?.s ?? 0);
+    this.jobSeqCounters.set(runId, seq);
+    return seq + 1;
   }
 
   /**
@@ -217,7 +240,15 @@ export class Store {
   appendRunEvent(runId: string, jobId: string | undefined, event: AgentEvent): number {
     const seq = this.nextEventSeq(runId);
     this.stmts.insertRunEvent.run(runId, seq, jobId ?? null, JSON.stringify(event), new Date(event.ts).toISOString());
+    // 更新内存计数器
+    this.eventSeqCounters.set(runId, seq);
     return seq;
+  }
+
+  /** 清理指定 run 的 seq 计数器（run 结束时调用） */
+  cleanupRunSeqCounters(runId: string): void {
+    this.eventSeqCounters.delete(runId);
+    this.jobSeqCounters.delete(runId);
   }
 
   getRunEvents(runId: string, afterSeq = 0): Array<{ seq: number; jobId?: string; event: AgentEvent }> {

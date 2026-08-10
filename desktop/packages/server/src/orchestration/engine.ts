@@ -111,6 +111,7 @@ export class OrchestrationEngine {
     } finally {
       this.runAborts.delete(run.id);
       this.cleanupSteering(run.id);
+      this.store.cleanupRunSeqCounters(run.id);
     }
   }
 
