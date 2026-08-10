@@ -3,7 +3,7 @@
  * 负责统计和调用已完成的任务
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Archive, BarChart3, Calendar, CheckCircle, Clock, Search, TrendingUp } from "lucide-react";
 import { api } from "../lib/api";
@@ -47,27 +47,27 @@ export default function TasksPage() {
   }
 
   // 统计数据
-  const stats = {
+  const stats = useMemo(() => ({
     total: runs.length,
     success: runs.filter((r) => r.status === "success").length,
     error: runs.filter((r) => r.status === "error").length,
     cancelled: runs.filter((r) => r.status === "cancelled").length,
-  };
+  }), [runs]);
 
   // 过滤
-  const filtered = runs.filter((r) => {
+  const filtered = useMemo(() => runs.filter((r) => {
     if (filter !== "all" && r.status !== filter) return false;
     if (search && !r.taskTitle?.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  });
+  }), [runs, filter, search]);
 
   // 按日期分组
-  const grouped = filtered.reduce<Record<string, Run[]>>((acc, run) => {
+  const grouped = useMemo(() => filtered.reduce<Record<string, Run[]>>((acc, run) => {
     const date = new Date(run.startedAt).toLocaleDateString("zh-CN");
     if (!acc[date]) acc[date] = [];
     acc[date].push(run);
     return acc;
-  }, {});
+  }, {}), [filtered]);
 
   return (
     <div className="mx-auto max-w-5xl px-8 py-8">

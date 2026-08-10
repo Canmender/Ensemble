@@ -83,12 +83,35 @@ preReasoning（记忆注入/压缩）→ Steering 消息检查 → 工具循环�
 - **显式记忆**：`memory_write/read/list` 工具让 Agent 自主记忆
 - 成本遥测 + 轮转清理 + 每日维护
 
+#### 双记忆池架构
+
+```
+┌─────────────────────────────────────────────┐
+│            显式记忆池 (Explicit)             │
+│  - 导航栏"记忆"页可见                        │
+│  - Agent 可通过工具读取往期记忆               │
+│  - 长期持久化，用户可管理                     │
+│  - 1000 条/agent，手动淘汰                   │
+├─────────────────────────────────────────────┤
+│            隐式记忆池 (Implicit)             │
+│  - 项目/Run 级别作用域                       │
+│  - 多 Agent 共享重要上下文                    │
+│  - 主动筛选注入 (重要度阈值 0.5)              │
+│  - 100 条/scope，24h 自动过期                │
+└─────────────────────────────────────────────┘
+```
+
+**工具**: `memory_pool_write`、`memory_pool_read`、`memory_pool_list`
+**API**: `GET/POST /api/memory-pool/explicit`、`GET/POST /api/memory-pool/implicit`、`GET /api/memory-pool/stats`
+
 ### 编排引擎（`orchestration/`）
 
-三种协作模式，统一通过 `executeJob` 执行：
+五种协作模式，统一通过 `executeJob` 执行：
 - **single**：单发/多 Agent 并行 + 可选聚合
 - **workflow**：DAG 调度（依赖/条件边/模板注入 `{{job.<id>.result}}`）
 - **chat**：群聊轮转（transcript 注入 / `@agent:` 委派 / `@done` 终止）
+- **plan**：Plan-Execute-Reflect 三阶段迭代（`orchestration/plan.ts`）。先由 Planner 生成执行计划，再由 Executor 逐步执行，最后由 Critic 评审并可触发反思重试。
+- **adversarial**：Coder vs Tester 对抗式代码迭代（`orchestration/adversarial-mode.ts`）。Coder 生成代码，Tester 运行测试并报告失败，循环直到全部通过或达到最大轮次。
 
 ### 事件与实时（`api/`）
 

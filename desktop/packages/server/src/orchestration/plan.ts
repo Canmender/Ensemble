@@ -9,6 +9,7 @@ import type { OrchestrationEngine } from "./engine";
 import type { AgentAdapter } from "../adapters/types";
 import { planExecuteReflect } from "./plan-execute-reflect";
 import { logger } from "../util/logger";
+import { newId } from "../util/id";
 
 export class PlanMode {
   constructor(private engine: OrchestrationEngine) {}
@@ -22,7 +23,7 @@ export class PlanMode {
 
     // 创建一个 Job 来跟踪整个 Plan-Execute-Reflect 过程
     const job: Job = {
-      id: `job-${Date.now()}`,
+      id: newId("job"),
       runId: run.id,
       seq: 1,
       agentId,

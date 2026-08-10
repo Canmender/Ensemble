@@ -12,7 +12,18 @@ export function settingsRouter(ctx: AppContext): Router {
 
   r.put("/", (req, res) => {
     try {
-      const settings = ctx.config.saveSettings(req.body ?? {});
+      // Explicitly destructure only allowed fields to prevent mass-assignment / injection.
+      // The appSettingsSchema will further validate, but we avoid passing arbitrary keys.
+      const body = req.body ?? {};
+      const patch: Record<string, unknown> = {};
+      if (body.workspaceRoot !== undefined) patch.workspaceRoot = body.workspaceRoot;
+      if (body.searchApi !== undefined) patch.searchApi = body.searchApi;
+      if (body.codeExecutionConfirm !== undefined) patch.codeExecutionConfirm = body.codeExecutionConfirm;
+      if (body.defaultProviderId !== undefined) patch.defaultProviderId = body.defaultProviderId;
+      if (body.mem0 !== undefined) patch.mem0 = body.mem0;
+      if (body.security !== undefined) patch.security = body.security;
+
+      const settings = ctx.config.saveSettings(patch);
       ok(res, settings);
     } catch (err) {
       fail(res, err);

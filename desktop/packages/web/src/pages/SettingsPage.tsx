@@ -551,6 +551,7 @@ export default function SettingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<ProviderConfig | undefined>();
   const [fetchingModels, setFetchingModels] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const { confirm, Dialog } = useConfirm();
 
   // 中继服务器状态
@@ -573,7 +574,7 @@ export default function SettingsPage() {
   }
 
   useEffect(() => {
-    void refresh();
+    void refresh().finally(() => setLoading(false));
   }, []);
 
   async function remove(id: string) {
@@ -634,6 +635,14 @@ export default function SettingsPage() {
     { key: "relay" as const, label: "云端中继", icon: <Cloud className="h-4 w-4" /> },
     { key: "general" as const, label: "通用", icon: <Settings className="h-4 w-4" /> },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Spinner label="加载设置中…" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-8 py-8">
