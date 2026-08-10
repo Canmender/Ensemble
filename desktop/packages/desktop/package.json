@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/desktop",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "合鸣 桌面应用（Electron 壳）",
   "main": "./dist/main/index.cjs",
