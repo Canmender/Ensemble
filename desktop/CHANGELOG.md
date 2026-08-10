@@ -2,6 +2,52 @@
 
 本项目采用语义化版本（SemVer）。所有值得注意的变更记录于此。
 
+## [0.4.3] - 2026-08-10
+
+安全加固 + 协作画布修复 + 工具确认内部弹窗 + 单元测试。
+
+### 🔒 安全加固
+
+- 命令注入防护：Shell 元字符检测 + 词边界黑名单 + 首 token 精确匹配
+- API Key 加密存储：AES-256-GCM 加密 + 自动迁移旧明文格式
+- WebSocket 认证：Token 认证 + timingSafeEqual + 1MB 消息限制
+- Electron CSP：Content-Security-Policy + will-navigate 导航守卫 + 权限拒绝
+- SSRF 防护：私有 IP 检测 + OpenAPI loader + 符号链接穿越防护
+- MCP 命令注入检测 + 审计日志
+- 速率限制：API + WebSocket 双层限流
+- 数据库：任务删除级联清理 + 复合索引优化
+
+### 🎉 新增
+
+- 工具确认内部弹窗（替代 Electron native dialog）
+- ErrorBoundary 全局错误边界
+- LLM 指数退避重试（429/5xx 自动恢复，尊重 Retry-After）
+- RAGStore 持久化（JSON 文件 + 60s 自动保存）
+- 中文 bigram 分词（搜索质量显著提升）
+- CI/CD 流水线（GitHub Actions: typecheck + test + build + docker）
+- 单元测试（vitest，58 个用例，覆盖安全/重试/工具/编排）
+
+### 🔧 修复
+
+- 协作画布：注册 AgentNode 自定义组件，修复空白显示
+- 前端性能：Dashboard 消除全页重渲染，TasksPage/ChatPage memo 优化
+- 错误处理：所有 silent catch 添加日志，前端表单 toast 反馈
+- 编排引擎：Agent 错误传播修复，DAG 死锁仅阻塞依赖链
+- 记忆池：SQL LIKE 通配符转义，过期记忆自动清理，ID 碰撞消除
+- Chat 轮询优化 + error/cancelled 提前退出
+- Nginx 安全头（HSTS/CSP/Referrer/Policy）
+- Dockerfile 端口修复（3001 → 8888）
+
+### ♿ 无障碍
+
+- 7 个页面添加 aria-label / role / aria-expanded / aria-current
+
+### 📦 代码质量
+
+- 3 个共享模块提取（useConfirm / historyCache / loadRunDetail）
+- TypeScript any 消除（desktop.d.ts 类型声明 + 具体类型替换）
+- 移除未使用的 p-limit 依赖
+
 ## [0.4.2] - 2026-08-10
 
 IM 风格聊天 + 可视化协作画布 + 简化任务创建。

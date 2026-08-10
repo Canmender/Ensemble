@@ -477,6 +477,33 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 
 ## 变更日志
 
+### v0.4.3 (2026-08-10) — 安全加固 + 画布修复 + 内部弹窗
+
+**安全加固（两轮深度审查，16 项高危修复）**
+- 命令注入防护：Shell 元字符检测 + 词边界黑名单 + MCP 命令审计
+- API Key AES-256-GCM 加密存储
+- WebSocket Token 认证 + timingSafeEqual
+- Electron CSP + will-navigate + 权限拒绝
+- SSRF 防护（私有 IP + 符号链接穿越 + OpenAPI loader）
+- 速率限制（API + WebSocket 双层）
+- 数据库级联删除 + 复合索引
+
+**新增功能**
+- 工具确认内部弹窗（ToolConfirmDialog，替代 native dialog）
+- ErrorBoundary 全局错误边界
+- LLM 指数退避重试（尊重 Retry-After）
+- RAGStore 持久化 + 中文 bigram 分词
+- CI/CD 流水线（GitHub Actions）
+- 58 个单元测试（vitest）
+
+**修复**
+- 协作画布：AgentNode 注册 + 历史事件绕过节流
+- 前端性能：Dashboard/ChatPage/TasksPage memo 优化
+- 编排引擎：错误传播 + DAG 死锁改进
+- 记忆池：LIKE 转义 + 过期清理 + ID 碰撞消除
+- 错误处理：silent catch → 日志 + toast 反馈
+- 无障碍：7 个页面 ARIA 属性
+
 ### v0.4.2 (2026-08-10) — 测试与依赖清理
 - 新增 vitest 单元测试框架
 - 新增 `security.ts` 单元测试（shell 元字符检测、命令黑白名单、边界情况）
