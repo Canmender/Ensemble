@@ -12,7 +12,7 @@ import type { Run } from "../types";
 import { Badge, Card, EmptyState, Input, Spinner, cls } from "../components/ui";
 
 /** 统计卡片 */
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: number | string; color: string }) {
+function StatCard({ icon: Icon, label, value, color }: { icon: typeof BarChart3; label: string; value: number | string; color: string }) {
   return (
     <Card className="flex items-center gap-3 p-4">
       <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${color}`}>

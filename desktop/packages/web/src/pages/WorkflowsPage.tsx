@@ -11,19 +11,38 @@ import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import { Bot, ChevronDown, Workflow, Pause, Clock, CheckCircle2, XCircle, Wrench, Brain, MessageSquare } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
-import { useRunStore } from "../store/runs";
+import { useRunStore, type AgentEventItem, type LiveJob } from "../store/runs";
 import { relativeTime } from "../lib/events";
+import { loadRunDetail } from "../lib/loadRunDetail";
 import type { Run } from "../types";
 import { Card, Spinner, StatusDot, cls, statusLabel } from "../components/ui";
 
 /** reactflow 动态加载：~140KB，仅在需要时加载 */
+interface CanvasNode {
+  id: string;
+  type?: string;
+  position: { x: number; y: number };
+  data: AgentNodeData;
+  style?: React.CSSProperties;
+  [key: string]: unknown;
+}
+
+interface CanvasEdge {
+  id: string;
+  source: string;
+  target: string;
+  animated?: boolean;
+  style?: React.CSSProperties;
+  [key: string]: unknown;
+}
+
 const CanvasView = lazy(() =>
   Promise.all([
     import("reactflow"),
     // @ts-ignore
     import("reactflow/dist/style.css"),
   ]).then(([rf]) => ({
-    default: function CanvasViewInner({ nodes, edges }: { nodes: any[]; edges: any[] }) {
+    default: function CanvasViewInner({ nodes, edges }: { nodes: CanvasNode[]; edges: CanvasEdge[] }) {
       const { ReactFlow, Background, Controls } = rf;
       return (
         <ReactFlow
@@ -43,36 +62,6 @@ const CanvasView = lazy(() =>
     },
   })),
 );
-
-const historyLoaded = new Set<string>();
-
-async function loadRunDetail(runId: string) {
-  if (historyLoaded.has(runId)) return;
-  try {
-    const d = await api.get<any>(`/runs/${runId}`);
-    const store = useRunStore.getState();
-    store.getOrCreate(runId);
-    store.setStatus(runId, d.run.status);
-    if (d.run.finalResult) store.setFinal(runId, d.run.finalResult, d.run.error);
-    let evSeq = 0;
-    for (const job of d.jobs ?? []) {
-      store.upsertJob(runId, job.id, {
-        agentName: job.agentName,
-        agentId: job.agentId,
-        status: job.status,
-        result: job.result,
-        sessionId: job.sessionId,
-      });
-      for (const ev of job.events ?? []) {
-        evSeq -= 1;
-        store.appendEvent(runId, { seq: evSeq, jobId: job.id, event: ev });
-      }
-    }
-    historyLoaded.add(runId);
-  } catch {
-    /* 失败不标记，可重试 */
-  }
-}
 
 /** 状态颜色映射 */
 const STATUS_COLORS: Record<string, string> = {
@@ -120,7 +109,7 @@ function StatusIcon({ status }: { status: string }) {
 }
 
 /** 工具调用摘要 */
-function ToolCallsSummary({ events }: { events: any[] }) {
+function ToolCallsSummary({ events }: { events: AgentEventItem[] }) {
   const toolCalls = events.filter(e => e.event?.type === "tool_use");
   if (toolCalls.length === 0) return null;
 
@@ -146,7 +135,7 @@ function ToolCallsSummary({ events }: { events: any[] }) {
 }
 
 /** 节点详情面板 */
-function NodeDetails({ job, events }: { job: any; events: any[] }) {
+function NodeDetails({ job, events }: { job: LiveJob; events: AgentEventItem[] }) {
   const toolCalls = events.filter(e => e.event?.type === "tool_use");
   const outputs = events.filter(e => e.event?.type === "output");
   const lastOutput = outputs.length > 0 ? outputs[outputs.length - 1] : null;
@@ -168,7 +157,7 @@ function NodeDetails({ job, events }: { job: any; events: any[] }) {
         <div>
           <div className="text-[10px] font-semibold uppercase text-muted mb-1">工具调用</div>
           <div className="space-y-1 max-h-[150px] overflow-y-auto">
-            {toolCalls.slice(-5).map((e: any, i: number) => (
+            {toolCalls.slice(-5).map((e, i) => (
               <div key={i} className="flex items-start gap-1.5 rounded bg-amber-500/5 p-1.5">
                 <Wrench className="h-3 w-3 mt-0.5 text-amber-500 shrink-0" />
                 <div className="min-w-0">
@@ -205,7 +194,14 @@ function NodeDetails({ job, events }: { job: any; events: any[] }) {
 }
 
 /** 自定义节点组件 */
-function AgentNode({ data }: { data: any }) {
+interface AgentNodeData {
+  job: LiveJob;
+  events: AgentEventItem[];
+  isExpanded: boolean;
+  onToggle: () => void;
+}
+
+function AgentNode({ data }: { data: AgentNodeData }) {
   const { job, events, isExpanded, onToggle } = data;
   const status = job.status || "queued";
 
@@ -316,7 +312,7 @@ function CollaborationCanvas({ runId }: { runId: string }) {
 
   // 构建连线（按执行顺序）
   const edges = useMemo(() => {
-    const result: any[] = [];
+    const result: CanvasEdge[] = [];
     for (let i = 1; i < orderedJobs.length; i++) {
       const prev = orderedJobs[i - 1];
       const curr = orderedJobs[i];
@@ -362,7 +358,7 @@ function RunCard({ run, isExpanded, onToggle }: { run: Run; isExpanded: boolean;
 
   return (
     <Card className={cls("overflow-hidden transition-all", isExpanded ? "col-span-full" : "")}>
-      <button onClick={onToggle} className="flex w-full items-center gap-3 p-4 text-left">
+      <button onClick={onToggle} aria-expanded={isExpanded} className="flex w-full items-center gap-3 p-4 text-left">
         <StatusDot status={status} />
         <div className="min-w-0 flex-1">
           <div className="truncate text-sm font-medium text-fg">{run.taskTitle || "未命名工作流"}</div>
@@ -422,7 +418,7 @@ export default function WorkflowsPage() {
     const newExpanded = expanded === id ? null : id;
     setExpanded(newExpanded);
     if (newExpanded) {
-      await loadRunDetail(id);
+      await loadRunDetail(id, { loadEvents: true, loadChatMessages: false });
     }
   }
 

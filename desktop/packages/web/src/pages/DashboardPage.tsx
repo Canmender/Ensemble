@@ -15,13 +15,11 @@ import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
 import { relativeTime } from "../lib/events";
+import { loadRunDetail } from "../lib/loadRunDetail";
 import type { Agent, Run } from "../types";
 import {
   Badge, Button, Card, Input, Label, Modal, Spinner, StatusDot, Textarea, cls, statusLabel,
 } from "../components/ui";
-
-// 已加载历史的 run（守卫：仅加载一次，避免 WS 预建 store 导致历史永不加载）
-const historyLoaded = new Set<string>();
 
 // 状态字形
 const STATUS_GLYPH: Record<string, string> = {
@@ -286,7 +284,7 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
         expanded ? "shadow-card-hover" : "hover:-translate-y-0.5 hover:shadow-card-hover",
       )}
     >
-      <button onClick={onToggle} className="w-full px-3.5 py-3 text-left">
+      <button onClick={onToggle} aria-expanded={expanded} className="w-full px-3.5 py-3 text-left">
         <div className="flex items-center gap-2">
           <StatusDot status={status} />
           <span className="text-xs font-bold text-muted/70">{STATUS_GLYPH[status] ?? "·"}</span>
@@ -409,33 +407,7 @@ export default function DashboardPage() {
   const toggleDetail = useCallback(
     async (runId: string) => {
       setExpanded((prev) => (prev === runId ? null : runId));
-      const store = useRunStore.getState();
-      if (historyLoaded.has(runId)) return;
-      try {
-        const d = await api.get<{ run: Run; jobs: any[]; chatMessages: any[] }>(`/runs/${runId}`);
-        store.getOrCreate(runId);
-        store.setStatus(runId, d.run.status);
-        if (d.run.finalResult) store.setFinal(runId, d.run.finalResult, d.run.error);
-        let evSeq = 0;
-        for (const job of d.jobs ?? []) {
-          store.upsertJob(runId, job.id, {
-            agentName: job.agentName,
-            status: job.status,
-            result: job.result,
-            sessionId: job.sessionId,
-          });
-          for (const ev of job.events ?? []) {
-            evSeq -= 1;
-            store.appendEvent(runId, { seq: evSeq, jobId: job.id, event: ev });
-          }
-        }
-        for (const m of d.chatMessages ?? []) {
-          store.appendMessage(runId, { jobId: m.jobId, agentId: m.agentId, content: m.content });
-        }
-        historyLoaded.add(runId);
-      } catch {
-        /* 加载失败不标记，可重试 */
-      }
+      await loadRunDetail(runId, { loadEvents: true, loadChatMessages: true });
     },
     [],
   );

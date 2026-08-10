@@ -1,11 +1,12 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { Navigate, useParams, Link, useNavigate } from "react-router-dom";
 import { Brain, CheckCircle2, Copy, Wrench, XCircle } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
-import { useRunStore } from "../store/runs";
+import { useRunStore, type AgentEventItem, type LiveJob } from "../store/runs";
 import { fmtTime } from "../lib/events";
-import type { Run as RunType } from "../types";
+import { loadRunDetail } from "../lib/loadRunDetail";
+import type { Run as RunType, Task } from "../types";
 import { Badge, Button, Card, Spinner, StatusDot, cls, statusLabel } from "../components/ui";
 
 /** reactflow 动态加载：仅在用户切换到"画布"视图时才加载（~140KB） */
@@ -16,7 +17,7 @@ const WorkflowCanvas = lazy(() =>
     import("reactflow/dist/style.css"),
   ]).then(([rf]) => {
     return {
-      default: function WorkflowCanvasInner({ jobs }: { jobs: any[] }) {
+      default: function WorkflowCanvasInner({ jobs }: { jobs: LiveJob[] }) {
         const { ReactFlow, Background, Controls } = rf;
         const nodes = useMemo(
           () =>
@@ -63,7 +64,7 @@ const WorkflowCanvas = lazy(() =>
 const modeLabel: Record<string, string> = { single: "单一分发", workflow: "工作流", chat: "群聊" };
 
 // ---------- 日志行 ----------
-function LogLine({ item }: { item: any }) {
+function LogLine({ item }: { item: AgentEventItem }) {
   const ev = item.event;
   const jobId = item.jobId;
 
@@ -86,7 +87,7 @@ function LogLine({ item }: { item: any }) {
         <span className="w-20 shrink-0 text-right text-[11px] text-muted/70">{fmtTime(ev.ts ?? Date.now())}</span>
         <span className="shrink-0">·</span>
         <span className="text-xs">
-          {statusLabel(ev.status)}
+          {statusLabel(ev.status ?? "")}
           {ev.detail ? ` · ${ev.detail}` : ""}
         </span>
       </div>
@@ -135,7 +136,7 @@ function LogLine({ item }: { item: any }) {
 }
 
 // ---------- 工具时间线（n8n/agenttrace 模式：工具调用链） ----------
-function ToolTimeline({ items }: { items: any[] }) {
+function ToolTimeline({ items }: { items: AgentEventItem[] }) {
   const steps = items.filter(
     (it) =>
       it.event.type === "tool_use" ||
@@ -153,7 +154,7 @@ function ToolTimeline({ items }: { items: any[] }) {
     <div className="flex-1 overflow-y-auto bg-bg/40 p-3 font-mono text-[12px]">
       <div className="space-y-1.5">
         {steps.map((it, i) => {
-          const ev = it.event as any;
+          const ev = it.event;
           if (ev.type === "tool_use") {
             return (
               <div key={i} className="flex gap-2">
@@ -188,7 +189,8 @@ function ToolTimeline({ items }: { items: any[] }) {
 
 export default function RunPage() {
   const { id } = useParams<{ id: string }>();
-  const runId = id!;
+  if (!id) return <Navigate to="/" />;
+  const runId = id;
   const navigate = useNavigate();
   const live = useRunStore((s) => s.live[runId]);
   const [run, setRun] = useState<RunType | null>(null);
@@ -202,11 +204,11 @@ export default function RunPage() {
   async function continueTask() {
     if (!run) return;
     try {
-      const task = await api.get<any>(`/tasks/${run.taskId}`);
+      const task = await api.get<Task>(`/tasks/${run.taskId}`);
       const input = task.input;
       const prevResult = live?.finalResult ?? run.finalResult;
       if (input?.mode === "single") {
-        const newRun = await api.post<any>("/tasks", {
+        const newRun = await api.post<RunType>("/tasks", {
           title: `${run.taskTitle ?? "任务"}（续）`,
           input: {
             mode: "single",
@@ -225,25 +227,8 @@ export default function RunPage() {
     setRun(null);
     setLoaded(false);
     wsClient.subscribe(runId);
-    void api.get<{ run: RunType; jobs: any[]; chatMessages: any[] }>(`/runs/${runId}`).then((d) => {
-      setRun(d.run);
-      const store = useRunStore.getState();
-      store.getOrCreate(runId);
-      store.setStatus(runId, d.run.status);
-      if (d.run.finalResult) store.setFinal(runId, d.run.finalResult, d.run.error);
-      // 历史 events 由 wsClient.subscribe 的 catchUp（/events?afterSeq=）补拉
-      for (const job of d.jobs ?? []) {
-        store.upsertJob(runId, job.id, {
-          agentId: job.agentId,
-          agentName: job.agentName,
-          status: job.status,
-          result: job.result,
-          sessionId: job.sessionId,
-        });
-      }
-      for (const m of d.chatMessages ?? []) {
-        store.appendMessage(runId, { jobId: m.jobId, agentId: m.agentId, content: m.content });
-      }
+    void loadRunDetail(runId, { loadEvents: false, loadChatMessages: true }).then((d) => {
+      if (d) setRun(d.run);
       setLoaded(true);
     });
     return () => wsClient.unsubscribe(runId);
@@ -372,10 +357,12 @@ export default function RunPage() {
                 {view === "log" && !collapseLog && (
                   <span className="text-[11px] text-muted/70">{sortedEvents.length} 条事件</span>
                 )}
-                <div className="flex overflow-hidden rounded-md border border-border text-[11px]">
+                <div className="flex overflow-hidden rounded-md border border-border text-[11px]" role="tablist">
                   {(["log", "timeline", "canvas"] as const).map((v) => (
                     <button
                       key={v}
+                      role="tab"
+                      aria-selected={view === v}
                       onClick={() => setView(v)}
                       className={cls(
                         "px-1.5 py-0.5 transition-colors",
@@ -389,6 +376,7 @@ export default function RunPage() {
                 {view === "log" && (
                   <button
                     onClick={() => setCollapseLog((v) => !v)}
+                    aria-expanded={!collapseLog}
                     className="rounded-md px-1.5 py-0.5 text-[11px] text-muted hover:bg-muted/10 hover:text-fg"
                   >
                     {collapseLog ? "展开过程" : "折叠过程"}
@@ -431,6 +419,7 @@ export default function RunPage() {
                 <button
                   onClick={() => void navigator.clipboard.writeText(live.finalResult ?? "")}
                   className="rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-muted/10 hover:text-fg"
+                  aria-label="复制结果"
                   title="复制结果"
                 >
                   <Copy className="h-3 w-3" />
