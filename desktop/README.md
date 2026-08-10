@@ -87,6 +87,7 @@ pnpm -r typecheck                    # 全量类型检查
 | 文档 | 说明 |
 |---|---|
 | [架构设计](docs/ARCHITECTURE.md) | 总体架构、核心模块、数据流、扩展点 |
+| [多 Agent 架构](docs/MULTI_AGENT_ARCHITECTURE.md) | Memory/Tool 协议、ReAct 拆解、状态机编排、RAG、对抗迭代、部署监控 |
 | [性能优化](docs/PERFORMANCE.md) | 前端/Electron/引擎优化措施、设计决策、维护指南 |
 | [开发指南](docs/DEVELOPMENT.md) | 本地开发、构建、测试、打包、发布、CLI、FAQ |
 | [扩展指南](docs/EXTENDING.md) | 添加工具 / Agent 类型 / Provider / Skill / 记忆后端 / MCP / 工作流 |
