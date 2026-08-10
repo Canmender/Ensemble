@@ -15,6 +15,7 @@ import { logger } from "../util/logger";
 import { SingleMode } from "./single";
 import { WorkflowMode } from "./workflow";
 import { ChatMode } from "./chat";
+import { PlanMode } from "./plan";
 
 /**
  * 编排引擎：统一执行器。
@@ -88,7 +89,9 @@ export class OrchestrationEngine {
         ? new SingleMode(this).run(run, task)
         : mode === "workflow"
           ? new WorkflowMode(this).run(run, task)
-          : new ChatMode(this).run(run, task));
+          : mode === "plan"
+            ? new PlanMode(this).run(run, task)
+            : new ChatMode(this).run(run, task));
 
       this.store.updateRun(run.id, { status: "success", finalResult: result, endedAt: new Date().toISOString() });
       this.hub.broadcast(run.id, 0, { type: "run.status", status: "success" });
@@ -270,6 +273,36 @@ export class OrchestrationEngine {
   getWorkflow(id: string) {
     if (this.getWorkflowDef) return this.getWorkflowDef(id);
     return this.store.getWorkflow(id);
+  }
+
+  // ========== Getter 方法（供 PlanMode 等编排器使用） ==========
+
+  getStore(): Store {
+    return this.store;
+  }
+
+  getHub(): WsHub {
+    return this.hub;
+  }
+
+  getRegistry(): AdapterRegistry {
+    return this.registry;
+  }
+
+  getRunAborts(): Map<string, Set<AbortController>> {
+    return this.runAborts;
+  }
+
+  getProviderRegistry(): any {
+    return (this.registry as any).deps?.providerRegistry;
+  }
+
+  getToolRegistry(): any {
+    return (this.registry as any).deps?.toolRegistry;
+  }
+
+  getAgentConfig(agentId: string): AgentConfig | undefined {
+    return this.agentConfigs.get(agentId);
   }
 
   /** 该 agent 在本 run 中的最近一次 session（供 chat 跨轮 resume） */

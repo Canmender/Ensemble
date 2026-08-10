@@ -51,3 +51,4 @@ coverage/
 *.tgz
 .cache/
 *.apk
+TencentDB-Agent-Memory/
