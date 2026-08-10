@@ -42,12 +42,13 @@ const CanvasView = lazy(() =>
     // @ts-ignore
     import("reactflow/dist/style.css"),
   ]).then(([rf]) => ({
-    default: function CanvasViewInner({ nodes, edges }: { nodes: CanvasNode[]; edges: CanvasEdge[] }) {
+    default: function CanvasViewInner({ nodes, edges, nodeTypes }: { nodes: CanvasNode[]; edges: CanvasEdge[]; nodeTypes: Record<string, any> }) {
       const { ReactFlow, Background, Controls } = rf;
       return (
         <ReactFlow
           nodes={nodes}
           edges={edges}
+          nodeTypes={nodeTypes}
           fitView
           proOptions={{ hideAttribution: true }}
           defaultEdgeOptions={{
@@ -262,6 +263,7 @@ function AgentNode({ data }: { data: AgentNodeData }) {
 function CollaborationCanvas({ runId }: { runId: string }) {
   const live = useRunStore((s) => s.live[runId]);
   const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+  const nodeTypes = useMemo(() => ({ agent: AgentNode }), []);
 
   const jobs = useMemo(() => Object.values(live?.jobs ?? {}), [live?.jobs]);
   const events = useMemo(() => (live?.events ?? []).slice().sort((a, b) => a.seq - b.seq), [live?.events]);
@@ -289,7 +291,7 @@ function CollaborationCanvas({ runId }: { runId: string }) {
 
       return {
         id: job.id,
-        type: "default",
+        type: "agent",
         position: {
           x: col * (nodeWidth + gapX) + 50,
           y: row * 160 + 50,
@@ -345,7 +347,7 @@ function CollaborationCanvas({ runId }: { runId: string }) {
 
   return (
     <Suspense fallback={<div className="flex h-full items-center justify-center"><Spinner label="加载画布…" /></div>}>
-      <CanvasView nodes={nodes} edges={edges} />
+      <CanvasView nodes={nodes} edges={edges} nodeTypes={nodeTypes} />
     </Suspense>
   );
 }

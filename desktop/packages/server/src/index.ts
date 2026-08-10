@@ -22,6 +22,9 @@ async function main(): Promise<void> {
       logger.info(`steering message for run ${msg.runId}`);
       ctx.engine.addSteering(msg.runId, msg.content);
     }
+    if (msg.type === "tool_confirm" && msg.confirmId) {
+      ctx.hub.resolveConfirm(msg.confirmId, msg.approved ?? false);
+    }
   };
 
   server.listen(env.port, () => {

@@ -17,8 +17,6 @@ export interface LocalServerOptions {
   port?: number;
   /** 密钥存储（桌面版传 Electron safeStorage 实现） */
   keyStore?: KeyStore;
-  /** 工具执行确认回调 */
-  askConfirm?: (tool: string, args: unknown) => Promise<boolean>;
 }
 
 export interface LocalServer {
@@ -44,7 +42,6 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
   const db = openDb(env.dbPath);
   const ctx = createAppContext(env, db, {
     ...(opts.keyStore ? { keyStore: opts.keyStore } : {}),
-    ...(opts.askConfirm ? { askConfirm: opts.askConfirm } : {}),
   });
   const staticDir =
     opts.staticDir && existsSync(opts.staticDir) ? opts.staticDir : undefined;
@@ -55,6 +52,7 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
   ctx.hub.onClientMessage = (msg) => {
     if (msg.type === "cancel") ctx.engine.cancelRun(msg.runId);
     if (msg.type === "steer" && msg.content) ctx.engine.addSteering(msg.runId, msg.content);
+    if (msg.type === "tool_confirm" && msg.confirmId) ctx.hub.resolveConfirm(msg.confirmId, msg.approved ?? false);
   };
 
   return new Promise((resolve, reject) => {

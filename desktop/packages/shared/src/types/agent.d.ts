@@ -82,6 +82,9 @@ export interface AgentTaskInput {
     resumeSessionId?: string;
     timeoutMs?: number;
     signal?: AbortSignal;
+    /** 当前 runId（用于 WS 工具确认路由） */
+    runId?: string;
+    steeringQueue?: Array<{ content: string; timestamp: number }>;
 }
 export type AgentStatusTimeline = AgentStatus;
 //# sourceMappingURL=agent.d.ts.map

@@ -1,4 +1,4 @@
-import { app, dialog } from "electron";
+import { app } from "electron";
 import { join, resolve } from "node:path";
 import { mkdirSync, existsSync, writeFileSync } from "node:fs";
 import { createLocalServer, type LocalServer, logger } from "@ensemble/server";
@@ -102,19 +102,6 @@ export async function startLocalServer(opts?: { port?: number }): Promise<LocalS
   const keyStore = createElectronKeyStore(secretsFile);
 
   logger.info(`configDir=${configDir} dbPath=${dbPath}`);
-  // 工具执行确认（HITL）：桌面 native 弹窗，注入引擎 askConfirm
-  const askConfirm = async (tool: string, args: unknown): Promise<boolean> => {
-    const { response } = await dialog.showMessageBox({
-      type: "warning",
-      buttons: ["允许", "取消"],
-      defaultId: 1,
-      cancelId: 1,
-      title: "合鸣 · 确认执行工具",
-      message: `Agent 请求执行工具：${tool}`,
-      detail: JSON.stringify(args ?? {}).slice(0, 1000),
-    });
-    return response === 0;
-  };
-
-  return createLocalServer({ configDir, dbPath, staticDir, port: opts?.port, keyStore, askConfirm });
+  // 工具执行确认（HITL）：通过 WebSocket 向前端发送确认请求，由内部弹窗处理
+  return createLocalServer({ configDir, dbPath, staticDir, port: opts?.port, keyStore });
 }

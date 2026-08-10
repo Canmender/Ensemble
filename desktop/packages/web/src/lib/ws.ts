@@ -14,6 +14,9 @@ interface WsEnvelope {
     content?: string;
     result?: string;
     message?: string;
+    confirmId?: string;
+    tool?: string;
+    args?: unknown;
     event?: {
       type: string;
       tool?: string;
@@ -138,6 +141,12 @@ class WsClient {
     }
   }
 
+  sendToolConfirm(runId: string, confirmId: string, approved: boolean): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "tool_confirm", runId, confirmId, approved }));
+    }
+  }
+
   private apply(env: WsEnvelope): void {
     const store = useRunStore.getState();
     store.getOrCreate(env.runId);
@@ -168,6 +177,15 @@ class WsClient {
         break;
       case "run.error":
         store.setFinal(env.runId, undefined, ev.message);
+        break;
+      case "tool_confirm_request":
+        if (ev.confirmId && ev.tool) {
+          store.setPendingConfirm(env.runId, {
+            confirmId: ev.confirmId,
+            tool: ev.tool,
+            args: ev.args,
+          });
+        }
         break;
     }
 

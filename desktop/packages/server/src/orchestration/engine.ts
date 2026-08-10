@@ -173,6 +173,7 @@ export class OrchestrationEngine {
           ...input,
           prompt,
           signal: controller.signal,
+          runId: run.id,
           steeringQueue: this.getSteeringQueue(run.id),
         })) {
           // 原子分配 seq（MAX+1 与 INSERT 在同一同步块，并行 job 不冲突）

@@ -8,6 +8,7 @@ import { fmtTime } from "../lib/events";
 import { loadRunDetail } from "../lib/loadRunDetail";
 import type { Run as RunType, Task } from "../types";
 import { Badge, Button, Card, Spinner, StatusDot, cls, statusLabel } from "../components/ui";
+import { ToolConfirmDialog } from "../components/ToolConfirmDialog";
 
 /** reactflow 动态加载：仅在用户切换到"画布"视图时才加载（~140KB） */
 const WorkflowCanvas = lazy(() =>
@@ -247,6 +248,7 @@ export default function RunPage() {
 
   const jobs = useMemo(() => Object.values(live?.jobs ?? {}), [live?.jobs]);
   const messages = live?.messages ?? [];
+  const pendingConfirm = live?.pendingConfirm;
 
   // 长任务日志限制（只渲染最近 800 条，避免 DOM 爆炸）
   const LOG_LIMIT = 800;
@@ -438,6 +440,24 @@ export default function RunPage() {
           </Card>
         </div>
       )}
+
+      {/* HITL 工具确认弹窗 */}
+      <ToolConfirmDialog
+        open={!!pendingConfirm}
+        confirm={pendingConfirm}
+        onApprove={() => {
+          if (pendingConfirm) {
+            wsClient.sendToolConfirm(runId, pendingConfirm.confirmId, true);
+            useRunStore.getState().clearPendingConfirm(runId);
+          }
+        }}
+        onReject={() => {
+          if (pendingConfirm) {
+            wsClient.sendToolConfirm(runId, pendingConfirm.confirmId, false);
+            useRunStore.getState().clearPendingConfirm(runId);
+          }
+        }}
+      />
     </div>
   );
 }

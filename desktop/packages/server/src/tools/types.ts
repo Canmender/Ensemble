@@ -7,8 +7,8 @@ export interface ToolContext {
   signal?: AbortSignal;
   agentId: string;
   appSettings?: AppSettings;
-  /** 需要用户确认的工具回调（桌面 IPC 弹窗；CLI/headless 返回 true） */
-  askConfirm?: (tool: string, args: unknown) => Promise<boolean>;
+  /** 需要用户确认的工具回调（WS 弹窗；CLI/headless 返回 false） */
+  askConfirm?: (tool: string, args: unknown, runId?: string) => Promise<boolean>;
 }
 
 /** 可插拔 Agent 工具 */

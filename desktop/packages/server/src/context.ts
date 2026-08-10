@@ -47,8 +47,6 @@ export interface AppContext {
 export interface CreateContextDeps {
   /** 密钥存储（桌面版传 Electron safeStorage 实现；缺省明文文件） */
   keyStore?: KeyStore;
-  /** 工具执行确认回调（桌面 IPC 弹窗；缺省自动允许） */
-  askConfirm?: (tool: string, args: unknown) => Promise<boolean>;
 }
 
 export function createAppContext(
@@ -150,11 +148,17 @@ export function createAppContext(
     }
   }
 
+  // WS-based HITL 确认：通过 hub 向前端发送确认请求，等待用户响应
+  const wsAskConfirm = async (tool: string, args: unknown, runId?: string): Promise<boolean> => {
+    if (!runId) return false; // 无 runId（headless/CLI）→ 拒绝
+    return hub.requestConfirm(runId, tool, args);
+  };
+
   const registry = new AdapterRegistry({
     providerRegistry,
     toolRegistry,
     appSettings: () => config.getSettings(),
-    askConfirm: deps.askConfirm,
+    askConfirm: wsAskConfirm,
     offloadBaseDir: join(dataDir, "offload"),
     memoryProvider,
     skillStore,
