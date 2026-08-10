@@ -16,6 +16,7 @@ import { SingleMode } from "./single";
 import { WorkflowMode } from "./workflow";
 import { ChatMode } from "./chat";
 import { PlanMode } from "./plan";
+import { AdversarialMode } from "./adversarial-mode";
 
 /**
  * 编排引擎：统一执行器。
@@ -91,7 +92,9 @@ export class OrchestrationEngine {
           ? new WorkflowMode(this).run(run, task)
           : mode === "plan"
             ? new PlanMode(this).run(run, task)
-            : new ChatMode(this).run(run, task));
+            : mode === "adversarial"
+              ? new AdversarialMode(this).run(run, task)
+              : new ChatMode(this).run(run, task));
 
       this.store.updateRun(run.id, { status: "success", finalResult: result, endedAt: new Date().toISOString() });
       this.hub.broadcast(run.id, 0, { type: "run.status", status: "success" });

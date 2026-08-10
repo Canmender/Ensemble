@@ -1,32 +1,33 @@
 /**
- * Plan 模式编排器
+ * 对抗模式编排器
  *
- * 实现 Plan-Execute-Reflect 三阶段循环
+ * 实现 Coder vs Tester 对抗迭代
  */
 
 import type { Run, Task, AgentEvent, Job } from "@ensemble/shared";
 import type { OrchestrationEngine } from "./engine";
-import type { AgentAdapter } from "../adapters/types";
-import { planExecuteReflect } from "./plan-execute-reflect";
+import { adversarialCoding } from "./adversarial";
 import { logger } from "../util/logger";
 
-export class PlanMode {
+export class AdversarialMode {
   constructor(private engine: OrchestrationEngine) {}
 
   async run(run: Run, task: Task): Promise<string> {
     const input = task.input;
-    if (input.mode !== "plan") throw new Error("Invalid mode for PlanMode");
+    if (input.mode !== "adversarial") throw new Error("Invalid mode for AdversarialMode");
 
-    const agentId = input.agentId;
-    const adapter = this.engine.getRegistry().get(agentId);
+    const coderAgentId = input.coderAgentId;
+    const testerAgentId = input.testerAgentId;
+    const coderAdapter = this.engine.getRegistry().get(coderAgentId);
+    const testerAdapter = this.engine.getRegistry().get(testerAgentId);
 
-    // 创建一个 Job 来跟踪整个 Plan-Execute-Reflect 过程
+    // 创建 Job
     const job: Job = {
       id: `job-${Date.now()}`,
       runId: run.id,
       seq: 1,
-      agentId,
-      agentName: this.engine.getAgentName(agentId),
+      agentId: coderAgentId,
+      agentName: `${this.engine.getAgentName(coderAgentId)} vs ${this.engine.getAgentName(testerAgentId)}`,
       prompt: input.prompt,
       status: "running",
       events: [],
@@ -37,7 +38,7 @@ export class PlanMode {
     this.engine.getHub().broadcast(run.id, 0, {
       type: "job.status",
       jobId: job.id,
-      agentId,
+      agentId: coderAgentId,
       status: "running",
     });
 
@@ -45,9 +46,19 @@ export class PlanMode {
     this.engine.getRunAborts().get(run.id)?.add(controller);
 
     try {
-      // 获取工具列表
+      // 获取 Provider
+      const coderConfig = this.engine.getAgentConfig(coderAgentId);
+      const testerConfig = this.engine.getAgentConfig(testerAgentId);
+      const coderProvider = this.engine.getProviderRegistry().get(coderConfig?.providerId ?? "");
+      const testerProvider = this.engine.getProviderRegistry().get(testerConfig?.providerId ?? "");
+
+      if (!coderProvider || !testerProvider) {
+        throw new Error("Provider not configured for coder or tester agent");
+      }
+
+      // 获取工具
       const tools = this.engine.getToolRegistry()?.forNames(
-        this.engine.getAgentConfig(agentId)?.tools ?? []
+        [...(coderConfig?.tools ?? []), ...(testerConfig?.tools ?? [])]
       ) ?? [];
 
       const llmTools = tools.map((t: any) => ({
@@ -56,25 +67,23 @@ export class PlanMode {
         input_schema: t.parameters,
       }));
 
-      // 执行 Plan-Execute-Reflect
+      // 执行对抗迭代
       const config = {
-        provider: this.engine.getProviderRegistry().get(
-          this.engine.getAgentConfig(agentId)?.providerId ?? ""
-        )!,
-        model: this.engine.getAgentConfig(agentId)?.model ?? "",
-        systemPrompt: this.engine.getAgentConfig(agentId)?.systemPrompt,
+        coderProvider,
+        testerProvider,
+        coderModel: coderConfig?.model ?? "",
+        testerModel: testerConfig?.model ?? "",
         tools,
         llmTools,
         signal: controller.signal,
-        maxIterations: input.maxIterations ?? 5,
-        qualityThreshold: input.qualityThreshold ?? 0.85,
+        maxIterations: input.maxIterations ?? 10,
+        coverageThreshold: input.coverageThreshold ?? 0.9,
         onEvent: (event: AgentEvent) => {
-          // 广播事件
           const seq = this.engine.getStore().appendRunEvent(run.id, job.id, event);
           this.engine.getHub().broadcast(run.id, seq, {
             type: "agent.event",
             jobId: job.id,
-            agentId,
+            agentId: coderAgentId,
             event,
           });
           job.events.push(event);
@@ -82,13 +91,13 @@ export class PlanMode {
       };
 
       const toolCtx = {
-        cwd: this.engine.getAgentConfig(agentId)?.cwd,
+        cwd: coderConfig?.cwd,
         signal: controller.signal,
-        agentId,
+        agentId: coderAgentId,
       };
 
       let finalResult = "";
-      for await (const event of planExecuteReflect(input.prompt, [], config, toolCtx)) {
+      for await (const event of adversarialCoding(input.prompt, input.language, config, toolCtx)) {
         if (event.type === "done") {
           finalResult = event.result ?? "";
           job.status = event.outcome === "success" ? "success" : "error";
@@ -106,7 +115,7 @@ export class PlanMode {
       this.engine.getHub().broadcast(run.id, 0, {
         type: "job.status",
         jobId: job.id,
-        agentId,
+        agentId: coderAgentId,
         status: job.status,
       });
 
@@ -125,7 +134,7 @@ export class PlanMode {
       this.engine.getHub().broadcast(run.id, 0, {
         type: "job.status",
         jobId: job.id,
-        agentId,
+        agentId: coderAgentId,
         status: "error",
       });
 
