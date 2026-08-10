@@ -201,7 +201,58 @@ ws.send({ type: "subscribe", runId: "run_xxx" });
 - 15s 心跳
 - 断线重连 + afterSeq 补拉
 
-### 6. 上下文管理 (`packages/server/src/context/`)
+### 6. 工具系统 (`packages/server/src/tools/`)
+
+#### RAG 知识库 (`tools/rag.ts`)
+
+```typescript
+// 创建 RAG 存储
+const ragStore = new RAGStore({
+  chunkSize: 512,
+  chunkOverlap: 50,
+  topK: 5,
+});
+
+// 添加文档
+await ragStore.addDocument({
+  id: "doc1",
+  content: "...",
+  metadata: { source: "manual", title: "..." },
+});
+
+// 混合检索
+const results = await ragStore.search("查询", {
+  method: "hybrid", // BM25 + 向量
+  topK: 5,
+  filters: { source: "manual" },
+});
+```
+
+**工具**：
+- `knowledge_search`: 知识库检索
+- `knowledge_manage`: 文档 CRUD
+
+#### Function Calling 适配层 (`tools/api-adapter.ts`)
+
+```typescript
+// 从 API 定义生成工具
+const tools = adapterToTools({
+  name: "github",
+  baseUrl: "https://api.github.com",
+  auth: { type: "token", envKey: "GITHUB_TOKEN" },
+  endpoints: [
+    { name: "search_repos", method: "GET", path: "/search/repositories", params: {...} },
+  ],
+});
+
+// 从 OpenAPI Spec 自动生成
+const tools = await loadToolsFromOpenApi("https://api.github.com/openapi.json", auth);
+```
+
+**预定义适配器**：
+- `githubAdapter`: GitHub API（仓库/Issue/PR）
+
+### 7. 上下文管理 (`packages/server/src/context/`)
 
 **ContextManager**：
 - `prepare()`：每轮 LLM 调用前，offload + 超阈值压缩
@@ -254,13 +305,23 @@ ws.send({ type: "subscribe", runId: "run_xxx" });
 
 ### 集成路线图
 
-| Phase | 内容 | 状态 |
-|-------|------|------|
-| 1 | Memory-Tool 协议、ReAct 循环、上下文压缩 | ✅ 已完成 |
-| 2 | Plan-Execute-Reflect、角色分工、状态机 | 📋 规划中 |
-| 3 | RAG 知识库、Function Calling、MCP 发现 | 📋 规划中 |
-| 4 | Coder vs Tester 对抗迭代 | 📋 规划中 |
-| 5 | 容器化、监控、自动调优、10 万次验证 | 📋 规划中 |
+| Phase | 内容 | 状态 | 文件 |
+|-------|------|------|------|
+| 1 | Memory-Tool 协议、ReAct 循环、上下文压缩 | ✅ 已完成 | `memory/`, `context/manager.ts` |
+| 2 | Plan-Execute-Reflect、角色分工、状态机 | ✅ 已完成 | `orchestration/plan-execute-reflect.ts`, `plan.ts` |
+| 3 | RAG 知识库、Function Calling | ✅ 已完成 | `tools/rag.ts`, `tools/api-adapter.ts` |
+| 4 | Coder vs Tester 对抗迭代 | ✅ 已完成 | `orchestration/adversarial.ts`, `adversarial-mode.ts` |
+| 5 | 容器化、监控、自动调优、10 万次验证 | 📋 规划中 | — |
+
+### 任务模式
+
+| 模式 | 说明 | 入口 |
+|------|------|------|
+| `single` | 单发/多 Agent 并行 + 可选聚合 | `orchestration/single.ts` |
+| `workflow` | DAG 调度（依赖/条件边/模板注入） | `orchestration/workflow.ts` |
+| `chat` | 群聊轮转（transcript 注入 / @agent 委派） | `orchestration/chat.ts` |
+| `plan` | Plan-Execute-Reflect 三阶段迭代 | `orchestration/plan.ts` |
+| `adversarial` | Coder vs Tester 对抗式代码迭代 | `orchestration/adversarial-mode.ts` |
 
 ---
 
