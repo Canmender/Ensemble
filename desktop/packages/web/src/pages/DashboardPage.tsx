@@ -219,7 +219,7 @@ function FullCreate({ agents, onRun }: { agents: Agent[]; onRun: (id: string) =>
                       onClick={() => setParticipantIds(toggle(participantIds, a.id))}
                       className={cls(
                         "rounded-lg border px-3 py-1.5 text-sm transition-colors",
-                        participantIds.includes(a.id) ? "border-violet-500 bg-violet-50 font-medium text-violet-700" : "border-border text-muted hover:border-violet-300",
+                        participantIds.includes(a.id) ? "border-primary bg-primary/10 font-medium text-primary" : "border-border text-muted hover:border-primary/50",
                       )}
                     >
                       {a.name}

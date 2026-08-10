@@ -36,7 +36,7 @@ function NavItem({ to, label, icon: Icon }: { to: string; label: string; icon: t
       end={to === "/"}
       className={({ isActive }) =>
         cls(
-          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+          "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
           isActive ? "bg-primary/10 text-primary" : "text-muted hover:bg-muted/10 hover:text-fg",
         )
       }
@@ -53,8 +53,9 @@ function ThemeSwitch() {
   return (
     <button
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className="relative flex h-6 w-11 items-center rounded-full bg-muted/30 transition-colors hover:bg-muted/50"
+      className="relative flex h-6 w-11 items-center rounded-full bg-muted/30 transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       title={isDark ? "切换到浅色" : "切换到深色"}
+      aria-label={isDark ? "切换到浅色主题" : "切换到深色主题"}
     >
       <span
         className={cls(
@@ -76,10 +77,11 @@ function SystemThemeToggle() {
     <button
       onClick={() => setTheme(isSystem ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light") : "system")}
       className={cls(
-        "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors",
+        "flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
         isSystem ? "bg-primary/10 text-primary" : "text-muted hover:bg-muted/10 hover:text-fg",
       )}
       title={isSystem ? "已跟随系统主题" : "点击跟随系统主题"}
+      aria-label={isSystem ? "已跟随系统主题" : "点击跟随系统主题"}
     >
       <MonitorSmartphone className="h-3.5 w-3.5" />
       <span>跟随系统</span>

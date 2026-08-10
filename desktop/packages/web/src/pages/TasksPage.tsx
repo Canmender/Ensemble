@@ -81,7 +81,7 @@ export default function TasksPage() {
         <StatCard icon={BarChart3} label="总任务数" value={stats.total} color="bg-blue-500" />
         <StatCard icon={CheckCircle} label="成功" value={stats.success} color="bg-emerald-500" />
         <StatCard icon={Clock} label="失败" value={stats.error} color="bg-red-500" />
-        <StatCard icon={TrendingUp} label="取消" value={stats.cancelled} color="bg-gray-500" />
+        <StatCard icon={TrendingUp} label="取消" value={stats.cancelled} color="bg-muted" />
       </div>
 
       {/* 搜索和过滤 */}

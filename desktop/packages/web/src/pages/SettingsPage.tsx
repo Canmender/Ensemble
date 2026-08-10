@@ -84,7 +84,7 @@ function ProviderForm({ initial, onDone }: { initial?: ProviderConfig; onDone: (
         </div>
       )}
       <div>
-        <Label>API Key {initial?.apiKeySet && <span className="text-emerald-600">（已配置）</span>}</Label>
+        <Label>API Key {initial?.apiKeySet && <span className="text-success">（已配置）</span>}</Label>
         <Input type="password" value={form.apiKey} onChange={(e) => set({ apiKey: e.target.value })} placeholder={initial?.apiKeySet ? "留空保持不变" : "sk-…"} />
       </div>
       <div>
@@ -677,7 +677,7 @@ export default function SettingsPage() {
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">
                 {p.baseUrl && <span className="rounded bg-bg px-2 py-0.5 font-mono">{p.baseUrl}</span>}
-                <span className={cls("rounded px-2 py-0.5", p.apiKeySet ? "bg-emerald-50 text-emerald-600" : "bg-bg text-muted")}>
+                <span className={cls("rounded px-2 py-0.5", p.apiKeySet ? "bg-success/10 text-success" : "bg-bg text-muted")}>
                   {p.apiKeySet ? "● API Key 已配置" : "○ 未配置 Key"}
                 </span>
                 {p.defaultModel && <span className="rounded bg-primary/10 px-2 py-0.5 text-primary">{p.defaultModel}</span>}
@@ -842,7 +842,7 @@ export default function SettingsPage() {
                 <p className="mt-0.5 text-xs text-muted">支持手机端跨网络连接，无需同一 WiFi</p>
               </div>
               <div className="flex items-center gap-2">
-                <div className={`h-2 w-2 rounded-full ${relayStatus.connected ? "bg-emerald-500" : "bg-gray-400"}`} />
+                <div className={`h-2 w-2 rounded-full ${relayStatus.connected ? "bg-success" : "bg-muted"}`} />
                 <span className="text-xs text-muted">
                   {relayStatus.connected ? "已连接" : "未连接"}
                 </span>

@@ -67,7 +67,13 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export function StatusDot({ status }: { status: string }) {
-  return <span className={cls("inline-block h-2 w-2 rounded-full", STATUS_COLOR[status] ?? "bg-muted/50")} />;
+  return (
+    <span
+      className={cls("inline-block h-2 w-2 rounded-full", STATUS_COLOR[status] ?? "bg-muted/50")}
+      aria-label={statusLabel(status)}
+      role="img"
+    />
+  );
 }
 
 export function statusLabel(status: string): string {
@@ -139,17 +145,30 @@ export function Modal({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+    >
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200"
+        onClick={onClose}
+      />
       <div
         className={cls(
           "relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl",
+          "animate-in fade-in zoom-in-95 duration-200",
           wide ? "max-w-2xl" : "max-w-lg",
         )}
       >
-        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+        <div className="flex shrink-0 items-center justify-between border-b border-border px-5 py-3.5">
           <h2 className="text-base font-semibold text-fg">{title}</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-muted hover:bg-muted/10 hover:text-fg">
+          <button
+            onClick={onClose}
+            aria-label="关闭"
+            className="rounded-lg p-1 text-muted hover:bg-muted/10 hover:text-fg focus-visible:ring-2 focus-visible:ring-ring"
+          >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
