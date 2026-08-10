@@ -45,6 +45,9 @@ export default {
         card: "0 1px 2px 0 rgb(0 0 0 / 0.05), 0 1px 3px 0 rgb(0 0 0 / 0.04)",
         "card-hover": "0 4px 12px -2px rgb(0 0 0 / 0.12)",
         pop: "0 10px 30px -5px rgb(0 0 0 / 0.25)",
+        // 深色模式使用更明显的阴影
+        "dark-card": "0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3)",
+        "dark-card-hover": "0 4px 12px -2px rgb(0 0 0 / 0.5)",
       },
     },
   },
