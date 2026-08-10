@@ -1,6 +1,6 @@
 import type { AgentEvent, Usage } from "./events";
 
-export type TaskMode = "single" | "workflow" | "chat";
+export type TaskMode = "single" | "workflow" | "chat" | "plan";
 export type RunStatus = "queued" | "running" | "success" | "error" | "cancelled";
 export type JobStatus = "queued" | "starting" | "running" | "success" | "error" | "cancelled";
 
@@ -22,7 +22,14 @@ export type TaskInput =
       aggregatorAgentId?: string;
     }
   | { mode: "workflow"; workflowId: string; prompt: string }
-  | { mode: "chat"; prompt: string; participantIds: string[]; maxRounds: number };
+  | { mode: "chat"; prompt: string; participantIds: string[]; maxRounds: number }
+  | {
+      mode: "plan";
+      prompt: string;
+      agentId: string;
+      maxIterations?: number;
+      qualityThreshold?: number;
+    };
 
 /** Run = 一次执行实例 */
 export interface Run {
