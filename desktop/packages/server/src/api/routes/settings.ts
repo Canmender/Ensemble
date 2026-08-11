@@ -10,7 +10,7 @@ export function settingsRouter(ctx: AppContext): Router {
     ok(res, ctx.config.getSettings());
   });
 
-  r.put("/", (req, res) => {
+  r.put("/", async (req, res) => {
     try {
       // Explicitly destructure only allowed fields to prevent mass-assignment / injection.
       // The appSettingsSchema will further validate, but we avoid passing arbitrary keys.
@@ -23,7 +23,7 @@ export function settingsRouter(ctx: AppContext): Router {
       if (body.mem0 !== undefined) patch.mem0 = body.mem0;
       if (body.security !== undefined) patch.security = body.security;
 
-      const settings = ctx.config.saveSettings(patch);
+      const settings = await ctx.config.saveSettings(patch);
       ok(res, settings);
     } catch (err) {
       fail(res, err);
