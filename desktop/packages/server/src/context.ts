@@ -21,6 +21,45 @@ import { OffloadStore } from "./context/offload";
 import { SkillStore, BUILTIN_SKILLS } from "./skills";
 import { makeMemoryTools } from "./tools/memory";
 import { logger } from "./util/logger";
+import { embedTexts, type EmbedFn, type EmbeddingOptions } from "./tools/embedding";
+import type { ProviderRuntimeConfig } from "./llm/types";
+
+/**
+ * 解析 RAG 向量检索的嵌入函数：
+ * - embeddingUrl/model 优先用 settings.rag 的配置
+ * - 缺省时复用默认 provider（defaultProviderId 优先，否则第一个启用的 OpenAI 兼容 provider）的
+ *   baseUrl / apiKey / 默认模型
+ * - 无法解析出 baseUrl+model 时返回 undefined（向量检索退化为仅 BM25）
+ */
+export function resolveEmbedFn(config: ConfigManager, providerRegistry: ProviderRegistry): EmbedFn | undefined {
+  const rag = config.getSettings().rag;
+  if (!rag?.enabled) return undefined;
+
+  let providerCfg: ProviderRuntimeConfig | undefined;
+  const defaultId = config.getSettings().defaultProviderId;
+  if (defaultId) providerCfg = providerRegistry.getRuntimeConfig(defaultId);
+  if (!providerCfg) {
+    for (const id of providerRegistry.list()) {
+      const cfg = providerRegistry.getRuntimeConfig(id);
+      if (cfg && (cfg.type === "openai" || cfg.type === "custom")) {
+        providerCfg = cfg;
+        break;
+      }
+    }
+  }
+
+  const baseUrl = rag.embeddingUrl ?? providerCfg?.baseUrl;
+  const model = rag.embeddingModel ?? providerCfg?.defaultModel;
+  if (!baseUrl || !model) return undefined;
+
+  const opts: EmbeddingOptions = {
+    baseUrl,
+    model,
+    apiKey: providerCfg?.apiKey,
+    extraHeaders: providerCfg?.extraHeaders,
+  };
+  return (texts: string[]) => embedTexts(opts, texts);
+}
 
 /** 应用服务容器：把所有模块组装起来，供 API 层使用 */
 export interface AppContext {
@@ -72,7 +111,7 @@ export function createAppContext(
     importanceThreshold: 0.5,
   });
 
-  registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager);
+  registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager, resolveEmbedFn(config, providerRegistry));
 
   const dataDir = dirname(env.dbPath);
   // 外部记忆后端：默认本地 SQL（SQLite + FTS5，免服务）；配置 Mem0 时切换到 Mem0

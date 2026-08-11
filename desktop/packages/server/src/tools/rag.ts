@@ -12,6 +12,7 @@ import type { AgentTool, ToolContext } from "./types";
 import { logger } from "../util/logger";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import type { EmbedFn } from "./embedding";
 
 // ========== 类型定义 ==========
 
@@ -62,6 +63,8 @@ export interface RAGConfig {
   rerankModel?: string;
   /** 本地存储路径 */
   storagePath?: string;
+  /** 可注入的嵌入函数（向量检索用）。缺省时向量检索退化为空、hybrid 仅返回 BM25 结果 */
+  embedFn?: EmbedFn;
 }
 
 // ========== 分块策略 ==========
@@ -331,6 +334,28 @@ function bm25Search(
   return scores.sort((a, b) => b.score - a.score).slice(0, topK);
 }
 
+/**
+ * Reciprocal Rank Fusion：按排名融合多个检索结果列表（k=60 为常见取值）。
+ * 避免向量相似度与 BM25 分数量纲不同导致的直接加和偏差。
+ */
+function rrfFuse(lists: SearchResult[][], topK: number): SearchResult[] {
+  const k = 60;
+  const scoreMap = new Map<string, number>();
+  const resultMap = new Map<string, SearchResult>();
+
+  for (const list of lists) {
+    list.forEach((r, i) => {
+      resultMap.set(r.chunk.id, r);
+      scoreMap.set(r.chunk.id, (scoreMap.get(r.chunk.id) ?? 0) + 1 / (k + i + 1));
+    });
+  }
+
+  return [...scoreMap.entries()]
+    .map(([id, score]) => ({ chunk: resultMap.get(id)!.chunk, score, source: "hybrid" as const }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, topK);
+}
+
 // ========== RAG 存储 ==========
 
 export class RAGStore {
@@ -340,6 +365,7 @@ export class RAGStore {
   private config: RAGConfig;
   private persistTimer: ReturnType<typeof setInterval> | null = null;
   private dirty = false;
+  private embedFn?: EmbedFn;
 
   constructor(config: RAGConfig) {
     this.config = {
@@ -348,6 +374,7 @@ export class RAGStore {
       topK: 5,
       ...config,
     };
+    this.embedFn = config.embedFn;
 
     // Attempt to load persisted data on startup
     if (this.config.storagePath) {
@@ -362,7 +389,7 @@ export class RAGStore {
     }
   }
 
-  /** 添加文档并分块 */
+  /** 添加文档并分块（配置了 embedFn 时为每个 chunk 计算向量） */
   async addDocument(doc: Document): Promise<void> {
     this.documents.set(doc.id, doc);
 
@@ -372,6 +399,16 @@ export class RAGStore {
       this.config.chunkSize,
       this.config.chunkOverlap,
     );
+
+    // 批量计算分块向量（失败不阻断入库，退化为仅 BM25 可检索）
+    let embeddings: number[][] | undefined;
+    if (this.embedFn) {
+      try {
+        embeddings = await this.embedFn(chunks.map((c) => c.content));
+      } catch (err) {
+        logger.warn(`RAG: embedding failed for ${doc.id}: ${String(err)}`);
+      }
+    }
 
     // 存储分块
     for (let i = 0; i < chunks.length; i++) {
@@ -384,6 +421,7 @@ export class RAGStore {
           startIndex: chunks[i].startIndex,
           endIndex: chunks[i].startIndex + chunks[i].content.length,
         },
+        embedding: embeddings?.[i],
       };
       this.chunks.set(chunk.id, chunk);
     }
@@ -465,7 +503,7 @@ export class RAGStore {
     }
   }
 
-  /** 混合检索：向量 + BM25 */
+  /** 混合检索：向量 + BM25（RRF 排名融合） */
   async search(
     query: string,
     options?: {
@@ -477,26 +515,24 @@ export class RAGStore {
     const topK = options?.topK ?? this.config.topK ?? 5;
     const method = options?.method ?? "hybrid";
 
-    let results: SearchResult[] = [];
-
-    if (method === "bm25" || method === "hybrid") {
-      // BM25 检索
-      if (!this.bm25Index) {
-        this.rebuildBM25Index();
-      }
-
-      if (this.bm25Index) {
-        const bm25Results = bm25Search(this.bm25Index, query, topK * 2);
-        for (const r of bm25Results) {
-          const chunk = this.chunks.get(r.id);
-          if (chunk) {
-            results.push({
-              chunk,
-              score: r.score,
-              source: "bm25",
-            });
-          }
-        }
+    let results: SearchResult[];
+    if (method === "vector") {
+      results = await this.vectorSearch(query, topK);
+    } else if (method === "bm25") {
+      results = this.bm25Search(query, topK);
+    } else {
+      // hybrid：并行跑向量与 BM25，用 RRF 融合排名（避免量纲差异）
+      const [vector, bm25] = await Promise.all([
+        this.vectorSearch(query, topK * 2),
+        this.bm25Search(query, topK * 2),
+      ]);
+      // 单侧能力缺失时退化为另一侧（source 保持诚实标注）
+      if (vector.length === 0) {
+        results = bm25;
+      } else if (bm25.length === 0) {
+        results = vector;
+      } else {
+        results = rrfFuse([vector, bm25], topK);
       }
     }
 
@@ -516,17 +552,46 @@ export class RAGStore {
       });
     }
 
-    // 去重并排序
-    const seen = new Set<string>();
-    const deduped: SearchResult[] = [];
-    for (const r of results) {
-      if (!seen.has(r.chunk.id)) {
-        seen.add(r.chunk.id);
-        deduped.push(r);
+    return results.slice(0, topK);
+  }
+
+  /** 向量语义检索：query 嵌入后与全部分块做余弦相似度 */
+  private async vectorSearch(query: string, topK: number): Promise<SearchResult[]> {
+    if (!this.embedFn) return [];
+    let queryEmbedding: number[];
+    try {
+      const [emb] = await this.embedFn([query]);
+      queryEmbedding = emb;
+    } catch (err) {
+      logger.warn(`RAG: query embedding failed: ${String(err)}`);
+      return [];
+    }
+    if (!queryEmbedding || queryEmbedding.length === 0) return [];
+
+    const scored: SearchResult[] = [];
+    for (const chunk of this.chunks.values()) {
+      if (!chunk.embedding || chunk.embedding.length === 0) continue;
+      const sim = cosineSimilarity(queryEmbedding, chunk.embedding);
+      if (sim > 0) {
+        scored.push({ chunk, score: sim, source: "vector" });
       }
     }
+    return scored.sort((a, b) => b.score - a.score).slice(0, topK);
+  }
 
-    return deduped.sort((a, b) => b.score - a.score).slice(0, topK);
+  /** BM25 关键词检索 */
+  private bm25Search(query: string, topK: number): SearchResult[] {
+    if (!this.bm25Index) this.rebuildBM25Index();
+    if (!this.bm25Index) return [];
+
+    const results: SearchResult[] = [];
+    for (const r of bm25Search(this.bm25Index, query, topK)) {
+      const chunk = this.chunks.get(r.id);
+      if (chunk) {
+        results.push({ chunk, score: r.score, source: "bm25" });
+      }
+    }
+    return results;
   }
 
   /** 重建 BM25 索引 */
