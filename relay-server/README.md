@@ -181,7 +181,7 @@ pm2 logs ensemble-relay --lines 100
 
 1. **使用 HTTPS** — 配置 SSL 证书
 2. **限制 CORS** — 只允许你的域名
-3. **添加认证** — 实现 token 认证机制
+3. **配置 `RELAY_AUTH_KEY`** — 启用后 Socket.IO 握手与 `/devices` 均要求 Bearer token（设备注册、消息转发不再裸奔）
 4. **限制连接数** — 防止 DDoS 攻击
 5. **定期更新** — 保持依赖最新
 
@@ -191,8 +191,11 @@ pm2 logs ensemble-relay --lines 100
 |------|--------|------|
 | `PORT` | 3001 | 服务器端口 |
 | `CORS_ORIGINS` | * | 允许的源 |
+| `RELAY_AUTH_KEY` | （空） | 共享认证密钥；设置后所有设备需用同一 key 连接 |
 | `OFFLINE_MESSAGE_EXPIRY` | 86400000 | 离线消息过期时间（ms） |
 | `LOG_LEVEL` | info | 日志级别 |
+
+客户端连接时传入 `auth: { token: <RELAY_AUTH_KEY> }`（桌面端 `/api/relay/connect`、移动端设置页均支持）。
 
 ## 🐛 故障排除
 

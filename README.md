@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-58%20passed-brightgreen)](#测试)
+[![Tests](https://img.shields.io/badge/tests-126%20passed-brightgreen)](#测试)
 
 ---
 
@@ -127,13 +127,28 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 | 措施 | 说明 |
 |------|------|
+| HTTP API 认证 | 所有 `/api/*` 要求 Bearer token；`/api/ws-token` Origin 校验；支持 `ENSEMBLE_API_KEY` |
+| WebSocket 认证 | Token 认证 + timingSafeEqual + 1MB 消息限制 |
 | 命令注入防护 | Shell 元字符检测 + 词边界匹配 + MCP 命令审计 |
 | API Key 加密 | AES-256-GCM 加密存储，自动迁移旧格式 |
-| WebSocket 认证 | Token 认证 + timingSafeEqual + 1MB 消息限制 |
 | Electron CSP | Content-Security-Policy + 导航守卫 + 权限拒绝 |
 | SSRF 防护 | 私有 IP 检测 + DNS 重绑定防护 |
 | 速率限制 | API + WebSocket 双层限流 |
 | 输入验证 | Zod schema + 字段白名单 + 路径穿越防护 |
+
+### 移动端直连（局域网）
+
+桌面端默认仅绑定 `127.0.0.1`。如需手机直连，启动桌面端前设置：
+
+```bash
+# 绑定局域网并自动发布 mDNS（手机端可发现）
+ENSEMBLE_LAN_HOST=0.0.0.0
+# 建议同时配置固定 API key（避免局域网内任意访问）
+ENSEMBLE_API_KEY=your-secret-key
+```
+
+手机端通过 REST + 原生 WebSocket 直连桌面端（认证、任务创建、实时事件流），
+或通过 `relay-server` 走云端中继（跨网络）。详见 [relay-server/README.md](relay-server/README.md)。
 
 ---
 
@@ -141,11 +156,12 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ```bash
 cd desktop
-pnpm --filter @ensemble/server test    # 58 个单元测试
+pnpm --filter @ensemble/server test    # 126 个单元测试
+pnpm --filter @ensemble/relay-server test  # 9 个集成测试（relay-server 目录）
 pnpm -r typecheck                      # 全量类型检查
 ```
 
-覆盖模块：安全检查（26 个用例）、LLM 重试逻辑（13 个用例）、工具系统、编排引擎、记忆池。
+覆盖模块：API 认证（18 个用例）、安全检查（26 个用例）、LLM 重试（13 个用例）、RAG 向量检索（18 个用例）、Store 持久层（13 个用例）、编排引擎（3 个用例）、ConfigManager 异步写（10 个用例）、WebSocket 事件驱动（6 个用例）。
 
 ---
 
@@ -154,7 +170,7 @@ pnpm -r typecheck                      # 全量类型检查
 | 优化项 | 效果 |
 |--------|------|
 | 路由懒加载 | 首屏 JS ↓55% |
-| ReactFlow 动态加载 | RunPage ↓92% |
+| ReactFlow 动态加载 | RunPage ↓92%（@xyflow/react v12） |
 | WebSocket 批量发送 | 帧数 ↓10-50x |
 | Zustand 选择器优化 | 消除每 50ms 全页重渲染 |
 | LLM 指数退避重试 | 429/5xx 自动恢复 |
@@ -178,8 +194,8 @@ pnpm -r typecheck                      # 全量类型检查
 
 | 层 | 技术 |
 |----|------|
-| 前端 | React 18 / TypeScript / Tailwind CSS / ReactFlow / Zustand |
-| 后端 | Express / WebSocket / SQLite (node:sqlite) / Zod |
+| 前端 | React 18 / TypeScript / Tailwind CSS / @xyflow/react / Zustand |
+| 后端 | Express 5 / WebSocket / SQLite (node:sqlite) / Zod |
 | 桌面 | Electron 43 / esbuild |
 | 手机 | Expo / React Native |
 | 部署 | Docker Compose / Nginx |
