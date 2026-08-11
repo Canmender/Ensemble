@@ -31,6 +31,14 @@ interface PendingMessage {
   jobId?: string;
 }
 
+/** 事件等待者：waitForRun 注册，broadcast 匹配后 resolve（替代忙等待轮询） */
+interface EventWaiter {
+  runId: string;
+  match: (event: RunEvent) => boolean;
+  resolve: (event: RunEvent | null) => void;
+  timer?: ReturnType<typeof setTimeout>;
+}
+
 export class WsHub {
   private wss?: WebSocketServer;
   private serverPath = "/ws";
@@ -53,6 +61,9 @@ export class WsHub {
 
   // HITL 工具确认：confirmId → { resolve, timer }
   private pendingConfirms = new Map<string, { resolve: (approved: boolean) => void; timer?: ReturnType<typeof setTimeout> }>();
+
+  /** 事件等待者（waitForRun 的注册表） */
+  private eventWaiters: EventWaiter[] = [];
 
   /** 获取当前 session token（前端用于建立 WebSocket 连接） */
   get sessionToken(): string {
@@ -193,8 +204,52 @@ export class WsHub {
     if (set && set.size === 0) this.runSubs.delete(runId);
   }
 
+  /**
+   * 事件驱动等待：等待该 run 广播下一个满足 match 的事件，超时返回 null。
+   * 替代服务端忙等待轮询（chat 端点等待回复/执行完成）。
+   */
+  waitForRun(
+    runId: string,
+    match: (event: RunEvent) => boolean,
+    timeoutMs: number,
+  ): Promise<RunEvent | null> {
+    return new Promise((resolve) => {
+      const entry: EventWaiter = { runId, match, resolve };
+      entry.timer = setTimeout(() => {
+        this.removeWaiter(entry);
+        resolve(null);
+      }, timeoutMs);
+      entry.timer.unref?.();
+      this.eventWaiters.push(entry);
+    });
+  }
+
+  private removeWaiter(entry: EventWaiter): void {
+    const idx = this.eventWaiters.indexOf(entry);
+    if (idx >= 0) this.eventWaiters.splice(idx, 1);
+  }
+
+  /** broadcast 时同步匹配 pending waiters（不依赖批量 flush，保证即时性） */
+  private checkWaiters(runId: string, event: RunEvent): void {
+    if (this.eventWaiters.length === 0) return;
+    const matched: EventWaiter[] = [];
+    for (let i = this.eventWaiters.length - 1; i >= 0; i--) {
+      const w = this.eventWaiters[i];
+      if (w.runId === runId && w.match(event)) {
+        this.eventWaiters.splice(i, 1);
+        matched.push(w);
+      }
+    }
+    for (const w of matched) {
+      if (w.timer) clearTimeout(w.timer);
+      w.resolve(event);
+    }
+  }
+
   /** 向订阅了该 run 的所有客户端广播一帧（含 wildcard 订阅者） */
   broadcast(runId: string, seq: number, event: RunEvent, jobId?: string): void {
+    // 同步匹配事件等待者（chat 等事件驱动的等待）
+    this.checkWaiters(runId, event);
     // 加入待发送队列，批量 flush
     this.pendingMessages.push({ runId, seq, event, ts: Date.now(), jobId });
     if (!this.flushTimer) {
@@ -329,6 +384,12 @@ export class WsHub {
       pending.resolve(false);
     }
     this.pendingConfirms.clear();
+    // 清理事件等待者（resolve null 避免悬挂 Promise）
+    for (const w of this.eventWaiters) {
+      if (w.timer) clearTimeout(w.timer);
+      w.resolve(null);
+    }
+    this.eventWaiters = [];
     this.wss?.close();
     this.wsSubs.clear();
     this.runSubs.clear();
