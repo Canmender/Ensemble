@@ -9,16 +9,24 @@
 
 let cached: Promise<string | null> | null = null;
 
-/** 获取当前 session token（首次调用后缓存；失败返回 null） */
+/** 获取当前 session token（首次调用后缓存；失败返回 null 且不缓存，允许下次重试） */
 export function getSessionToken(): Promise<string | null> {
   if (!cached) {
-    cached = fetch("/api/ws-token")
-      .then((res) => (res.ok ? res.json() : null))
-      .then((json: unknown) => {
-        const token = (json as { token?: unknown } | null)?.token;
+    cached = (async () => {
+      try {
+        const res = await fetch("/api/ws-token");
+        if (!res.ok) return null;
+        const json = (await res.json()) as { token?: unknown } | null;
+        const token = json?.token;
         return typeof token === "string" ? token : null;
-      })
-      .catch(() => null);
+      } catch {
+        return null;
+      }
+    })().then((token) => {
+      // 失败（null）不缓存：避免一次性网络失败导致后续请求永久 401
+      if (token === null) cached = null;
+      return token;
+    });
   }
   return cached;
 }
