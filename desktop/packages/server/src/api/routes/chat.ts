@@ -30,36 +30,28 @@ export function chatRouter(ctx: AppContext): Router {
           const run = ctx.store.getRun(runId);
           if (!run) return fail(res, new Error("run not found"), 404);
 
-          // 通过 steer 注入用户消息
+          // 事件驱动等待 agent 回复（替代 200ms 忙等待轮询）：
+          // 命中 agent 新消息（chat.message）或 run 终止（error/cancelled）即 resolve
+          const waitForReply = ctx.hub.waitForRun(
+            runId,
+            (ev) => {
+              if (ev.type === "chat.message") return ev.agentId !== "user";
+              if (ev.type === "run.status") return ev.status === "error" || ev.status === "cancelled";
+              return false;
+            },
+            60_000,
+          );
+
+          // 先注册等待，再注入用户消息，避免竞态
           ctx.engine.addSteering(runId, message);
 
           // 广播用户消息
           ctx.engine.broadcastChatMessage(runId, undefined, "user", "user", message);
 
-          // 等待智能体回复（轮询检查新消息）
-          // TODO: replace busy-wait polling with an event-based approach (e.g. SSE or WebSocket push)
-          const initialCount = ctx.store.listChatMessages(runId).length;
-          const maxWait = 60000; // 最多等待 60 秒
-          const startTime = Date.now();
-
-          while (Date.now() - startTime < maxWait) {
-            await new Promise((resolve) => setTimeout(resolve, 200));
-            // Early exit if the run was cancelled or failed
-            const currentRun = ctx.store.getRun(runId);
-            if (currentRun?.status === "error" || currentRun?.status === "cancelled") {
-              return ok(res, { reply: "(任务已终止)", agentId });
-            }
-            const messages = ctx.store.listChatMessages(runId);
-            if (messages.length > initialCount) {
-              // 找到最新的非用户消息
-              const lastMsg = messages[messages.length - 1];
-              if (lastMsg.agentId !== "user") {
-                return ok(res, { reply: lastMsg.content, agentId: lastMsg.agentId });
-              }
-            }
-          }
-
-          return ok(res, { reply: "(等待回复超时)", agentId });
+          const ev = await waitForReply;
+          if (!ev) return ok(res, { reply: "(等待回复超时)", agentId });
+          if (ev.type === "chat.message") return ok(res, { reply: ev.content, agentId: ev.agentId });
+          return ok(res, { reply: "(任务已终止)", agentId });
         }
 
         // 单聊：创建一次性 Run 获取回复
@@ -69,18 +61,14 @@ export function chatRouter(ctx: AppContext): Router {
           agentIds: [agentId],
         });
 
-        // 等待执行完成
-        // TODO: replace busy-wait polling with an event-based approach (e.g. SSE or WebSocket push)
-        const maxWait = 60000;
-        const startTime = Date.now();
-
-        while (Date.now() - startTime < maxWait) {
-          await new Promise((resolve) => setTimeout(resolve, 200));
-          const currentRun = ctx.store.getRun(run.id);
-          if (currentRun?.status === "success" || currentRun?.status === "error" || currentRun?.status === "cancelled") {
-            break;
-          }
-        }
+        // 事件驱动等待执行完成（替代 200ms 忙等待轮询）
+        await ctx.hub.waitForRun(
+          run.id,
+          (ev) =>
+            ev.type === "run.status" &&
+            (ev.status === "success" || ev.status === "error" || ev.status === "cancelled"),
+          60_000,
+        );
 
         // 获取结果
         const finalRun = ctx.store.getRun(run.id);
