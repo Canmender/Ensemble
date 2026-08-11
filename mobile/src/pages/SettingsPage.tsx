@@ -18,9 +18,12 @@ import {
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
 import { discoveryService } from "../services/discovery";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const APP_VERSION = "0.4.3";
 const MAX_HISTORY = 10;
+/** 连接历史持久化 key（AsyncStorage） */
+const HISTORY_KEY = "@ensemble/settings_connection_history";
 
 /** Connection history entry */
 interface ConnectionRecord {
@@ -31,7 +34,7 @@ interface ConnectionRecord {
   lastConnected: number;
 }
 
-/** In-memory connection history. TODO: persist with AsyncStorage. */
+/** Connection history（进程内缓存，持久化到 AsyncStorage） */
 let connectionHistory: ConnectionRecord[] = [];
 let savedRelayUrl = "";
 let savedRelayToken = "";
@@ -56,6 +59,19 @@ export default function SettingsPage() {
 
   const isConnected = connectionState === "connected";
 
+  // 启动时从 AsyncStorage 加载连接历史
+  useEffect(() => {
+    void AsyncStorage.getItem(HISTORY_KEY).then((raw) => {
+      if (!raw) return;
+      try {
+        connectionHistory = JSON.parse(raw) as ConnectionRecord[];
+        setHistory([...connectionHistory]);
+      } catch {
+        // 损坏数据忽略，回退空列表
+      }
+    });
+  }, []);
+
   /** Add entry to connection history */
   const addToHistory = useCallback(
     (label: string, address: string, mode: "lan" | "relay") => {
@@ -71,6 +87,7 @@ export default function SettingsPage() {
         ...connectionHistory.filter((h) => h.address !== address || h.mode !== mode),
       ].slice(0, MAX_HISTORY);
       setHistory([...connectionHistory]);
+      void AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(connectionHistory));
     },
     []
   );
