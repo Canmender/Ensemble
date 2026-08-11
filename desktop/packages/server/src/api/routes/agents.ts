@@ -5,20 +5,20 @@ import { asyncH, fail, ok } from "./helpers";
 /** Agent 记忆端点（两级记忆：snapshot / consolidate / clear） */
 function memoryRoutes(ctx: AppContext, r: Router): void {
   r.get("/:id/memory", asyncH(async (req, res) => {
-    if (!/^[a-z0-9-]+$/.test(req.params.id)) return fail(res, new Error("invalid agent id"), 400);
-    const snap = await ctx.memoryProvider.snapshot(req.params.id);
+    if (!/^[a-z0-9-]+$/.test(String(req.params.id))) return fail(res, new Error("invalid agent id"), 400);
+    const snap = await ctx.memoryProvider.snapshot(String(req.params.id));
     ok(res, snap);
   }));
 
   r.post("/:id/memory/consolidate", asyncH(async (req, res) => {
-    if (!/^[a-z0-9-]+$/.test(req.params.id)) return fail(res, new Error("invalid agent id"), 400);
-    await ctx.memoryProvider.consolidate(req.params.id);
+    if (!/^[a-z0-9-]+$/.test(String(req.params.id))) return fail(res, new Error("invalid agent id"), 400);
+    await ctx.memoryProvider.consolidate(String(req.params.id));
     ok(res, { ok: true });
   }));
 
   r.delete("/:id/memory", (req, res) => {
-    if (!/^[a-z0-9-]+$/.test(req.params.id)) return fail(res, new Error("invalid agent id"), 400);
-    ctx.memoryProvider.clear(req.params.id);
+    if (!/^[a-z0-9-]+$/.test(String(req.params.id))) return fail(res, new Error("invalid agent id"), 400);
+    ctx.memoryProvider.clear(String(req.params.id));
     ok(res, { deleted: true });
   });
 }
@@ -31,8 +31,8 @@ export function agentsRouter(ctx: AppContext): Router {
   });
 
   r.get("/:id", (req, res) => {
-    const cfg = ctx.config.getAgent(req.params.id);
-    if (!cfg) return fail(res, new Error(`agent not found: ${req.params.id}`), 404);
+    const cfg = ctx.config.getAgent(String(req.params.id));
+    if (!cfg) return fail(res, new Error(`agent not found: ${String(req.params.id)}`), 404);
     ok(res, cfg);
   });
 
@@ -48,7 +48,7 @@ export function agentsRouter(ctx: AppContext): Router {
 
   r.put("/:id", async (req, res) => {
     try {
-      const cfg = await ctx.config.updateAgent(req.params.id, req.body);
+      const cfg = await ctx.config.updateAgent(String(req.params.id), req.body);
       ctx.reloadAgents();
       ok(res, cfg);
     } catch (err) {
@@ -57,16 +57,16 @@ export function agentsRouter(ctx: AppContext): Router {
   });
 
   r.delete("/:id", async (req, res) => {
-    await ctx.config.deleteAgent(req.params.id);
+    await ctx.config.deleteAgent(String(req.params.id));
     ctx.reloadAgents();
-    ok(res, { deleted: req.params.id });
+    ok(res, { deleted: String(req.params.id) });
   });
 
   /** 冒烟测试：跑一句 prompt，返回事件流（不落库） */
   r.post(
     "/:id/test",
     asyncH(async (req, res) => {
-      const id = req.params.id;
+      const id = String(req.params.id);
       const cfg = ctx.config.getAgent(id);
       if (!cfg) return fail(res, new Error(`agent not found: ${id}`), 404);
       if (!ctx.registry.has(id)) return fail(res, new Error(`agent not enabled: ${id}`));

@@ -91,7 +91,7 @@ export function chatRouter(ctx: AppContext): Router {
   r.get(
     "/history/:runId",
     asyncH(async (req, res) => {
-      const { runId } = req.params;
+      const runId = String(req.params.runId);
       const run = ctx.store.getRun(runId);
       if (!run) return fail(res, new Error("run not found"), 404);
 
@@ -106,7 +106,7 @@ export function chatRouter(ctx: AppContext): Router {
   r.get(
     "/:runId/messages",
     asyncH(async (req, res) => {
-      const { runId } = req.params;
+      const runId = String(req.params.runId);
       const run = ctx.store.getRun(runId);
       if (!run) return fail(res, new Error("run not found"), 404);
 
@@ -122,7 +122,7 @@ export function chatRouter(ctx: AppContext): Router {
   r.post(
     "/:runId/messages",
     asyncH(async (req, res) => {
-      const { runId } = req.params;
+      const runId = String(req.params.runId);
       const { content } = req.body ?? {};
       const run = ctx.store.getRun(runId);
       if (!run) return fail(res, new Error("run not found"), 404);

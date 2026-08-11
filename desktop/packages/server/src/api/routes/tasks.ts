@@ -11,8 +11,8 @@ export function tasksRouter(ctx: AppContext): Router {
   });
 
   r.get("/:id", (req, res) => {
-    const task = ctx.store.getTask(req.params.id);
-    if (!task) return fail(res, new Error(`task not found: ${req.params.id}`), 404);
+    const task = ctx.store.getTask(String(req.params.id));
+    if (!task) return fail(res, new Error(`task not found: ${String(req.params.id)}`), 404);
     const runs = ctx.store.listRuns({ taskId: task.id });
     ok(res, { task, runs });
   });
@@ -36,16 +36,16 @@ export function tasksRouter(ctx: AppContext): Router {
   r.post(
     "/:id/rerun",
     asyncH(async (req, res) => {
-      const task = ctx.store.getTask(req.params.id);
-      if (!task) return fail(res, new Error(`task not found: ${req.params.id}`), 404);
+      const task = ctx.store.getTask(String(req.params.id));
+      if (!task) return fail(res, new Error(`task not found: ${String(req.params.id)}`), 404);
       const run = ctx.engine.executeTask(task);
       ok(res, run, 201);
     }),
   );
 
   r.delete("/:id", (req, res) => {
-    ctx.store.deleteTask(req.params.id);
-    ok(res, { deleted: req.params.id });
+    ctx.store.deleteTask(String(req.params.id));
+    ok(res, { deleted: String(req.params.id) });
   });
 
   return r;
