@@ -2,6 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type {
   AgentEvent,
   ChatMessage,
+  Conversation,
   Job,
   Run,
   Task,
@@ -50,6 +51,14 @@ export class Store {
     listWorkflows: ReturnType<DatabaseSync["prepare"]>;
     getWorkflow: ReturnType<DatabaseSync["prepare"]>;
     deleteWorkflow: ReturnType<DatabaseSync["prepare"]>;
+    // Conversations
+    createConversation: ReturnType<DatabaseSync["prepare"]>;
+    getConversation: ReturnType<DatabaseSync["prepare"]>;
+    listConversations: ReturnType<DatabaseSync["prepare"]>;
+    deleteConversation: ReturnType<DatabaseSync["prepare"]>;
+    updateConvMeta: ReturnType<DatabaseSync["prepare"]>;
+    incrementUnread: ReturnType<DatabaseSync["prepare"]>;
+    markRead: ReturnType<DatabaseSync["prepare"]>;
   };
 
   constructor(private db: DatabaseSync) {
@@ -81,6 +90,14 @@ export class Store {
       listWorkflows: db.prepare("SELECT * FROM workflows ORDER BY name"),
       getWorkflow: db.prepare("SELECT * FROM workflows WHERE id = ?"),
       deleteWorkflow: db.prepare("DELETE FROM workflows WHERE id = ?"),
+      // Conversations
+      createConversation: db.prepare("INSERT INTO conversations (id, user_id, type, title, participant_ids, run_id, last_message, last_message_ts, unread, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)"),
+      getConversation: db.prepare("SELECT * FROM conversations WHERE id = ?"),
+      listConversations: db.prepare("SELECT * FROM conversations ORDER BY updated_at DESC"),
+      deleteConversation: db.prepare("DELETE FROM conversations WHERE id = ?"),
+      updateConvMeta: db.prepare("UPDATE conversations SET last_message = ?, last_message_ts = ?, updated_at = ? WHERE id = ?"),
+      incrementUnread: db.prepare("UPDATE conversations SET unread = unread + 1, updated_at = ? WHERE id = ?"),
+      markRead: db.prepare("UPDATE conversations SET unread = 0 WHERE id = ?"),
     };
   }
 
@@ -323,6 +340,50 @@ export class Store {
   deleteWorkflow(id: string): void {
     this.stmts.deleteWorkflow.run(id);
   }
+
+  // ---------- Conversations ----------
+  createConversation(c: Conversation): void {
+    this.stmts.createConversation.run(
+      c.id, c.userId ?? '', c.type, c.title ?? null,
+      JSON.stringify(c.participantIds), c.runId,
+      c.lastMessage ?? null, c.lastMessageTs ?? null,
+      c.unread, c.createdAt, c.updatedAt,
+    );
+  }
+
+  getConversation(id: string): Conversation | undefined {
+    const r = this.stmts.getConversation.get(id) as any;
+    return r ? rowToConversation(r) : undefined;
+  }
+
+  /** 通过关联的 run_id 反查会话（broadcastChatMessage 更新会话元数据用） */
+  getConversationByRunId(runId: string): Conversation | undefined {
+    const r = this.db.prepare("SELECT * FROM conversations WHERE run_id = ?").get(runId) as any;
+    return r ? rowToConversation(r) : undefined;
+  }
+
+  listConversations(userId?: string): Conversation[] {
+    const rows = userId
+      ? (this.db.prepare("SELECT * FROM conversations WHERE user_id = ? OR user_id = '' ORDER BY updated_at DESC").all(userId) as any[])
+      : (this.stmts.listConversations.all() as any[]);
+    return rows.map(rowToConversation);
+  }
+
+  updateConversationMeta(id: string, lastMessage: string, lastMessageTs: string): void {
+    this.stmts.updateConvMeta.run(lastMessage, lastMessageTs, new Date().toISOString(), id);
+  }
+
+  incrementUnread(id: string): void {
+    this.stmts.incrementUnread.run(new Date().toISOString(), id);
+  }
+
+  markRead(id: string): void {
+    this.stmts.markRead.run(id);
+  }
+
+  deleteConversation(id: string): void {
+    this.stmts.deleteConversation.run(id);
+  }
 }
 
 function rowToRun(r: any): Run {
@@ -359,5 +420,21 @@ function rowToJob(r: any): Job {
     startedAt: r.started_at ?? undefined,
     endedAt: r.ended_at ?? undefined,
     error: r.error ?? undefined,
+  };
+}
+
+function rowToConversation(r: any): Conversation {
+  return {
+    id: r.id,
+    userId: r.user_id ?? undefined,
+    type: r.type,
+    title: r.title ?? undefined,
+    participantIds: JSON.parse(r.participant_ids ?? "[]"),
+    runId: r.run_id,
+    lastMessage: r.last_message ?? undefined,
+    lastMessageTs: r.last_message_ts ?? undefined,
+    unread: Number(r.unread ?? 0),
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
   };
 }

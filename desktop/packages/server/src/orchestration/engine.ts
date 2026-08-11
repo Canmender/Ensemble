@@ -381,6 +381,12 @@ export class OrchestrationEngine {
       userId: run?.userId,
       ts: new Date().toISOString(),
     });
+    // 更新关联会话元数据：lastMessage；agent 回复增加未读计数
+    const conv = this.store.getConversationByRunId(runId);
+    if (conv) {
+      this.store.updateConversationMeta(conv.id, content, new Date().toISOString());
+      if (role === "assistant") this.store.incrementUnread(conv.id);
+    }
     this.hub.broadcast(runId, 0, {
       type: "chat.message",
       jobId: jobId ?? "",

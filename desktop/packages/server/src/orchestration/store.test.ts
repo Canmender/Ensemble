@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../db/sqlite";
 import { Store } from "./store";
-import type { Task, Run, Job, ChatMessage, WorkflowDef } from "@ensemble/shared";
+import type { Task, Run, Job, ChatMessage, Conversation, WorkflowDef } from "@ensemble/shared";
 
 /** 临时文件 DB 的 Store 测试（验证 SQLite 持久层 CRUD、seq 分配、级联删除） */
 function makeStore(): { store: Store; db: ReturnType<typeof openDb>; dir: string } {
@@ -254,5 +254,61 @@ describe("Store workflows", () => {
     store.saveWorkflow({ id: "wf-1", name: "W", nodes: [{ id: "n1", agentId: "a", prompt: "p" }], edges: [] });
     store.deleteWorkflow("wf-1");
     expect(store.getWorkflow("wf-1")).toBeUndefined();
+  });
+});
+
+// ── Conversations ───────────────────────────────────────────────────────────
+
+describe("Store conversations", () => {
+  const conv = (id: string, runId: string): Conversation => ({
+    id,
+    userId: "u1",
+    type: "direct",
+    participantIds: ["agent-a"],
+    runId,
+    unread: 0,
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  it("creates and lists conversations for a user", () => {
+    const { store } = setup();
+    store.createConversation(conv("c1", "r1"));
+    store.createConversation({ ...conv("c2", "r2"), userId: "u2" });
+
+    const mine = store.listConversations("u1");
+    expect(mine.some((c) => c.id === "c1")).toBe(true);
+    expect(mine.some((c) => c.id === "c2")).toBe(false);
+  });
+
+  it("updates lastMessage metadata and unread", () => {
+    const { store } = setup();
+    store.createConversation(conv("c1", "r1"));
+
+    store.updateConversationMeta("c1", "hello", "2026-01-01T00:01:00.000Z");
+    const c = store.getConversation("c1");
+    expect(c?.lastMessage).toBe("hello");
+    expect(c?.lastMessageTs).toBe("2026-01-01T00:01:00.000Z");
+
+    store.incrementUnread("c1");
+    store.incrementUnread("c1");
+    expect(store.getConversation("c1")?.unread).toBe(2);
+
+    store.markRead("c1");
+    expect(store.getConversation("c1")?.unread).toBe(0);
+  });
+
+  it("looks up conversation by run id", () => {
+    const { store } = setup();
+    store.createConversation(conv("c1", "run-xyz"));
+    expect(store.getConversationByRunId("run-xyz")?.id).toBe("c1");
+    expect(store.getConversationByRunId("nope")).toBeUndefined();
+  });
+
+  it("deletes a conversation", () => {
+    const { store } = setup();
+    store.createConversation(conv("c1", "r1"));
+    store.deleteConversation("c1");
+    expect(store.getConversation("c1")).toBeUndefined();
   });
 });

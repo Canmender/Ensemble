@@ -112,3 +112,20 @@ export interface ChatMessage {
   content: string;
   ts: string;
 }
+
+/** 会话（企业级 IM）：direct = 用户与单个 agent；group = 多 agent 群聊 */
+export interface Conversation {
+  id: string;
+  /** 归属用户（空 = 本地/共享） */
+  userId?: string;
+  type: "direct" | "group";
+  title?: string;
+  participantIds: string[];
+  /** 关联的 run（群聊 = chat run；个体 = 持续 single run） */
+  runId: string;
+  lastMessage?: string;
+  lastMessageTs?: string;
+  unread: number;
+  createdAt: string;
+  updatedAt: string;
+}
