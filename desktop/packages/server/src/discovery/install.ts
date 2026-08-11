@@ -9,6 +9,11 @@
 import { spawn } from "node:child_process";
 import { logger } from "../util/logger";
 
+/** 中国网络环境：npm 全局安装走 npmmirror 镜像（可经 ENSEMBLE_NPM_REGISTRY 覆盖） */
+const NPM_REGISTRY = process.env.ENSEMBLE_NPM_REGISTRY ?? "https://registry.npmmirror.com";
+/** pip 走阿里镜像（可经 ENSEMBLE_PIP_INDEX 覆盖） */
+const PIP_INDEX = process.env.ENSEMBLE_PIP_INDEX ?? "https://mirrors.aliyun.com/pypi/simple/";
+
 export interface HarnessInstaller {
   type: string;
   name: string;
@@ -26,42 +31,42 @@ export const INSTALLERS: Record<string, HarnessInstaller> = {
     type: "opencode",
     name: "OpenCode",
     cmd: "opencode",
-    install: "npm install -g opencode-ai",
+    install: `npm install -g opencode-ai --registry=${NPM_REGISTRY}`,
     autoInstallable: true,
   },
   claude: {
     type: "claude",
     name: "Claude Code",
     cmd: "claude",
-    install: "npm install -g @anthropic-ai/claude-code",
+    install: `npm install -g @anthropic-ai/claude-code --registry=${NPM_REGISTRY}`,
     autoInstallable: true,
   },
   codex: {
     type: "codex",
     name: "Codex CLI",
     cmd: "codex",
-    install: "npm install -g @openai/codex",
+    install: `npm install -g @openai/codex --registry=${NPM_REGISTRY}`,
     autoInstallable: true,
   },
   gemini: {
     type: "gemini",
     name: "Gemini CLI",
     cmd: "gemini",
-    install: "npm install -g @google/gemini-cli",
+    install: `npm install -g @google/gemini-cli --registry=${NPM_REGISTRY}`,
     autoInstallable: true,
   },
   qwen: {
     type: "qwen",
     name: "Qwen Code",
     cmd: "qwen",
-    install: "npm install -g @qwen-code/qwen-code",
+    install: `npm install -g @qwen-code/qwen-code --registry=${NPM_REGISTRY}`,
     autoInstallable: true,
   },
   aider: {
     type: "aider",
     name: "Aider",
     cmd: "aider",
-    install: "python -m pip install aider-chat",
+    install: `python -m pip install aider-chat -i ${PIP_INDEX}`,
     autoInstallable: true,
   },
   // 以下暂不支持一键自动安装（安装方式各异），提供手动引导
