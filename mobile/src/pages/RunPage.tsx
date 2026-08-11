@@ -17,11 +17,10 @@ import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
 import type { AgentEvent, RunStatus } from "@ensemble/shared-protocol";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../App";
 
-interface RunPageProps {
-  route: { params: { runId: string } };
-  navigation: any;
-}
+type RunPageProps = NativeStackScreenProps<RootStackParamList, "Run">;
 
 /** 状态颜色映射 */
 function getStatusColor(status: RunStatus | string): string {
@@ -100,7 +99,7 @@ function renderEvent(event: AgentEvent, index: number) {
             <Text style={eventStyles.toolBadgeText}>调用工具</Text>
           </View>
           <Text style={eventStyles.toolName}>{event.tool}</Text>
-          {event.input && (
+          {event.input != null && (
             <Text style={eventStyles.toolInput} numberOfLines={3}>
               {typeof event.input === "string"
                 ? event.input

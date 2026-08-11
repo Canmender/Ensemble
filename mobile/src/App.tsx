@@ -20,7 +20,13 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 // State management
 import { useDeviceStore } from "./store/deviceStore";
 
-const Stack = createNativeStackNavigator();
+/** 根导航栈参数表 */
+export type RootStackParamList = {
+  Main: undefined;
+  Run: { runId: string };
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
 // 底部标签导航
