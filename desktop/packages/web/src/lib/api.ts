@@ -4,20 +4,26 @@
 import { getSessionToken, resetSessionToken } from "./token";
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = await getSessionToken();
-  const headers: Record<string, string> = {
-    ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  const doFetch = async (): Promise<Response> => {
+    const token = await getSessionToken();
+    const headers: Record<string, string> = {
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+    return fetch(`/api${path}`, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
   };
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
+
+  let res = await doFetch();
   if (res.status === 401) {
-    // 服务重启后 token 已变更，清除缓存让下一次请求重新获取
+    // 服务重启后 token 已变更：重置缓存并重试一次，避免首屏请求失败
     resetSessionToken();
+    res = await doFetch();
   }
+
   const json = (await res.json().catch(() => null)) as any;
   if (!res.ok) {
     throw new Error(json?.error?.message ?? `HTTP ${res.status}`);
