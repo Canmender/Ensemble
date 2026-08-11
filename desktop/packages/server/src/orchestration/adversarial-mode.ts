@@ -26,7 +26,7 @@ export class AdversarialMode {
     const job: Job = {
       id: newId("job"),
       runId: run.id,
-      seq: 1,
+      seq: this.engine.getStore().nextJobSeq(run.id),
       agentId: coderAgentId,
       agentName: `${this.engine.getAgentName(coderAgentId)} vs ${this.engine.getAgentName(testerAgentId)}`,
       prompt: input.prompt,

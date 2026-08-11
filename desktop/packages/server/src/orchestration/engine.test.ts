@@ -163,4 +163,42 @@ describe("OrchestrationEngine single mode", () => {
     expect(jobs[0].status).toBe("error");
     hub.close();
   });
+
+  it("marks the run as cancelled when cancelRun is called mid-execution", async () => {
+    const { store, hub, engine } = setup({
+      kind: "builtin",
+      capabilities: caps,
+      async *startTask(input: AgentTaskInput) {
+        yield { type: "output", kind: "text", text: "start", ts: Date.now() };
+        await new Promise((r) => setTimeout(r, 500));
+        if (input.signal?.aborted) {
+          yield { type: "done", outcome: "cancelled", result: "", ts: Date.now() };
+          return;
+        }
+        yield { type: "done", outcome: "success", result: "completed", ts: Date.now() };
+      },
+      async cancel() {},
+      async dispose() {},
+    });
+
+    const run = await engine.createAndExecuteTask("可取消任务", {
+      mode: "single",
+      prompt: "hi",
+      agentIds: ["agent-a"],
+    });
+
+    // 等待 job 启动（慢 adapter 仍在运行中）
+    await new Promise((r) => setTimeout(r, 150));
+    engine.cancelRun(run.id);
+
+    const ev = await hub.waitForRun(
+      run.id,
+      (e) => e.type === "run.status" && e.status === "cancelled",
+      5000,
+    );
+    expect(ev?.type).toBe("run.status");
+    // 取消后 run 应为 cancelled，而不是 success/error
+    expect(store.getRun(run.id)?.status).toBe("cancelled");
+    hub.close();
+  });
 });

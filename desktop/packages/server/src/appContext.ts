@@ -93,8 +93,9 @@ export class ConfigManager {
       createdAt: input.createdAt ?? now(),
       updatedAt: now(),
     }) as unknown as AgentConfig;
-    if (this.getAgent(parsed.id)) throw new Error(`agent already exists: ${parsed.id}`);
     return this.withWriteLock(async () => {
+      // 锁内二次存在性检查，避免并发相同 id 双写
+      if (this.getAgent(parsed.id)) throw new Error(`agent already exists: ${parsed.id}`);
       await this.saveAgentFile(parsed);
       this.reload();
       return parsed;
@@ -102,18 +103,18 @@ export class ConfigManager {
   }
 
   async updateAgent(id: string, patch: Partial<AgentConfigInput>): Promise<AgentConfig> {
-    const existing = this.getAgent(id);
-    if (!existing) throw new Error(`agent not found: ${id}`);
-    const merged: AgentConfig = {
-      ...existing,
-      ...patch,
-      id: existing.id,
-      kind: patch.kind ?? existing.kind,
-      capabilities: patch.capabilities ?? existing.capabilities,
-      updatedAt: now(),
-    };
-    const parsed = agentConfigSchema.parse(merged) as unknown as AgentConfig;
     return this.withWriteLock(async () => {
+      const existing = this.getAgent(id);
+      if (!existing) throw new Error(`agent not found: ${id}`);
+      const merged: AgentConfig = {
+        ...existing,
+        ...patch,
+        id: existing.id,
+        kind: patch.kind ?? existing.kind,
+        capabilities: patch.capabilities ?? existing.capabilities,
+        updatedAt: now(),
+      };
+      const parsed = agentConfigSchema.parse(merged) as unknown as AgentConfig;
       await this.saveAgentFile(parsed);
       this.reload();
       return parsed;
@@ -161,6 +162,8 @@ export class ConfigManager {
   }
 
   async deleteWorkflow(id: string): Promise<void> {
+    const existing = this.getWorkflow(id);
+    if (!existing) return;
     await this.withWriteLock(async () => {
       const file = resolve(this.env.configDir, "workflows", `${id}.json`);
       await unlink(file).catch(() => {
@@ -222,18 +225,18 @@ export class ConfigManager {
   }
 
   async updateProvider(id: string, patch: Partial<ProviderConfigInput>): Promise<ProviderConfig> {
-    const existing = this.getProvider(id);
-    if (!existing) throw new Error(`provider not found: ${id}`);
-    const { apiKey, ...rest } = patch;
-    const merged = providerConfigSchema.parse({
-      ...existing,
-      ...rest,
-      id: existing.id,
-      type: existing.type,
-      apiKeySet: apiKey ? true : existing.apiKeySet,
-      updatedAt: now(),
-    }) as unknown as ProviderConfig;
     return this.withWriteLock(async () => {
+      const existing = this.getProvider(id);
+      if (!existing) throw new Error(`provider not found: ${id}`);
+      const { apiKey, ...rest } = patch;
+      const merged = providerConfigSchema.parse({
+        ...existing,
+        ...rest,
+        id: existing.id,
+        type: existing.type,
+        apiKeySet: apiKey ? true : existing.apiKeySet,
+        updatedAt: now(),
+      }) as unknown as ProviderConfig;
       const dir = resolve(this.env.configDir, "providers");
       await mkdir(dir, { recursive: true });
       await writeFile(resolve(dir, `${id}.json`), JSON.stringify(merged, null, 2), "utf8");
@@ -271,12 +274,13 @@ export class ConfigManager {
   }
 
   async saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
-    const merged = {
-      ...this.getSettings(),
-      ...patch,
-    };
-    const parsed = appSettingsSchema.parse(merged) as unknown as AppSettings;
     return this.withWriteLock(async () => {
+      // 锁内读-改-写，避免并发更新丢失
+      const merged = {
+        ...this.getSettings(),
+        ...patch,
+      };
+      const parsed = appSettingsSchema.parse(merged) as unknown as AppSettings;
       const file = resolve(this.env.configDir, "settings.json");
       await mkdir(this.env.configDir, { recursive: true });
       await writeFile(file, JSON.stringify(parsed, null, 2), "utf8");

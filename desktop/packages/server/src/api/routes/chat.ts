@@ -29,14 +29,20 @@ export function chatRouter(ctx: AppContext): Router {
         if (runId) {
           const run = ctx.store.getRun(runId);
           if (!run) return fail(res, new Error("run not found"), 404);
+          // 已终止的 run 不接受继续对话（避免 waitForRun 等 60s）
+          if (run.status !== "queued" && run.status !== "running") {
+            return ok(res, { reply: `(任务已结束，状态: ${run.status})`, agentId });
+          }
 
           // 事件驱动等待 agent 回复（替代 200ms 忙等待轮询）：
-          // 命中 agent 新消息（chat.message）或 run 终止（error/cancelled）即 resolve
+          // 命中 agent 新消息（chat.message）或 run 终态（success/error/cancelled）即 resolve
           const waitForReply = ctx.hub.waitForRun(
             runId,
             (ev) => {
               if (ev.type === "chat.message") return ev.agentId !== "user";
-              if (ev.type === "run.status") return ev.status === "error" || ev.status === "cancelled";
+              if (ev.type === "run.status") {
+                return ev.status === "success" || ev.status === "error" || ev.status === "cancelled";
+              }
               return false;
             },
             60_000,
@@ -51,6 +57,18 @@ export function chatRouter(ctx: AppContext): Router {
           const ev = await waitForReply;
           if (!ev) return ok(res, { reply: "(等待回复超时)", agentId });
           if (ev.type === "chat.message") return ok(res, { reply: ev.content, agentId: ev.agentId });
+          // run.status 终态：success 时返回最新 agent 消息，error/cancelled 返回对应提示
+          if (ev.type === "run.status" && ev.status === "success") {
+            const msgs = ctx.store.listChatMessages(runId);
+            const lastAgent = [...msgs].reverse().find((m) => m.agentId !== "user");
+            return ok(res, {
+              reply: lastAgent?.content ?? "(任务已成功结束)",
+              agentId: lastAgent?.agentId ?? agentId,
+            });
+          }
+          if (ev.type === "run.status" && ev.status === "cancelled") {
+            return ok(res, { reply: "(任务已取消)", agentId });
+          }
           return ok(res, { reply: "(任务已终止)", agentId });
         }
 
@@ -62,16 +80,32 @@ export function chatRouter(ctx: AppContext): Router {
         });
 
         // 事件驱动等待执行完成（替代 200ms 忙等待轮询）
-        await ctx.hub.waitForRun(
+        const ev = await ctx.hub.waitForRun(
           run.id,
-          (ev) =>
-            ev.type === "run.status" &&
-            (ev.status === "success" || ev.status === "error" || ev.status === "cancelled"),
+          (e) =>
+            e.type === "run.status" &&
+            (e.status === "success" || e.status === "error" || e.status === "cancelled"),
           60_000,
         );
 
         // 获取结果
         const finalRun = ctx.store.getRun(run.id);
+
+        // 超时且仍在运行 → 明确返回 pending（而不是误导性 "(无回复)"）
+        if (!ev && finalRun?.status === "running") {
+          return ok(res, { reply: "(执行仍在进行中)", agentId, runId: run.id, pending: true });
+        }
+        if (finalRun?.status === "error") {
+          return ok(res, {
+            reply: `(执行失败: ${finalRun.error ?? "未知错误"})`,
+            agentId,
+            runId: run.id,
+          });
+        }
+        if (finalRun?.status === "cancelled") {
+          return ok(res, { reply: "(任务已取消)", agentId, runId: run.id });
+        }
+
         const jobs = ctx.store.getJobs(run.id);
         const lastJob = jobs[jobs.length - 1];
 

@@ -48,6 +48,12 @@ export class ChatMode {
           { context: transcriptText, resumeSessionId },
         );
 
+        // run 已取消：不把 "cancelled by user" 当 assistant 消息写入 transcript
+        if (job.status === "cancelled") {
+          stopped = true;
+          break;
+        }
+
         const content = job.result?.trim() ?? "";
         if (content) {
           this.engine.broadcastChatMessage(run.id, job.id, agentId, "assistant", content);

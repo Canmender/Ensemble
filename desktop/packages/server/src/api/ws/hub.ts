@@ -235,7 +235,16 @@ export class WsHub {
     const matched: EventWaiter[] = [];
     for (let i = this.eventWaiters.length - 1; i >= 0; i--) {
       const w = this.eventWaiters[i];
-      if (w.runId === runId && w.match(event)) {
+      // 先按 runId 短路，再调 match（其他 run 的事件不触发观察者）
+      if (w.runId !== runId) continue;
+      let isMatch = false;
+      try {
+        isMatch = w.match(event);
+      } catch (err) {
+        // 观察者异常不应污染引擎的广播/状态判定路径
+        logger.warn(`waitForRun matcher threw for run ${runId}: ${String(err)}`);
+      }
+      if (isMatch) {
         this.eventWaiters.splice(i, 1);
         matched.push(w);
       }

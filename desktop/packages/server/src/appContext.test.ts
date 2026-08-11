@@ -121,6 +121,16 @@ describe("ConfigManager workflow CRUD (async)", () => {
     await cm.deleteWorkflow("wf-1");
     expect(cm.getWorkflow("wf-1")).toBeUndefined();
   });
+
+  it("rejects workflow ids with path-traversal characters", async () => {
+    const { cm, dir } = makeConfig();
+    dirs.push(dir);
+
+    // 无白名单时 "../evil" 会覆写 configDir 外的文件
+    await expect(
+      cm.saveWorkflow({ id: "../evil", name: "X", nodes: [{ id: "n1", agentId: "a", prompt: "p" }], edges: [] }),
+    ).rejects.toThrow();
+  });
 });
 
 // ── Provider CRUD（缓存） ───────────────────────────────────────────────────

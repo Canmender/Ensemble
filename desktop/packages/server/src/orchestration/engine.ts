@@ -1,5 +1,6 @@
 import type {
   AgentConfig,
+  AgentEvent,
   AgentTaskInput,
   Job,
   Run,
@@ -31,6 +32,8 @@ export class OrchestrationEngine {
   private agentConfigs = new Map<string, AgentConfig>();
   /** Steering 消息队列：runId → 待注入消息 */
   private steeringQueues = new Map<string, SteeringMessage[]>();
+  /** run 级取消标记：取消后不再启动新 job（取消是"粘性"的） */
+  private cancelledRuns = new Set<string>();
 
   constructor(
     private store: Store,
@@ -96,12 +99,20 @@ export class OrchestrationEngine {
               ? new AdversarialMode(this).run(run, task)
               : new ChatMode(this).run(run, task));
 
+      // 执行期间被取消（各模式可能正常返回）→ 统一标记 cancelled，不覆盖为 success
+      if (this.cancelledRuns.has(run.id)) {
+        throw Object.assign(new Error("run cancelled"), { code: "RUN_CANCELLED" });
+      }
+
       this.store.updateRun(run.id, { status: "success", finalResult: result, endedAt: new Date().toISOString() });
       this.hub.broadcast(run.id, 0, { type: "run.status", status: "success" });
       this.hub.broadcast(run.id, 0, { type: "run.result", result: result ?? "" });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const cancelled = [...aborts].some((a) => a.signal.aborted);
+      const cancelled =
+        [...aborts].some((a) => a.signal.aborted) ||
+        (err as { code?: string })?.code === "RUN_CANCELLED" ||
+        this.cancelledRuns.has(run.id);
       const status = cancelled ? "cancelled" : "error";
       this.store.updateRun(run.id, {
         status,
@@ -117,6 +128,7 @@ export class OrchestrationEngine {
     } finally {
       this.runAborts.delete(run.id);
       this.cleanupSteering(run.id);
+      this.cancelledRuns.delete(run.id);
       this.store.cleanupRunSeqCounters(run.id);
     }
   }
@@ -133,6 +145,13 @@ export class OrchestrationEngine {
     parentJobId?: string,
   ): Promise<Job> {
     return this.withAgentLock(agentId, async () => {
+      // run 已取消：不再启动新 job（取消是 run 级终态）
+      if (this.cancelledRuns.has(run.id)) {
+        const err = new Error("run cancelled") as Error & { code?: string };
+        err.code = "RUN_CANCELLED";
+        throw err;
+      }
+
       const seq = this.store.nextJobSeq(run.id);
 
       const job: Job = {
@@ -207,15 +226,22 @@ export class OrchestrationEngine {
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        if (controller.signal.aborted) {
-          job.status = "cancelled";
-          job.error = "cancelled";
-        } else {
-          job.status = "error";
-          job.error = message;
-        }
+        const cancelled =
+          controller.signal.aborted ||
+          (err as { code?: string })?.code === "RUN_CANCELLED" ||
+          this.cancelledRuns.has(run.id);
+        job.status = cancelled ? "cancelled" : "error";
+        job.error = cancelled ? "cancelled" : message;
         job.endedAt = new Date().toISOString();
-        job.events.push({ type: "error", message, ts: Date.now() });
+        // 错误/取消帧落库并广播，保持内存态与持久态一致（重连补拉不缺帧）
+        const errEv: AgentEvent = {
+          type: "error",
+          message: cancelled ? "cancelled" : message,
+          ts: Date.now(),
+        };
+        job.events.push(errEv);
+        const eseq = this.store.appendRunEvent(run.id, job.id, errEv);
+        this.hub.broadcast(run.id, eseq, { type: "agent.event", jobId: job.id, agentId, event: errEv }, job.id);
       } finally {
         cleanup();
       }
@@ -239,9 +265,25 @@ export class OrchestrationEngine {
   }
 
   cancelRun(runId: string): void {
+    // run 级取消标记：后续 executeJob 检查后不再启动新 job（取消是"粘性"的）
+    this.cancelledRuns.add(runId);
     const aborts = this.runAborts.get(runId);
-    if (!aborts) return;
-    for (const ac of aborts) ac.abort();
+    if (aborts) {
+      for (const ac of aborts) ac.abort();
+    }
+    // 通知涉及 adapter 终止子进程（local agent 等），避免孤儿进程
+    for (const job of this.store.getJobs(runId)) {
+      try {
+        this.registry.get(job.agentId)?.cancel();
+      } catch {
+        /* adapter 取消失败不影响主流程 */
+      }
+    }
+  }
+
+  /** 该 run 是否已被取消（供编排模式提前终止） */
+  isRunCancelled(runId: string): boolean {
+    return this.cancelledRuns.has(runId);
   }
 
   /**
@@ -249,6 +291,9 @@ export class OrchestrationEngine {
    * 用户在 agent 运行中发送的消息，会在下一个检查点注入上下文。
    */
   addSteering(runId: string, content: string): void {
+    // 仅对活跃（queued/running）run 注入；已结束/已取消的 run 忽略，避免队列永久泄漏
+    const run = this.store.getRun(runId);
+    if (!run || (run.status !== "queued" && run.status !== "running")) return;
     let queue = this.steeringQueues.get(runId);
     if (!queue) {
       queue = [];
@@ -342,14 +387,9 @@ export class OrchestrationEngine {
   private withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
     const prev = this.agentChains.get(agentId) ?? Promise.resolve();
     const next = prev.then(fn, fn);
-    // Store the raw promise so errors propagate through the chain to callers.
-    // `.then(fn, fn)` already handles the rejection case (runs fn regardless),
-    // so a rejecting `next` does not break chain serialisation.
-    // Attach a fire-and-forget `.catch` to prevent Node's unhandled-rejection
-    // warning — the *result* of that catch is discarded; `next` itself still
-    // carries the rejection to the awaiting caller.
     next.catch(() => { /* suppress unhandled-rejection only */ });
-    this.agentChains.set(agentId, next);
+    // 链上只存串行化占位（空值），不持有带结果的 Job（避免长期 agent 常驻大对象）
+    this.agentChains.set(agentId, next.then(() => undefined, () => undefined));
     return next;
   }
 }
