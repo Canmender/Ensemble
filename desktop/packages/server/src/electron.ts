@@ -1,10 +1,12 @@
 import { createServer, type Server } from "node:http";
 import { existsSync } from "node:fs";
 import type { AddressInfo } from "node:net";
+import { hostname } from "node:os";
 import { getEnv, type ServerEnv } from "./config/env";
 import { openDb } from "./db/sqlite";
 import { createAppContext, type AppContext } from "./context";
 import { createApp } from "./app";
+import { advertiseEnsembleService } from "./discovery/advertise";
 import { logger } from "./util/logger";
 import type { KeyStore } from "./keychain";
 
@@ -56,11 +58,20 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
   };
 
   return new Promise((resolve, reject) => {
+    // 默认仅绑定 127.0.0.1；配置 ENSEMBLE_LAN_HOST 时绑定局域网（移动端直连）
+    const host = env.lanHost && env.lanHost !== "127.0.0.1" && env.lanHost !== "::1" ? env.lanHost : "127.0.0.1";
+    let stopAdvertise: (() => void) | undefined;
+
     server.once("error", reject);
-    server.listen(opts.port ?? 0, "127.0.0.1", () => {
+    server.listen(opts.port ?? 0, host, () => {
       const { port } = server.address() as AddressInfo;
       const url = `http://127.0.0.1:${port}`;
       logger.info(`local server listening at ${url}`);
+      // 局域网模式：发布 mDNS 供移动端发现（HTTP 与 WS 同端口）
+      if (host !== "127.0.0.1") {
+        const deviceId = `desktop-${hostname().replace(/[^a-zA-Z0-9]/g, "-")}`;
+        stopAdvertise = advertiseEnsembleService({ httpPort: port, wsPort: port, deviceId });
+      }
       resolve({
         port,
         url,
@@ -68,6 +79,7 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
         server,
         close: () =>
           new Promise((res) => {
+            stopAdvertise?.();
             void ctx.dispose().finally(() => {
               server.close(() => {
                 try {

@@ -22,6 +22,8 @@ import type {
 import { createMessage, isValidMessage } from "@ensemble/shared-protocol";
 import { useDeviceStore } from "../store/deviceStore";
 import { useTaskStore } from "../store/taskStore";
+import { api } from "./api";
+import { wsLink } from "./wslink";
 
 // ==================== 类型定义 ====================
 
@@ -82,7 +84,7 @@ interface ConnectionEventMap {
   /** 设备离线 */
   "device:offline": (deviceId: string) => void;
   /** 任务创建响应 */
-  "task:created": (data: { task: Task; run?: Run }) => void;
+  "task:created": (data: { task?: Task; run?: Run }) => void;
   /** 任务状态更新 */
   "task:status": (data: { taskId: string; runId: string; status: string; jobs: Job[] }) => void;
   /** Agent 事件 */
@@ -269,10 +271,75 @@ class ConnectionService {
     this.relayConfig = config;
   }
 
-  /** 连接到桌面端（局域网直连） */
+  /** 连接到桌面端（局域网直连：REST 验证 + 原生 WebSocket 事件流） */
   async connect(ip: string, port: number): Promise<boolean> {
     this.connectionMode = "lan";
-    return this.connectToServer(`http://${ip}:${port}`);
+    // 清理旧连接（socket.io 中继 + WS 直连）
+    if (this.socket?.connected) this.disconnect();
+    wsLink.disconnect();
+
+    useDeviceStore.getState().setConnectionState("connecting");
+    useDeviceStore.getState().setError(null);
+    useDeviceStore.getState().setLastErrorAt(null);
+
+    try {
+      // 1. REST 探活
+      const res = await fetch(`http://${ip}:${port}/api/health`, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) {
+        this.connectFailed(`桌面端返回错误 (HTTP ${res.status})`);
+        return false;
+      }
+      const health = (await res.json()) as Record<string, unknown>;
+
+      // 2. 记录连接的桌面端（api.ts 据此构造 baseUrl）
+      const device: DeviceInfo = {
+        id: typeof health.deviceId === "string" ? health.deviceId : `desktop-${ip}`,
+        name: typeof health.deviceName === "string" ? health.deviceName : `桌面端 (${ip})`,
+        type: "desktop",
+        os: typeof health.os === "string" ? health.os : "unknown",
+        appVersion: typeof health.appVersion === "string" ? health.appVersion : "0.0.0",
+        wsPort: typeof health.wsPort === "number" ? health.wsPort : port,
+        httpPort: port,
+        ip,
+        lastSeen: Date.now(),
+      };
+      useDeviceStore.getState().setConnectedDevice(device);
+      useDeviceStore.getState().setConnectionState("connected");
+      this.emit("connection:state", "connected");
+
+      // 3. 启动原生 WS 事件流
+      wsLink.on({ onConnectionState: (s) => this.handleWsState(s) });
+      await wsLink.connect(ip, port);
+
+      // 4. 拉取初始数据
+      await this.syncData();
+      return true;
+    } catch (err) {
+      this.connectFailed(err instanceof Error ? err.message : "连接失败");
+      return false;
+    }
+  }
+
+  /** 直连失败处理 */
+  private connectFailed(message: string): void {
+    useDeviceStore.getState().setConnectionState("error");
+    useDeviceStore.getState().setError(message);
+    useDeviceStore.getState().setLastErrorAt(Date.now());
+    this.emit("error", message);
+    this.emit("connection:state", "error");
+  }
+
+  /** WS 事件流状态回调（直连模式） */
+  private handleWsState(state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error"): void {
+    if (this.connectionMode !== "lan") return;
+    if (state === "connected") {
+      useDeviceStore.getState().setConnectionState("connected");
+    } else if (state === "reconnecting") {
+      useDeviceStore.getState().setConnectionState("reconnecting");
+    } else if (state === "disconnected" || state === "error") {
+      useDeviceStore.getState().setConnectionState("disconnected");
+    }
+    this.emit("connection:state", state === "error" ? "error" : state);
   }
 
   /** 连接到云端中继服务器 */
@@ -342,6 +409,8 @@ class ConnectionService {
 
   /** 断开连接 */
   disconnect(reason?: string): void {
+    // 关闭直连 WS 事件流
+    wsLink.disconnect();
     // 清理重连定时器
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -447,31 +516,82 @@ class ConnectionService {
 
   // ==================== 便捷方法 ====================
 
-  /** 创建任务 */
-  createTask(title: string, mode: "single" | "workflow" | "chat", input: unknown): void {
+  /** 创建任务（直连模式走 REST；中继模式广播） */
+  async createTask(title: string, mode: "single" | "workflow" | "chat", input: unknown): Promise<void> {
+    if (this.connectionMode === "lan") {
+      const res = await api.createTask({ title, mode, input });
+      if (res.data) {
+        useTaskStore.getState().addRun(res.data);
+        this.emit("task:created", { run: res.data });
+      } else {
+        this.emit("error", res.error || "创建任务失败");
+      }
+      return;
+    }
     this.broadcast("task:create", { title, mode, input });
   }
 
-  /** 发送聊天消息 */
-  sendChatMessage(runId: string, content: string): void {
+  /** 发送聊天消息（直连模式走 REST；回复通过 WS 实时推送） */
+  async sendChatMessage(runId: string, content: string): Promise<void> {
+    if (this.connectionMode === "lan") {
+      const res = await api.sendChatMessage(runId, content);
+      if (!res.data?.sent) {
+        this.emit("error", res.error || "发送失败");
+      }
+      return;
+    }
     this.broadcast("chat:send", { runId, content });
   }
 
-  /** 发送控制命令 */
-  sendControlCommand(
+  /** 发送控制命令（直连模式仅支持 run 取消） */
+  async sendControlCommand(
     command: "pause" | "resume" | "cancel" | "retry",
     targetId: string,
     targetType: "task" | "run" | "job"
-  ): void {
+  ): Promise<void> {
+    if (this.connectionMode === "lan") {
+      if (command === "cancel" && targetType === "run") {
+        const res = await api.cancelRun(targetId);
+        if (!res.data?.cancelled) {
+          this.emit("error", res.error || "取消失败");
+        }
+      } else {
+        this.emit("error", `直连模式暂不支持 ${command}`);
+      }
+      return;
+    }
     this.broadcast("control:command", { command, targetId, targetType });
   }
 
-  /** 请求状态同步 */
-  requestSync(since?: number): void {
+  /** 请求状态同步（直连模式拉取 REST；中继模式广播） */
+  async requestSync(_since?: number): Promise<void> {
+    if (this.connectionMode === "lan") {
+      await this.syncData();
+      return;
+    }
     this.broadcast("sync:request", {
       types: ["agents", "tasks", "runs", "jobs"],
-      since,
+      since: _since,
     });
+  }
+
+  /** 直连模式：拉取桌面端初始数据到本地 store */
+  private async syncData(): Promise<void> {
+    const store = useTaskStore.getState();
+    const [agents, tasks, runs] = await Promise.all([
+      api.getAgents(),
+      api.getTasks(),
+      api.getRuns(),
+    ]);
+    if (agents.data) store.setAgents(agents.data);
+    if (tasks.data) store.setTasks(tasks.data);
+    if (runs.data) store.setRuns(runs.data);
+    this.emit("sync:response", {
+      agents: agents.data,
+      tasks: tasks.data,
+      runs: runs.data,
+    });
+    store.setLastSyncTs(Date.now());
   }
 
   // ==================== 状态查询 ====================

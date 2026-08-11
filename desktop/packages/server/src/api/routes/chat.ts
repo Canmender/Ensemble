@@ -100,5 +100,41 @@ export function chatRouter(ctx: AppContext): Router {
     }),
   );
 
+  /**
+   * 获取群聊历史消息（移动端协议：GET /api/chat/:runId/messages）
+   */
+  r.get(
+    "/:runId/messages",
+    asyncH(async (req, res) => {
+      const { runId } = req.params;
+      const run = ctx.store.getRun(runId);
+      if (!run) return fail(res, new Error("run not found"), 404);
+
+      const messages = ctx.store.listChatMessages(runId);
+      ok(res, { messages, status: run.status });
+    }),
+  );
+
+  /**
+   * 群聊发送消息（fire-and-forget，回复通过 WS 实时推送）。
+   * 移动端协议：POST /api/chat/:runId/messages { content }
+   */
+  r.post(
+    "/:runId/messages",
+    asyncH(async (req, res) => {
+      const { runId } = req.params;
+      const { content } = req.body ?? {};
+      const run = ctx.store.getRun(runId);
+      if (!run) return fail(res, new Error("run not found"), 404);
+      if (typeof content !== "string" || !content.trim()) {
+        return fail(res, new Error("content required"), 400);
+      }
+
+      ctx.engine.addSteering(runId, content);
+      ctx.engine.broadcastChatMessage(runId, undefined, "user", "user", content);
+      ok(res, { sent: true });
+    }),
+  );
+
   return r;
 }
