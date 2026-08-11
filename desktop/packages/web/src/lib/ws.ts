@@ -1,4 +1,5 @@
 import { useRunStore, type AgentEventItem } from "../store/runs";
+import { getSessionToken, resetSessionToken } from "./token";
 
 interface WsEnvelope {
   v: 1;
@@ -58,16 +59,9 @@ class WsClient {
 
     // Fetch session token if we don't have one yet
     if (!this.wsToken) {
-      try {
-        const res = await fetch("/api/ws-token");
-        if (res.ok) {
-          const data = await res.json();
-          this.wsToken = data.token;
-        } else {
-          console.warn("[ws] failed to fetch ws-token, status:", res.status);
-        }
-      } catch (err) {
-        console.warn("[ws] failed to fetch ws-token:", err);
+      this.wsToken = (await getSessionToken()) ?? undefined;
+      if (!this.wsToken) {
+        console.warn("[ws] failed to fetch ws-token");
       }
     }
 
@@ -96,6 +90,7 @@ class WsClient {
       // Clear token on abnormal close so it gets re-fetched (handles server restarts)
       if (e.code !== 1000) {
         this.wsToken = undefined;
+        resetSessionToken();
       }
       this.scheduleReconnect();
     };
@@ -194,7 +189,10 @@ class WsClient {
 
   private async catchUp(runId: string, afterSeq: number): Promise<void> {
     try {
-      const res = await fetch(`/api/runs/${runId}/events?afterSeq=${afterSeq}`);
+      const token = await getSessionToken();
+      const res = await fetch(`/api/runs/${runId}/events?afterSeq=${afterSeq}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      });
       const json = (await res.json()) as { data?: { events?: Array<{ seq: number; jobId?: string; event: AgentEventItem["event"] }> } };
       const events = json?.data?.events ?? [];
       const store = useRunStore.getState();

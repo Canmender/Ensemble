@@ -15,6 +15,7 @@ import { memoryPoolRouter } from "./api/routes/memory-pool";
 import { discoveryRouter } from "./api/routes/discovery";
 import { relayRouter } from "./api/routes/relay";
 import { chatRouter } from "./api/routes/chat";
+import { apiAuth } from "./api/auth";
 
 export interface CreateAppOptions {
   /** 托管前端静态资源目录（桌面 prod 同源加载） */
@@ -65,6 +66,17 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   const app = express();
   app.use(express.json({ limit: "2mb" }));
 
+  // API 认证：除 health（探活）与 ws-token（bootstrap，仅本机来源）外，
+  // 所有 /api/* 端点要求 Authorization: Bearer <sessionToken>。
+  app.use(
+    "/api",
+    apiAuth({
+      getToken: () => ctx.hub.sessionToken,
+      publicPaths: ["/health"],
+      originGuardPaths: ["/ws-token"],
+    }),
+  );
+
   // 写入端点速率限制（每分钟最多 60 次请求）
   const writeRateLimiter = createWriteRateLimiter();
   app.use("/api/tasks", writeRateLimiter);
@@ -85,8 +97,13 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/relay", relayRouter(ctx));
   app.use("/api/chat", chatRouter(ctx));
 
-  // WebSocket token endpoint：前端获取 session token 用于建立 WS 连接
+  // WebSocket token endpoint：前端获取 session token 用于建立 WS 连接。
+  // 配置固定 API key（headless/Docker）时禁用，防止公网绑定下 token 被任意获取。
   app.get("/api/ws-token", (_req, res) => {
+    if (ctx.env.apiKey) {
+      res.status(404).json({ error: { code: "not_found", message: "ws-token disabled when ENSEMBLE_API_KEY is set" } });
+      return;
+    }
     res.json({ token: ctx.hub.sessionToken });
   });
 

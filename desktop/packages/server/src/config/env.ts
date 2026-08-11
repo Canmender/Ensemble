@@ -35,6 +35,12 @@ export interface ServerEnv {
   hermesExecutable?: string;
   hermesUseWsl: boolean;
   hermesWslDistro: string;
+  /**
+   * 固定 API key（headless/Docker 部署用）。配置后：
+   * - 替代自动生成的随机 session token，作为 HTTP 与 WS 的访问凭证
+   * - /api/ws-token 端点被禁用（公网绑定 0.0.0.0 时防止 token 被任意获取）
+   */
+  apiKey?: string;
 }
 
 export function getEnv(): ServerEnv {
@@ -46,5 +52,6 @@ export function getEnv(): ServerEnv {
     hermesExecutable: process.env.HERMES_EXECUTABLE || undefined,
     hermesUseWsl: process.env.HERMES_USE_WSL === "true",
     hermesWslDistro: process.env.HERMES_WSL_DISTRO ?? "Ubuntu",
+    apiKey: process.env.ENSEMBLE_API_KEY || undefined,
   };
 }
