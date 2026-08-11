@@ -27,8 +27,17 @@ async function main(): Promise<void> {
     }
   };
 
-  // 默认绑定所有接口（headless/Docker 部署）；可配置 ENSEMBLE_LAN_HOST 收紧
-  const host = env.lanHost || undefined;
+  // 安全：默认仅绑定 127.0.0.1。显式 ENSEMBLE_LAN_HOST 才对外绑定。
+  const host = env.lanHost ?? "127.0.0.1";
+  // 对外绑定但未配置固定 API key → 拒绝启动。
+  // 否则局域网内任何设备可先 GET /api/ws-token 拿 session token，再 Bearer 接管全部 API。
+  const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";
+  if (!isLoopback && !env.apiKey) {
+    logger.error(
+      `ENSEMBLE_LAN_HOST=${host} 是对外地址但未配置 ENSEMBLE_API_KEY，为安全起见拒绝启动。`,
+    );
+    process.exit(1);
+  }
   server.listen(env.port, host, () => {
     logger.info(`合鸣 server listening on http://localhost:${env.port}`);
     logger.info(

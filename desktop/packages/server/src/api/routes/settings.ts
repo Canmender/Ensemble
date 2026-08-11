@@ -1,13 +1,27 @@
 import { Router } from "express";
 import type { AppContext } from "../../context";
 import { fail, ok } from "./helpers";
+import type { AppSettings } from "@ensemble/shared";
+
+/** 掩蔽 settings 中的第三方 API key（searchApi / mem0），仅返回是否已配置 */
+function maskSettings(s: AppSettings): AppSettings {
+  return {
+    ...s,
+    searchApi: s.searchApi
+      ? { ...s.searchApi, apiKey: undefined, apiKeySet: !!s.searchApi.apiKey }
+      : undefined,
+    mem0: s.mem0
+      ? { ...s.mem0, apiKey: undefined, apiKeySet: !!s.mem0.apiKey }
+      : undefined,
+  } as AppSettings;
+}
 
 /** 应用设置路由（workspaceRoot / 确认策略 / 搜索 API / 默认 provider） */
 export function settingsRouter(ctx: AppContext): Router {
   const r = Router();
 
   r.get("/", (_req, res) => {
-    ok(res, ctx.config.getSettings());
+    ok(res, maskSettings(ctx.config.getSettings()));
   });
 
   r.put("/", async (req, res) => {
@@ -24,7 +38,7 @@ export function settingsRouter(ctx: AppContext): Router {
       if (body.security !== undefined) patch.security = body.security;
 
       const settings = await ctx.config.saveSettings(patch);
-      ok(res, settings);
+      ok(res, maskSettings(settings));
     } catch (err) {
       fail(res, err);
     }

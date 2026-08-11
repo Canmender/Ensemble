@@ -51,7 +51,7 @@ export const workflowEdgeSchema = z.object({
 });
 
 export const workflowDefSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().min(1).regex(/^[a-z0-9-]+$/i),
   name: z.string().min(1),
   nodes: z.array(workflowNodeSchema).min(1),
   edges: z.array(workflowEdgeSchema),

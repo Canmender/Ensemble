@@ -22,7 +22,8 @@ export interface CreateAppOptions {
   staticDir?: string;
 }
 
-/** 简单的内存速率限制中间件（仅限写入端点） */
+/** 简单的内存速率限制中间件（仅限写入方法 POST/PUT/PATCH/DELETE） */
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 function createWriteRateLimiter(windowMs: number = 60_000, max: number = 60) {
   const store = new Map<string, { count: number; resetAt: number }>();
 
@@ -38,6 +39,9 @@ function createWriteRateLimiter(windowMs: number = 60_000, max: number = 60) {
   if (timer.unref) timer.unref();
 
   const middleware = (req: Request, res: Response, next: NextFunction) => {
+    // 只对写方法计数（GET 探活/读取不占用配额）
+    if (!WRITE_METHODS.has(req.method)) return next();
+
     const ip = req.ip || req.socket?.remoteAddress || "unknown";
     const now = Date.now();
     let entry = store.get(ip);
@@ -77,10 +81,11 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
     }),
   );
 
-  // 写入端点速率限制（每分钟最多 60 次请求）
+  // 全部写端点速率限制（POST/PUT/PATCH/DELETE，每分钟最多 60 次/ IP）。
+  // 覆盖 agents/mcp/providers/settings/workflows/tasks/chat/skills/memory 等，
+  // 防止批量注册 MCP 进程、批量消耗 LLM 额度等滥用。
   const writeRateLimiter = createWriteRateLimiter();
-  app.use("/api/tasks", writeRateLimiter);
-  app.use("/api/chat", writeRateLimiter);
+  app.use("/api", writeRateLimiter);
 
   app.use("/api/agents", agentsRouter(ctx));
   app.use("/api/tasks", tasksRouter(ctx));
