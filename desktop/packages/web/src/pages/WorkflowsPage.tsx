@@ -8,6 +8,7 @@
  */
 
 import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import type { Node, Edge } from "@xyflow/react";
 import { Bot, ChevronDown, Workflow, Pause, Clock, CheckCircle2, XCircle, Wrench, Brain, MessageSquare } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
@@ -17,30 +18,16 @@ import { loadRunDetail } from "../lib/loadRunDetail";
 import type { Run } from "../types";
 import { Card, Spinner, StatusDot, cls, statusLabel } from "../components/ui";
 
-/** reactflow 动态加载：~140KB，仅在需要时加载 */
-interface CanvasNode {
-  id: string;
-  type?: string;
-  position: { x: number; y: number };
-  data: AgentNodeData;
-  style?: React.CSSProperties;
-  [key: string]: unknown;
-}
+/** @xyflow/react 动态加载：~140KB，仅在需要时加载 */
+interface CanvasNode extends Node<AgentNodeData & Record<string, unknown>> {}
 
-interface CanvasEdge {
-  id: string;
-  source: string;
-  target: string;
-  animated?: boolean;
-  style?: React.CSSProperties;
-  [key: string]: unknown;
-}
+interface CanvasEdge extends Edge {}
 
 const CanvasView = lazy(() =>
   Promise.all([
-    import("reactflow"),
+    import("@xyflow/react"),
     // @ts-ignore
-    import("reactflow/dist/style.css"),
+    import("@xyflow/react/dist/style.css"),
   ]).then(([rf]) => ({
     default: function CanvasViewInner({ nodes, edges, nodeTypes }: { nodes: CanvasNode[]; edges: CanvasEdge[]; nodeTypes: Record<string, any> }) {
       const { ReactFlow, Background, Controls } = rf;

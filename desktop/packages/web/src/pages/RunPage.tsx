@@ -13,9 +13,9 @@ import { ToolConfirmDialog } from "../components/ToolConfirmDialog";
 /** reactflow 动态加载：仅在用户切换到"画布"视图时才加载（~140KB） */
 const WorkflowCanvas = lazy(() =>
   Promise.all([
-    import("reactflow"),
+    import("@xyflow/react"),
     // @ts-ignore - CSS side-effect import
-    import("reactflow/dist/style.css"),
+    import("@xyflow/react/dist/style.css"),
   ]).then(([rf]) => {
     return {
       default: function WorkflowCanvasInner({ jobs }: { jobs: LiveJob[] }) {
