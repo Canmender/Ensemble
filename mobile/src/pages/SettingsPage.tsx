@@ -20,7 +20,7 @@ import { connectionService } from "../services/connection";
 import { discoveryService } from "../services/discovery";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const APP_VERSION = "0.5.0";
+const APP_VERSION = "0.6.0";
 const MAX_HISTORY = 10;
 /** 连接历史持久化 key（AsyncStorage） */
 const HISTORY_KEY = "@ensemble/settings_connection_history";

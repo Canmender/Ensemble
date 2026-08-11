@@ -326,6 +326,55 @@ const tools = await loadToolsFromOpenApi("https://api.github.com/openapi.json", 
 
 ---
 
+## 企业级能力
+
+### 账号系统
+
+多用户支持（服务器部署）：
+
+| 端点 | 说明 |
+|---|---|
+| `POST /api/auth/register` | 注册（用户名 3-32 位 + 密码 ≥6 位），返回会话 token |
+| `POST /api/auth/login` | 登录（scrypt 校验）|
+| `GET /api/auth/me` | 当前用户信息 |
+| `POST /api/auth/logout` | 登出（删除会话）|
+
+**认证双凭证**（`api/auth.ts`，按序判定）：
+1. 用户 session token → `req.user`（多用户数据隔离）
+2. `ENSEMBLE_API_KEY` → system 用户（机器级，headless/Docker/移动端直连）
+3. 设备 token（桌面本地免登录）
+
+**数据隔离**：`userId` 经 task → run → job → event → chat 全链传播；`tasks/runs/chat_messages` 按 `user_id` 过滤（`OR user_id = ''` 保留共享数据）。agents/workflows 团队全局共享。预留 `org_id` 字段（后续组织/租户）。
+
+**Web 前端**：`AuthProvider` 三态（用户 / 本地模式 / 未登录）+ 路由守卫；token 存 localStorage；401 跳登录。
+
+### agent 原生支持（harness 自动安装）
+
+对常用开源 agent CLI（opencode / claude-code / codex / gemini / qwen / aider）的原生支持：
+
+- **启动自动检测**：`createAppContext` 启动时 `detectAgents()` + 自动创建配置（`ENSEMBLE_AUTO_SYNC_LOCAL=false` 可关），已安装的默认启用
+- **一键安装**：设置页 → 本地 agent → 未安装的显示"一键安装"（`POST /api/discovery/:type/install`）
+- **中文镜像**：npm 走 npmmirror、pip 走阿里（`ENSEMBLE_NPM_REGISTRY` / `ENSEMBLE_PIP_INDEX` 可覆盖）
+- **手动引导**：hermes / goose 等暂不支持自动安装，提供官方文档引导
+
+### 会话系统（企业级 IM）
+
+| 端点 | 说明 |
+|---|---|
+| `GET /api/conversations` | 会话列表（含 lastMessage / 未读）|
+| `POST /api/conversations` | 创建会话（`type: direct \| group`）|
+| `GET /api/conversations/:id/messages` | 消息分页（`before` 游标 + `limit`）|
+| `POST /api/conversations/:id/messages` | 发送消息（fire-and-forget，回复走 WS）|
+| `POST /api/conversations/:id/read` | 标记已读 |
+| `DELETE /api/conversations/:id` | 删除会话 |
+
+- **direct** = 用户与单个 agent 的持续对话（chat run + 1 participant）；**group** = 多 agent 群聊
+- 会话生命周期：关联 run 终态后拒绝发送（防"只进不出"）
+- 未读：agent 回复自动 +1，`/read` 清零
+- 消息统一落 `chat_messages`（发送经后端广播，修复 WS steer 不落库问题）
+
+---
+
 ## 多 Agent 架构
 
 详见 [MULTI_AGENT_ARCHITECTURE.md](MULTI_AGENT_ARCHITECTURE.md)，涵盖：
@@ -535,6 +584,29 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 ---
 
 ## 变更日志
+
+### v0.6.0 (2026-08-11) — 企业级升级：账号系统 + agent 原生支持 + 会话系统
+
+**账号系统（P0）**
+- users/sessions 表 + 密码登录（scrypt，零新依赖）
+- 认证双凭证：用户 session token / 机器 API key / 设备 token（桌面本地）
+- `/api/auth`：注册 / 登录 / 当前用户 / 登出
+- 数据隔离：任务 / 运行 / 聊天按用户隔离（userId 全链传播）；agents 团队共享
+- Web 登录/注册页 + 路由守卫 + token 持久化
+
+**agent 原生支持（P1）**
+- 启动自动检测并接入本机 harness（opencode / claude-code / hermes 等）
+- 缺失一键安装（npm/pip，走中文镜像 npmmirror/阿里）
+- 已安装的本地 agent 默认启用
+
+**会话系统 / 企业级 IM（P2）**
+- conversations 表：direct（1:1 个体对话）/ group（多 agent 群聊）
+- `/api/conversations`：列表 / 创建 / 消息分页 / 发送 / 已读 / 删除
+- 未读计数、会话生命周期（终态拒绝发送）
+- 前端会话列表持久化 + 消息落库统一
+
+**其他**
+- 版本号规则（x.y.z：bug→patch，中型→minor）写入 WIKI
 
 ### v0.5.0 (2026-08-11) — 安全加固 + RAG 向量检索 + 移动端局域网直连 + 依赖升级
 
