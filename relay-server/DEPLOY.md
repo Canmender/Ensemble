@@ -111,12 +111,14 @@ pm2 monit
 
 ## 配置环境变量
 
-创建 `.env` 文件：
+创建 `.env` 文件（**生产环境必须设置 `RELAY_AUTH_KEY`**，否则设备注册与消息转发无鉴权）：
 
 ```bash
 cat > /opt/ensemble/relay-server/.env << EOF
 PORT=8888
 CORS_ORIGINS=*
+# 共享认证密钥：所有设备（桌面端/移动端）连接时需传相同 token
+RELAY_AUTH_KEY=replace-with-a-strong-random-string
 OFFLINE_MESSAGE_EXPIRY=86400000
 LOG_LEVEL=info
 EOF

@@ -18,6 +18,8 @@ services:
     environment:
       - PORT=8888
       - CORS_ORIGINS=*
+      # 生产环境请设置 RELAY_AUTH_KEY（Socket.IO 握手 + /devices 鉴权）
+      - RELAY_AUTH_KEY=${RELAY_AUTH_KEY:-}
       - OFFLINE_MESSAGE_EXPIRY=86400000
       - LOG_LEVEL=info
     restart: unless-stopped

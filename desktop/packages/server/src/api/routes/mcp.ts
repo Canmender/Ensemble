@@ -21,6 +21,12 @@ const now = () => new Date().toISOString();
 
 const SHELL_META_RE = /[;&|`$<>!{}()\[\]#'~]/;
 
+/** 未配置白名单时拒绝的解释器命令（MCP stdio 是任意命令执行入口，需显式信任） */
+const INTERPRETER_COMMANDS = new Set([
+  "node", "npm", "npx", "python", "python3", "sh", "bash", "zsh", "fish",
+  "perl", "ruby", "pwsh", "powershell", "cmd", "deno", "bun", "wsl",
+]);
+
 function validateMcpCommand(
   command: string | undefined,
   args: string[] | undefined,
@@ -33,6 +39,9 @@ function validateMcpCommand(
     if (!allowedCommands.includes(command)) {
       return `command "${command}" is not in the allowed commands list`;
     }
+  } else if (INTERPRETER_COMMANDS.has(command)) {
+    // 无白名单时禁止解释器命令，防止参数注入型任意代码执行（如 python -c "..."）
+    return `command "${command}" 是解释器，出于安全考虑请先在安全设置（allowedCommands）中显式允许`;
   }
   return undefined; // valid
 }

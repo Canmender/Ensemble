@@ -65,8 +65,13 @@ export function apiAuth(opts: ApiAuthOptions): RequestHandler {
   return (req: Request, res: Response, next: NextFunction) => {
     const path = req.path;
 
-    // 公开端点（探活等）
-    if (publicPaths.has(path)) return next();
+    // 公开端点（探活等）：仅允许 GET，避免非 GET 方法绕过 token
+    if (publicPaths.has(path)) {
+      if (req.method !== "GET") {
+        return res.status(405).json({ error: { code: "method_not_allowed", message: "Method Not Allowed" } });
+      }
+      return next();
+    }
 
     // Bootstrap 端点：仅限 GET + 本机来源，防恶意网页盗取 session token
     if (originGuardPaths.has(path)) {

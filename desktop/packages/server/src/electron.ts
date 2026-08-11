@@ -60,6 +60,11 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
   return new Promise((resolve, reject) => {
     // 默认仅绑定 127.0.0.1；配置 ENSEMBLE_LAN_HOST 时绑定局域网（移动端直连）
     const host = env.lanHost && env.lanHost !== "127.0.0.1" && env.lanHost !== "::1" ? env.lanHost : "127.0.0.1";
+    if (host !== "127.0.0.1" && !env.apiKey) {
+      logger.warn(
+        `监听地址为 ${host}（局域网可见）但未配置 ENSEMBLE_API_KEY，局域网内设备可获取 session token 访问全部 API。`,
+      );
+    }
     let stopAdvertise: (() => void) | undefined;
 
     server.once("error", reject);
