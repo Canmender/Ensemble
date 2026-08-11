@@ -177,3 +177,74 @@ describe("ws-token origin guard", () => {
     expect(res.status).toBe(405);
   });
 });
+
+// ── 多凭证认证（用户 token / API key / 设备 token） ─────────────────────────
+
+describe("multi-credential auth", () => {
+  const app = express();
+  app.use(
+    "/api",
+    apiAuth({
+      resolveUser: (token) =>
+        token === "user-token" ? { id: "u1", username: "alice", role: "user" } : undefined,
+      apiKey: "machine-key",
+      getToken: () => "device-token",
+      publicPaths: ["/health"],
+      originGuardPaths: ["/ws-token"],
+    }),
+  );
+  app.get("/api/agents", (req, res) => res.json({ data: { user: req.user?.username ?? null } }));
+  app.get("/api/health", (_req, res) => res.json({ data: { status: "ok" } }));
+
+  let s: Server;
+  let url: string;
+
+  beforeAll(async () => {
+    await new Promise<void>((resolve) => {
+      s = app.listen(0, "127.0.0.1", () => {
+        url = `http://127.0.0.1:${(s.address() as AddressInfo).port}`;
+        resolve();
+      });
+    });
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => s.close((err) => (err ? reject(err) : resolve())));
+  });
+
+  it("resolves a user session token to req.user", async () => {
+    const res = await fetch(`${url}/api/agents`, {
+      headers: { Authorization: "Bearer user-token" },
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as any).data.user).toBe("alice");
+  });
+
+  it("resolves the machine API key to system user", async () => {
+    const res = await fetch(`${url}/api/agents`, {
+      headers: { Authorization: "Bearer machine-key" },
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as any).data.user).toBe("system");
+  });
+
+  it("accepts the device token without a user (local mode)", async () => {
+    const res = await fetch(`${url}/api/agents`, {
+      headers: { Authorization: "Bearer device-token" },
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as any).data.user).toBeNull();
+  });
+
+  it("rejects unknown tokens", async () => {
+    const res = await fetch(`${url}/api/agents`, {
+      headers: { Authorization: "Bearer unknown-token" },
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it("still allows public health without a token", async () => {
+    const res = await fetch(`${url}/api/health`);
+    expect(res.status).toBe(200);
+  });
+});

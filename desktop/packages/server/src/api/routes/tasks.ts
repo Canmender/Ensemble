@@ -6,14 +6,14 @@ import { asyncH, fail, ok } from "./helpers";
 export function tasksRouter(ctx: AppContext): Router {
   const r = Router();
 
-  r.get("/", (_req, res) => {
-    ok(res, ctx.store.listTasks());
+  r.get("/", (req, res) => {
+    ok(res, ctx.store.listTasks(req.user?.id));
   });
 
   r.get("/:id", (req, res) => {
     const task = ctx.store.getTask(String(req.params.id));
     if (!task) return fail(res, new Error(`task not found: ${String(req.params.id)}`), 404);
-    const runs = ctx.store.listRuns({ taskId: task.id });
+    const runs = ctx.store.listRuns({ taskId: task.id }, req.user?.id);
     ok(res, { task, runs });
   });
 
@@ -28,7 +28,7 @@ export function tasksRouter(ctx: AppContext): Router {
       if (!parsed.success) {
         return fail(res, new Error(parsed.error.issues[0]?.message ?? "invalid input"));
       }
-      const run = await ctx.engine.createAndExecuteTask(title, parsed.data);
+      const run = await ctx.engine.createAndExecuteTask(title, parsed.data, req.user?.id);
       ok(res, run, 201);
     }),
   );

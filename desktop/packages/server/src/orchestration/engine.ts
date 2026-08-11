@@ -50,13 +50,14 @@ export class OrchestrationEngine {
     return this.agentConfigs.get(agentId)?.name ?? agentId;
   }
 
-  /** 创建任务并立即执行，返回新 Run */
-  async createAndExecuteTask(title: string, input: TaskInput): Promise<Run> {
+  /** 创建任务并立即执行，返回新 Run（userId 用于多用户数据隔离） */
+  async createAndExecuteTask(title: string, input: TaskInput, userId?: string): Promise<Run> {
     const task: Task = {
       id: newId("task"),
       title,
       mode: input.mode,
       input,
+      userId,
       createdAt: new Date().toISOString(),
     };
     this.store.createTask(task);
@@ -70,6 +71,7 @@ export class OrchestrationEngine {
       taskId: task.id,
       mode: task.mode,
       status: "queued",
+      userId: task.userId,
       startedAt: new Date().toISOString(),
       taskTitle: task.title,
     };
@@ -158,6 +160,7 @@ export class OrchestrationEngine {
         id: newId("job"),
         runId: run.id,
         seq,
+        userId: run.userId,
         agentId,
         agentName: this.getAgentName(agentId),
         prompt,
@@ -196,7 +199,7 @@ export class OrchestrationEngine {
           steeringQueue: this.getSteeringQueue(run.id),
         })) {
           // 原子分配 seq（MAX+1 与 INSERT 在同一同步块，并行 job 不冲突）
-          const seq = this.store.appendRunEvent(run.id, job.id, ev);
+          const seq = this.store.appendRunEvent(run.id, job.id, ev, run.userId);
           this.hub.broadcast(
             run.id,
             seq,
@@ -240,7 +243,7 @@ export class OrchestrationEngine {
           ts: Date.now(),
         };
         job.events.push(errEv);
-        const eseq = this.store.appendRunEvent(run.id, job.id, errEv);
+        const eseq = this.store.appendRunEvent(run.id, job.id, errEv, run.userId);
         this.hub.broadcast(run.id, eseq, { type: "agent.event", jobId: job.id, agentId, event: errEv }, job.id);
       } finally {
         cleanup();
@@ -367,6 +370,7 @@ export class OrchestrationEngine {
     role: "user" | "assistant",
     content: string,
   ): void {
+    const run = this.store.getRun(runId);
     this.store.createChatMessage({
       id: newId("msg"),
       runId,
@@ -374,6 +378,7 @@ export class OrchestrationEngine {
       agentId,
       role,
       content,
+      userId: run?.userId,
       ts: new Date().toISOString(),
     });
     this.hub.broadcast(runId, 0, {

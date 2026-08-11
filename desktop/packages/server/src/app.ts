@@ -16,6 +16,7 @@ import { discoveryRouter } from "./api/routes/discovery";
 import { relayRouter } from "./api/routes/relay";
 import { chatRouter } from "./api/routes/chat";
 import { apiAuth } from "./api/auth";
+import { authRouter } from "./api/routes/auth";
 
 export interface CreateAppOptions {
   /** 托管前端静态资源目录（桌面 prod 同源加载） */
@@ -70,12 +71,17 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   const app = express();
   app.use(express.json({ limit: "2mb" }));
 
-  // API 认证：除 health（探活）与 ws-token（bootstrap，仅本机来源）外，
-  // 所有 /api/* 端点要求 Authorization: Bearer <sessionToken>。
+  // 用户认证路由（注册/登录/会话）—— 挂在 apiAuth 之前，登录无需已有 token
+  app.use("/api/auth", authRouter(ctx));
+
+  // API 认证：三凭证按序判定（用户 session → 机器 API key → 设备 token）。
+  // 除 health（探活）与 ws-token（bootstrap，仅本机来源）外，所有 /api/* 要求 Bearer。
   app.use(
     "/api",
     apiAuth({
       getToken: () => ctx.hub.sessionToken,
+      resolveUser: (token) => ctx.userStore.getUserBySessionToken(token),
+      apiKey: ctx.env.apiKey,
       publicPaths: ["/health"],
       originGuardPaths: ["/ws-token"],
     }),

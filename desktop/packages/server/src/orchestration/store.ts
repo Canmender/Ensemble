@@ -56,15 +56,15 @@ export class Store {
     // 一次性 prepare 所有固定 SQL（动态 SQL 如 updateRun/updateJob 仍需即时 prepare）
     this.stmts = {
       // Tasks
-      createTask: db.prepare("INSERT INTO tasks (id, title, mode, input_json, created_at) VALUES (?, ?, ?, ?, ?)"),
+      createTask: db.prepare("INSERT INTO tasks (id, title, mode, input_json, user_id, created_at) VALUES (?, ?, ?, ?, ?, ?)"),
       listTasks: db.prepare("SELECT * FROM tasks ORDER BY created_at DESC"),
       getTask: db.prepare("SELECT * FROM tasks WHERE id = ?"),
       deleteTask: db.prepare("DELETE FROM tasks WHERE id = ?"),
       // Runs
-      createRun: db.prepare("INSERT INTO runs (id, task_id, mode, status, task_title, started_at) VALUES (?, ?, ?, ?, ?, ?)"),
+      createRun: db.prepare("INSERT INTO runs (id, task_id, mode, status, task_title, user_id, started_at) VALUES (?, ?, ?, ?, ?, ?, ?)"),
       getRun: db.prepare("SELECT * FROM runs WHERE id = ?"),
       // Jobs
-      createJob: db.prepare("INSERT INTO jobs (id, run_id, seq, agent_id, agent_name, prompt, status, parent_job_id, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+      createJob: db.prepare("INSERT INTO jobs (id, run_id, seq, agent_id, agent_name, prompt, status, user_id, parent_job_id, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
       getJob: db.prepare("SELECT * FROM jobs WHERE id = ?"),
       getJobs: db.prepare("SELECT * FROM jobs WHERE run_id = ? ORDER BY seq"),
       getJobEvents: db.prepare("SELECT event_json FROM run_events WHERE run_id = ? AND job_id = ? ORDER BY seq"),
@@ -72,10 +72,10 @@ export class Store {
       // Run events
       nextEventSeq: db.prepare("SELECT COALESCE(MAX(seq), 0) AS max_seq FROM run_events WHERE run_id = ?"),
       nextJobSeq: db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM jobs WHERE run_id = ?"),
-      insertRunEvent: db.prepare("INSERT INTO run_events (run_id, seq, job_id, event_json, ts) VALUES (?, ?, ?, ?, ?)"),
+      insertRunEvent: db.prepare("INSERT INTO run_events (run_id, seq, job_id, user_id, event_json, ts) VALUES (?, ?, ?, ?, ?, ?)"),
       getRunEvents: db.prepare("SELECT seq, job_id, event_json FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq"),
       // Chat messages
-      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, content, ts) VALUES (?, ?, ?, ?, ?, ?, ?)"),
+      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
       listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY ts"),
       // Workflows
       listWorkflows: db.prepare("SELECT * FROM workflows ORDER BY name"),
@@ -86,11 +86,13 @@ export class Store {
 
   // ---------- Tasks ----------
   createTask(task: Task): void {
-    this.stmts.createTask.run(task.id, task.title, task.mode, JSON.stringify(task.input), task.createdAt);
+    this.stmts.createTask.run(task.id, task.title, task.mode, JSON.stringify(task.input), task.userId ?? '', task.createdAt);
   }
 
-  listTasks(): Task[] {
-    const rows = this.stmts.listTasks.all() as any[];
+  listTasks(userId?: string): Task[] {
+    const rows = userId
+      ? (this.db.prepare("SELECT * FROM tasks WHERE user_id = ? OR user_id = '' ORDER BY created_at DESC").all(userId) as any[])
+      : (this.stmts.listTasks.all() as any[]);
     return rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -128,7 +130,7 @@ export class Store {
 
   // ---------- Runs ----------
   createRun(run: Run): void {
-    this.stmts.createRun.run(run.id, run.taskId, run.mode, run.status, run.taskTitle ?? null, run.startedAt);
+    this.stmts.createRun.run(run.id, run.taskId, run.mode, run.status, run.taskTitle ?? null, run.userId ?? '', run.startedAt);
   }
 
   updateRun(id: string, patch: Partial<Run>): void {
@@ -150,9 +152,10 @@ export class Store {
     return rowToRun(r);
   }
 
-  listRuns(filter?: { taskId?: string; mode?: string; status?: string }): Run[] {
+  listRuns(filter?: { taskId?: string; mode?: string; status?: string }, userId?: string): Run[] {
     const where: string[] = [];
     const vals: any[] = [];
+    if (userId) { where.push("(user_id = ? OR user_id = '')"); vals.push(userId); }
     if (filter?.taskId) { where.push("task_id = ?"); vals.push(filter.taskId); }
     if (filter?.mode) { where.push("mode = ?"); vals.push(filter.mode); }
     if (filter?.status) { where.push("status = ?"); vals.push(filter.status); }
@@ -166,7 +169,7 @@ export class Store {
   createJob(job: Job): void {
     this.stmts.createJob.run(
       job.id, job.runId, job.seq, job.agentId, job.agentName, job.prompt,
-      job.status, job.parentJobId ?? null, job.startedAt ?? new Date().toISOString(),
+      job.status, job.userId ?? '', job.parentJobId ?? null, job.startedAt ?? new Date().toISOString(),
     );
     // 更新 job seq 计数器
     const currentMax = this.jobSeqCounters.get(job.runId) ?? 0;
@@ -251,9 +254,9 @@ export class Store {
    * 原子分配 seq 并落库（同步方法：JS 单线程下 MAX+1 与 INSERT 不可被打断）。
    * 并行 job 各自调用不会拿到相同 seq（分配与写入在同一同步块内）。
    */
-  appendRunEvent(runId: string, jobId: string | undefined, event: AgentEvent): number {
+  appendRunEvent(runId: string, jobId: string | undefined, event: AgentEvent, userId?: string): number {
     const seq = this.nextEventSeq(runId);
-    this.stmts.insertRunEvent.run(runId, seq, jobId ?? null, JSON.stringify(event), new Date(event.ts).toISOString());
+    this.stmts.insertRunEvent.run(runId, seq, jobId ?? null, userId ?? '', JSON.stringify(event), new Date(event.ts).toISOString());
     // 更新内存计数器
     this.eventSeqCounters.set(runId, seq);
     return seq;
@@ -276,11 +279,13 @@ export class Store {
 
   // ---------- Chat messages ----------
   createChatMessage(msg: ChatMessage): void {
-    this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.content, msg.ts);
+    this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.ts);
   }
 
-  listChatMessages(runId: string): ChatMessage[] {
-    const rows = this.stmts.listChatMessages.all(runId) as any[];
+  listChatMessages(runId: string, userId?: string): ChatMessage[] {
+    const rows = userId
+      ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') ORDER BY ts").all(runId, userId) as any[])
+      : (this.stmts.listChatMessages.all(runId) as any[]);
     return rows.map((r) => ({
       id: r.id,
       runId: r.run_id,
@@ -326,6 +331,7 @@ function rowToRun(r: any): Run {
     taskId: r.task_id,
     mode: r.mode,
     status: r.status,
+    userId: r.user_id ?? undefined,
     startedAt: r.started_at,
     endedAt: r.ended_at ?? undefined,
     finalResult: r.final_result ?? undefined,
@@ -339,6 +345,7 @@ function rowToJob(r: any): Job {
   return {
     id: r.id,
     runId: r.run_id,
+    userId: r.user_id ?? undefined,
     seq: Number(r.seq),
     agentId: r.agent_id,
     agentName: r.agent_name,

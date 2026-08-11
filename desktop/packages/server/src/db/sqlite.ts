@@ -7,6 +7,26 @@ const INIT_SQL = `
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS users (
+  id            TEXT PRIMARY KEY,
+  username      TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
+  salt          TEXT NOT NULL,
+  display_name  TEXT,
+  role          TEXT NOT NULL DEFAULT 'user',
+  org_id        TEXT,
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  token        TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL REFERENCES users(id),
+  created_at   TEXT NOT NULL,
+  expires_at   TEXT NOT NULL,
+  device_info  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS agents (
   id          TEXT PRIMARY KEY,
   name        TEXT NOT NULL,
@@ -22,6 +42,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   title      TEXT NOT NULL,
   mode       TEXT NOT NULL,
   input_json TEXT NOT NULL,
+  user_id    TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL
 );
 
@@ -31,6 +52,7 @@ CREATE TABLE IF NOT EXISTS runs (
   mode         TEXT NOT NULL,
   status       TEXT NOT NULL,
   task_title   TEXT,
+  user_id      TEXT NOT NULL DEFAULT '',
   started_at   TEXT NOT NULL,
   ended_at     TEXT,
   final_result TEXT,
@@ -45,6 +67,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   agent_name    TEXT NOT NULL,
   prompt        TEXT NOT NULL,
   status        TEXT NOT NULL,
+  user_id       TEXT NOT NULL DEFAULT '',
   result        TEXT,
   usage_json    TEXT,
   session_id    TEXT,
@@ -58,6 +81,7 @@ CREATE TABLE IF NOT EXISTS run_events (
   run_id     TEXT NOT NULL REFERENCES runs(id),
   seq        INTEGER NOT NULL,
   job_id     TEXT,
+  user_id    TEXT NOT NULL DEFAULT '',
   event_json TEXT NOT NULL,
   ts         TEXT NOT NULL,
   PRIMARY KEY (run_id, seq)
@@ -69,6 +93,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   job_id   TEXT,
   agent_id TEXT NOT NULL,
   role     TEXT NOT NULL,
+  user_id  TEXT NOT NULL DEFAULT '',
   content  TEXT NOT NULL,
   ts       TEXT NOT NULL
 );
@@ -92,5 +117,17 @@ export function openDb(dbPath: string): DatabaseSync {
   mkdirSync(dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
   db.exec(INIT_SQL);
+  migrateUserColumns(db);
   return db;
+}
+
+/** 旧库迁移：CREATE TABLE IF NOT EXISTS 不添加列，业务表缺失 user_id 时补齐 */
+function migrateUserColumns(db: DatabaseSync): void {
+  const tables = ["tasks", "runs", "jobs", "run_events", "chat_messages"];
+  for (const table of tables) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "user_id")) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN user_id TEXT NOT NULL DEFAULT ''`);
+    }
+  }
 }

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { timingSafeEqual } from "node:crypto";
+import type { AuthUser } from "../db/users";
 
 /**
  * 本地服务 HTTP API 认证中间件（挂载于 /api）。
@@ -11,6 +12,11 @@ import { timingSafeEqual } from "node:crypto";
  * - 本机其他进程"顺便"访问 localhost 端口 → Bearer token 使其需要先主动提取 token
  *   （纵深防御；本机进程仍可通过内存/命令行读取绕过，属固有局限）。
  * - 恶意网页盗取 bootstrap token（/api/ws-token）→ Origin/Referer 校验拒绝非本机来源。
+ *
+ * 凭证（按序判定，命中即放行）：
+ * 1. 用户 session token（sessions 表）→ 附加 req.user（多用户服务器模式）
+ * 2. 机器 API key（ENSEMBLE_API_KEY）→ req.user = { role: "system" }（headless/Docker/移动端直连）
+ * 3. 设备 token（桌面本地）→ 放行但无 req.user（本地单用户，不隔离）
  *
  * 例外端点：
  * - publicPaths：无需认证（如 /api/health 探活，不暴露敏感数据）。
@@ -50,8 +56,12 @@ function extractBearer(auth: string | undefined): string | null {
 }
 
 export interface ApiAuthOptions {
-  /** 返回当前有效的 API token（session token 或配置的 API key） */
-  getToken: () => string;
+  /** 设备级 token（桌面本地，无用户）；未配置时跳过该凭证 */
+  getToken?: () => string;
+  /** 解析用户 session token → AuthUser（多用户服务器模式）；未配置时跳过 */
+  resolveUser?: (token: string) => AuthUser | undefined;
+  /** 机器 API key（headless/Docker/移动端直连），命中时 req.user = { role: "system" } */
+  apiKey?: string;
   /** 无需认证的端点（相对 /api 挂载点的路径），如 ["/health"] */
   publicPaths?: string[];
   /** 仅校验来源的 bootstrap 端点，如 ["/ws-token"] */
@@ -86,14 +96,34 @@ export function apiAuth(opts: ApiAuthOptions): RequestHandler {
       return next();
     }
 
-    // 其余端点：要求 Bearer token（timing-safe 比较）
+    // 其余端点：要求 Bearer token，按序判定凭证
     const token = extractBearer(req.headers.authorization);
-    if (!token || !safeEqual(token, opts.getToken())) {
+    if (!token) {
       res.setHeader("WWW-Authenticate", 'Bearer realm="ensemble"');
-      return res
-        .status(401)
-        .json({ error: { code: "unauthorized", message: "Missing or invalid API token" } });
+      return res.status(401).json({ error: { code: "unauthorized", message: "Missing or invalid API token" } });
     }
-    next();
+
+    // ① 用户 session token（多用户服务器模式）→ 附加 req.user
+    if (opts.resolveUser) {
+      const user = opts.resolveUser(token);
+      if (user) {
+        req.user = user;
+        return next();
+      }
+    }
+
+    // ② 机器 API key → req.user = system
+    if (opts.apiKey && safeEqual(token, opts.apiKey)) {
+      req.user = { id: "", username: "system", role: "system" };
+      return next();
+    }
+
+    // ③ 设备 token（桌面本地，无 req.user）
+    if (opts.getToken && safeEqual(token, opts.getToken())) {
+      return next();
+    }
+
+    res.setHeader("WWW-Authenticate", 'Bearer realm="ensemble"');
+    return res.status(401).json({ error: { code: "unauthorized", message: "Missing or invalid API token" } });
   };
 }

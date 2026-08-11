@@ -10,6 +10,8 @@ export interface Task {
   title: string;
   mode: TaskMode;
   input: TaskInput;
+  /** 归属用户 ID（多用户隔离；空 = 本地/共享） */
+  userId?: string;
   createdAt: string;
 }
 
@@ -46,6 +48,7 @@ export interface Run {
   taskId: string;
   mode: TaskMode;
   status: RunStatus;
+  userId?: string;
   startedAt: string;
   endedAt?: string;
   finalResult?: string;
@@ -57,6 +60,7 @@ export interface Run {
 export interface Job {
   id: string;
   runId: string;
+  userId?: string;
   seq: number;
   agentId: string;
   agentName: string;
@@ -101,6 +105,7 @@ export interface WorkflowEdge {
 export interface ChatMessage {
   id: string;
   runId: string;
+  userId?: string;
   jobId?: string;
   agentId: string;
   role: "user" | "assistant";

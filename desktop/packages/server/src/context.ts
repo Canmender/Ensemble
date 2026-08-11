@@ -3,6 +3,7 @@ import { resolve, join, dirname } from "node:path";
 import type { ServerEnv } from "./config/env";
 import { ConfigManager } from "./appContext";
 import { Store } from "./orchestration/store";
+import { UserStore } from "./db/users";
 import { AdapterRegistry } from "./adapters/registry";
 import { OrchestrationEngine } from "./orchestration/engine";
 import { WsHub } from "./api/ws/hub";
@@ -67,6 +68,7 @@ export interface AppContext {
   db: DatabaseSync;
   config: ConfigManager;
   store: Store;
+  userStore: UserStore;
   registry: AdapterRegistry;
   engine: OrchestrationEngine;
   hub: WsHub;
@@ -95,6 +97,7 @@ export function createAppContext(
 ): AppContext {
   const config = new ConfigManager(env);
   const store = new Store(db);
+  const userStore = new UserStore(db);
   const hub = new WsHub();
   // headless/Docker 部署：用固定 API key 覆盖随机 session token（HTTP + WS 统一凭证）
   if (env.apiKey) hub.overrideToken(env.apiKey);
@@ -225,6 +228,7 @@ export function createAppContext(
     db,
     config,
     store,
+    userStore,
     registry,
     engine,
     hub,
