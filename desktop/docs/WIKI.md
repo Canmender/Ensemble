@@ -34,9 +34,9 @@
 | **前端** | React + TypeScript | 18.3 | SPA UI |
 | **样式** | Tailwind CSS | 3.4 | 原子化 CSS |
 | **状态** | Zustand | 4.5 | 轻量状态管理 |
-| **图表** | ReactFlow | 11.x | 工作流 DAG 可视化 |
-| **构建** | Vite | 5.4 | 前端构建 + HMR |
-| **后端** | Express + TypeScript | 4.19 | REST API |
+| **图表** | @xyflow/react | 12.x | 工作流 DAG 可视化（原 reactflow） |
+| **构建** | Vite | 5.x | 前端构建 + HMR（base "./" + target es2022） |
+| **后端** | Express + TypeScript | 5.2 | REST API |
 | **实时** | ws (WebSocket) | 8.18 | 事件推送 |
 | **数据库** | node:sqlite (SQLite) | 内置 | 持久化存储 |
 | **桌面** | Electron | 43 | 桌面壳 |
@@ -197,10 +197,11 @@ ws.send({ type: "subscribe", runId: "run_xxx" });
 ```
 
 支持：
-- 按 runId 订阅
-- Wildcard 订阅（`*`，看板实时）
+- 按 runId 订阅（**Wildcard 订阅已禁用**，防止监听全部运行）
+- 连接需 session token（`?token=` query 验证）
 - 15s 心跳
 - 断线重连 + afterSeq 补拉
+- 事件驱动等待（`waitForRun`，替代轮询；chat 端点等回复/执行完成）
 
 ### 6. 记忆池系统 (`packages/server/src/memory/pool.ts`)
 
@@ -236,28 +237,36 @@ ws.send({ type: "subscribe", runId: "run_xxx" });
 
 #### RAG 知识库 (`tools/rag.ts`)
 
+支持向量语义检索、BM25 关键词检索、混合检索（RRF 排名融合）。
+
 ```typescript
-// 创建 RAG 存储
+// 创建 RAG 存储（可选注入 embedFn 启用向量检索）
 const ragStore = new RAGStore({
   chunkSize: 512,
   chunkOverlap: 50,
   topK: 5,
+  embedFn, // (texts: string[]) => Promise<number[][]>，OpenAI 兼容 embeddings
 });
 
-// 添加文档
+// 添加文档（配置 embedFn 时为分块生成向量）
 await ragStore.addDocument({
   id: "doc1",
   content: "...",
   metadata: { source: "manual", title: "..." },
 });
 
-// 混合检索
+// 混合检索（向量 + BM25，单侧能力缺失时自动退化为另一侧）
 const results = await ragStore.search("查询", {
-  method: "hybrid", // BM25 + 向量
+  method: "hybrid", // vector | bm25 | hybrid
   topK: 5,
   filters: { source: "manual" },
 });
 ```
+
+**embedding 配置**（`settings.rag`）：
+- `embeddingUrl` / `embeddingModel`：OpenAI 兼容 `/embeddings` 端点（Ollama 等本地端点亦可）
+- 未配置时复用默认 provider 的 baseUrl/apiKey/模型
+- 工具通过 `tools/embedding.ts` 的 `embedTexts` 调用，复用 `fetchWithRetry`
 
 **工具**：
 - `knowledge_search`: 知识库检索
@@ -306,7 +315,7 @@ const tools = await loadToolsFromOpenApi("https://api.github.com/openapi.json", 
 | 优化项 | 效果 | 文件 |
 |--------|------|------|
 | 路由懒加载 | 首屏 426KB→190KB | `web/src/App.tsx` |
-| reactflow 动态加载 | RunPage 153KB→13KB | `web/src/pages/RunPage.tsx` |
+| @xyflow/react 动态加载 | RunPage 153KB→13KB | `web/src/pages/RunPage.tsx` |
 | vendor chunk 拆分 | 缓存命中率↑ | `web/vite.config.ts` |
 | GPU 光栅化 | 渲染性能↑ | `desktop/src/main/index.ts` |
 | 后台节流 | 能耗↓ | `desktop/src/main/window.ts` |
@@ -416,6 +425,28 @@ pnpm --filter @ensemble/desktop dev
 
 ---
 
+## 安全
+
+### HTTP API 认证
+
+所有 `/api/*` 端点（除 `/api/health` 探活）要求 `Authorization: Bearer <sessionToken>`：
+
+- **session token**：桌面版启动时随机生成（32-byte hex），前端通过 `GET /api/ws-token` 获取；HTTP 与 WebSocket 共用同一 token
+- **`/api/ws-token` Origin 校验**：仅放行 `localhost`/`127.0.0.1` 来源（或非浏览器客户端），防恶意网页跨站盗取
+- **headless/Docker**：`ENSEMBLE_API_KEY` 配置固定 key 覆盖随机 token，且禁用 `/api/ws-token`（防公网绕过）
+- **对外绑定强制**：`ENSEMBLE_LAN_HOST` 设为对外地址但未配置 API key 时 headless 拒绝启动
+- 401 响应带 `WWW-Authenticate`；Bearer 校验 timing-safe
+
+### 其他加固
+
+- 所有写端点（POST/PUT/PATCH/DELETE）速率限制（60/min/IP）
+- 配置 id（agent/workflow/provider）字符白名单 `^[a-z0-9-]+$`（防路径穿越）
+- settings 中的第三方 API key（searchApi/mem0）响应掩蔽
+- MCP 命令白名单：无 `allowedCommands` 时拒绝解释器命令（python/sh 等）
+- `ConfigManager` 写操作互斥串行化（防并发丢失）
+
+---
+
 ## 部署与发布
 
 ### 构建安装包
@@ -447,6 +478,21 @@ npm run dev  # 开发模式
 npm start    # 生产模式
 ```
 
+**鉴权**：生产环境务必设置 `RELAY_AUTH_KEY`（Socket.IO 握手 + `/devices` 均要求 Bearer token）。客户端连接时传 `auth: { token: <key> }`。
+
+### 移动端局域网直连
+
+桌面端默认仅绑定 `127.0.0.1`。要让移动端直连：
+
+```bash
+# 桌面端设置监听局域网 + 自动发布 mDNS（_ensemble._tcp）
+ENSEMBLE_LAN_HOST=0.0.0.0
+# 对外绑定建议同时配置固定 API key（否则局域网内任何设备可获取 session token）
+ENSEMBLE_API_KEY=<random>
+```
+
+移动端通过 mDNS 自动发现或手动输入 IP，经 REST API + 原生 WebSocket（`/ws?token=...`）连接。直连模式下移动端支持：任务创建/取消、群聊消息、实时事件流（`wslink.ts` 解析 WsEnvelope）。
+
 ---
 
 ## 故障排查
@@ -477,6 +523,26 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 ---
 
 ## 变更日志
+
+### v0.5.0 (2026-08-11) — 安全加固 + RAG 向量检索 + 移动端局域网直连 + 依赖升级
+
+**安全加固**
+- HTTP API 认证：所有 `/api/*` Bearer token；`/api/ws-token` Origin 校验；`ENSEMBLE_API_KEY` 支持
+- relay-server 鉴权：`RELAY_AUTH_KEY` 握手鉴权 + `/devices` 保护 + 同设备顶替防串扰
+- 三轮代码审查修复：headless 默认回环绑定 + 对外强制 API key；workflow id 路径穿越；settings 第三方 key 掩蔽；MCP 解释器命令白名单；全量写限流；health 收敛
+- 取消语义：run 级取消（plan/adversarial 取消不再误标成功；取消终止本地子进程）
+
+**新功能**
+- RAG 向量检索：OpenAI 兼容 embedding 接入，vector/BM25/混合（RRF 融合）
+- Chat 事件驱动：`WsHub.waitForRun` 替代 200ms 忙等待轮询
+- 移动端局域网直连：桌面端 `ENSEMBLE_LAN_HOST` + mDNS；移动端原生 WebSocket 事件流（wslink）
+- ConfigManager async：读缓存 + 异步写 + 互斥串行
+
+**依赖升级**
+- Express 5、reactflow → @xyflow/react v12、vitest 3、Vite base "./" + target es2022
+
+**测试**
+- server 128 单元测试 + relay-server 9 集成测试；移动端 typecheck 0 错误
 
 ### v0.4.3 (2026-08-10) — 安全加固 + 画布修复 + 内部弹窗 + 移动端全面改进
 
