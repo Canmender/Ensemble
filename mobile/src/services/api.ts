@@ -147,6 +147,11 @@ class ApiService {
   /** 请求超时（毫秒） */
   private timeoutMs = DEFAULT_TIMEOUT_MS;
 
+  /** 当前连接的桌面端 session token（Bearer 认证） */
+  private apiToken: string | null = null;
+  /** token 获取中（防止并发重复请求） */
+  private tokenPromise: Promise<string | null> | null = null;
+
   /** 设置请求超时 */
   setTimeoutMs(ms: number): void {
     this.timeoutMs = ms;
@@ -157,6 +162,42 @@ class ApiService {
     const { connectedDevice } = useDeviceStore.getState();
     if (!connectedDevice) return null;
     return `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
+  }
+
+  /** 获取桌面端 session token（缓存；桌面端重启或切换设备后 401 会触发重置） */
+  private async getToken(): Promise<string | null> {
+    if (this.apiToken) return this.apiToken;
+    if (!this.tokenPromise) {
+      const baseUrl = this.getBaseUrl();
+      if (!baseUrl) return null;
+      this.tokenPromise = (async () => {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 5000);
+          let res: Response;
+          try {
+            res = await fetch(`${baseUrl}/api/ws-token`, { signal: controller.signal });
+          } finally {
+            clearTimeout(timer);
+          }
+          if (!res.ok) return null;
+          const json = (await res.json()) as { token?: unknown } | null;
+          this.apiToken = typeof json?.token === "string" ? json.token : null;
+          return this.apiToken;
+        } catch {
+          return null;
+        } finally {
+          this.tokenPromise = null;
+        }
+      })();
+    }
+    return this.tokenPromise;
+  }
+
+  /** 清除 token 缓存（桌面端重启 / 切换设备后旧 token 失效） */
+  private resetToken(): void {
+    this.apiToken = null;
+    this.tokenPromise = null;
   }
 
   /** 将 HTTP 状态码映射为用户友好的错误消息 */
@@ -206,11 +247,13 @@ class ApiService {
     const timer = setTimeout(() => controller.abort(), timeout);
 
     try {
+      const token = await this.getToken();
       const options: RequestInit = {
         method,
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
         signal: controller.signal,
       };
@@ -222,6 +265,9 @@ class ApiService {
       const response = await fetch(`${baseUrl}${path}`, options);
 
       if (!response.ok) {
+        // 桌面端重启后 session token 变更，清除缓存让下一次请求重新获取
+        if (response.status === 401) this.resetToken();
+
         let detail: string | undefined;
         try {
           const errBody = await response.json();

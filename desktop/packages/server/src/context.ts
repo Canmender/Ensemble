@@ -57,6 +57,8 @@ export function createAppContext(
   const config = new ConfigManager(env);
   const store = new Store(db);
   const hub = new WsHub();
+  // headless/Docker 部署：用固定 API key 覆盖随机 session token（HTTP + WS 统一凭证）
+  if (env.apiKey) hub.overrideToken(env.apiKey);
   const keyStore = deps.keyStore ?? new FileKeyStore(resolve(env.configDir, "secrets.json"));
   const providerRegistry = new ProviderRegistry(keyStore);
   const toolRegistry = new ToolRegistry();

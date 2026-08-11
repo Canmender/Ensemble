@@ -59,6 +59,11 @@ export class WsHub {
     return this._sessionToken;
   }
 
+  /** 用固定 token 覆盖自动生成的 session token（headless/API key 模式） */
+  overrideToken(token: string): void {
+    this._sessionToken = token;
+  }
+
   /** 客户端消息回调（cancel/steer/tool_confirm 等需要引擎配合的操作） */
   onClientMessage?: (msg: { type: string; runId: string; content?: string; confirmId?: string; approved?: boolean }) => void;
 
