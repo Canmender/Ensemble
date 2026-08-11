@@ -46,6 +46,8 @@ export interface ServerEnv {
    * 用于移动端直连；此时建议配合 ENSEMBLE_API_KEY 或至少设置防火墙。
    */
   lanHost?: string;
+  /** 启动时自动接入本机已安装的 agent harness（默认开；设为 false 关闭） */
+  autoSyncLocal?: boolean;
 }
 
 export function getEnv(): ServerEnv {
@@ -59,5 +61,6 @@ export function getEnv(): ServerEnv {
     hermesWslDistro: process.env.HERMES_WSL_DISTRO ?? "Ubuntu",
     apiKey: process.env.ENSEMBLE_API_KEY || undefined,
     lanHost: process.env.ENSEMBLE_LAN_HOST || undefined,
+    autoSyncLocal: process.env.ENSEMBLE_AUTO_SYNC_LOCAL !== "false",
   };
 }

@@ -474,17 +474,22 @@ function SystemInfo() {
 // ---------- 本地 Agent 发现与同步 ----------
 function DiscoverySection() {
   const [agents, setAgents] = useState<DetectedAgent[]>([]);
+  const [installers, setInstallers] = useState<Array<{ type: string; name: string; autoInstallable: boolean }>>([]);
   const [syncing, setSyncing] = useState<string | null>(null);
+  const [installing, setInstalling] = useState<string | null>(null);
   const [result, setResult] = useState<SyncResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function refresh() {
     setAgents(await api.get<DetectedAgent[]>("/discovery"));
+    setInstallers(await api.get<Array<{ type: string; name: string; autoInstallable: boolean }>>("/discovery/installers"));
   }
   useEffect(() => { void refresh(); }, []);
 
   async function sync(type: string) {
     setSyncing(type);
     setResult(null);
+    setError(null);
     try {
       setResult(await api.post(`/discovery/${type}/sync`));
       void refresh();
@@ -493,14 +498,33 @@ function DiscoverySection() {
     }
   }
 
+  async function install(type: string) {
+    setInstalling(type);
+    setError(null);
+    try {
+      await api.post(`/discovery/${type}/install`);
+      void refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "安装失败");
+    } finally {
+      setInstalling(null);
+    }
+  }
+
+  // 未检测到、但支持安装的 harness
+  const missing = installers.filter((i) => !agents.some((a) => a.type === i.type));
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted">自动识别本机安装的 agent（Claude Code / Hermes），可同步其技能、记忆与配置到平台</p>
+      <p className="text-sm text-muted">自动识别本机安装的 agent（OpenCode / Claude Code / Hermes 等），缺失的可以一键安装</p>
 
-      {agents.length === 0 && (
+      {agents.length === 0 && missing.length === 0 && (
         <Card className="p-8 text-center text-sm text-muted">未检测到本地 agent</Card>
       )}
 
+      {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {/* 已安装的 agent：同步技能/记忆/配置 */}
       {agents.map((a) => (
         <Card key={a.type} className="p-5">
           <div className="flex items-center justify-between">
@@ -539,6 +563,37 @@ function DiscoverySection() {
             <div className="mt-1 text-xs text-destructive">{result.errors.join("；")}</div>
           )}
         </Card>
+      )}
+
+      {/* 未安装但支持一键安装的 harness */}
+      {missing.length > 0 && (
+        <div>
+          <div className="mb-2 mt-2 text-xs font-medium uppercase tracking-wide text-muted">未安装（可一键安装）</div>
+          {missing.map((m) => (
+            <Card key={m.type} className="mb-2 p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-muted/20 text-muted">
+                    <Wrench className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-fg">{m.name}</div>
+                    <div className="text-xs text-muted">{m.type}</div>
+                  </div>
+                </div>
+                <Button
+                  variant={m.autoInstallable ? "primary" : "secondary"}
+                  onClick={() => install(m.type)}
+                  disabled={installing === m.type}
+                  className="px-3 py-1.5 text-xs"
+                  title={m.autoInstallable ? "自动安装" : "需手动安装"}
+                >
+                  {installing === m.type ? "安装中…" : m.autoInstallable ? "一键安装" : "安装"}
+                </Button>
+              </div>
+            </Card>
+          ))}
+        </div>
       )}
     </div>
   );

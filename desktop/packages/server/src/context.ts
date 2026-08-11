@@ -4,6 +4,8 @@ import type { ServerEnv } from "./config/env";
 import { ConfigManager } from "./appContext";
 import { Store } from "./orchestration/store";
 import { UserStore } from "./db/users";
+import { detectAgents } from "./discovery/detect";
+import { syncAgent } from "./discovery/sync";
 import { AdapterRegistry } from "./adapters/registry";
 import { OrchestrationEngine } from "./orchestration/engine";
 import { WsHub } from "./api/ws/hub";
@@ -221,6 +223,21 @@ export function createAppContext(
   /** 把 config 中的 providers 同步到 ProviderRegistry（新增/修改 provider 后调用） */
   function reloadProviders(): void {
     providerRegistry.reload(config.listProviders());
+  }
+
+  // 启动时自动接入本机已安装的 agent harness（opencode / claude / hermes 等，默认启用）
+  if (env.autoSyncLocal) {
+    void (async () => {
+      try {
+        const detected = detectAgents();
+        for (const agent of detected) {
+          await syncAgent(agent, { skillStore, memoryProvider, configManager: config });
+        }
+        if (detected.length) reloadAgents();
+      } catch (err) {
+        logger.warn(`auto-sync local agents failed: ${String(err)}`);
+      }
+    })();
   }
 
   return {
