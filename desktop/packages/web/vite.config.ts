@@ -27,8 +27,8 @@ export default defineConfig({
         manualChunks: {
           // 框架层：变更频率低，长期缓存
           "vendor-react": ["react", "react-dom", "react-router-dom"],
-          // reactflow 体量大，单独拆分（已被路由懒加载隔离）
-          "vendor-flow": ["reactflow"],
+          // @xyflow/react 体量大，单独拆分（已被路由懒加载隔离）
+          "vendor-flow": ["@xyflow/react"],
         },
       },
     },
