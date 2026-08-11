@@ -93,8 +93,8 @@ export function mcpRouter(ctx: AppContext): Router {
   r.put(
     "/:id",
     asyncH(async (req, res) => {
-      const existing = ctx.mcpConfig.get(req.params.id);
-      if (!existing) return fail(res, new Error(`mcp server not found: ${req.params.id}`), 404);
+      const existing = ctx.mcpConfig.get(String(req.params.id));
+      if (!existing) return fail(res, new Error(`mcp server not found: ${String(req.params.id)}`), 404);
       const body = req.body ?? {};
 
       // Security: if command is being changed, re-validate
@@ -128,17 +128,17 @@ export function mcpRouter(ctx: AppContext): Router {
   r.delete(
     "/:id",
     asyncH(async (req, res) => {
-      await ctx.mcpManager.disconnect(req.params.id);
-      ctx.mcpConfig.delete(req.params.id);
-      ok(res, { deleted: req.params.id });
+      await ctx.mcpManager.disconnect(String(req.params.id));
+      ctx.mcpConfig.delete(String(req.params.id));
+      ok(res, { deleted: String(req.params.id) });
     }),
   );
 
   r.post(
     "/:id/test",
     asyncH(async (req, res) => {
-      const cfg = ctx.mcpConfig.get(req.params.id);
-      if (!cfg) return fail(res, new Error(`mcp server not found: ${req.params.id}`), 404);
+      const cfg = ctx.mcpConfig.get(String(req.params.id));
+      if (!cfg) return fail(res, new Error(`mcp server not found: ${String(req.params.id)}`), 404);
       const result = await ctx.mcpManager.test(cfg);
       ok(res, result);
     }),
@@ -147,8 +147,8 @@ export function mcpRouter(ctx: AppContext): Router {
   r.post(
     "/:id/refresh",
     asyncH(async (req, res) => {
-      const cfg = ctx.mcpConfig.get(req.params.id);
-      if (!cfg) return fail(res, new Error(`mcp server not found: ${req.params.id}`), 404);
+      const cfg = ctx.mcpConfig.get(String(req.params.id));
+      if (!cfg) return fail(res, new Error(`mcp server not found: ${String(req.params.id)}`), 404);
       const st = await ctx.mcpManager.connectOrRefresh(cfg);
       ok(res, st);
     }),
