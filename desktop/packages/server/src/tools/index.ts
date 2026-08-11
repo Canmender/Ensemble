@@ -1,6 +1,7 @@
 import type { AppSettings } from "@ensemble/shared";
 import type { ToolRegistry } from "./types";
 import type { MemoryPoolManager } from "../memory/pool";
+import type { EmbedFn } from "./embedding";
 import { fileTools } from "./file";
 import { webTools } from "./web";
 import { utilityTools } from "./utility";
@@ -13,6 +14,7 @@ export function registerBuiltinTools(
   registry: ToolRegistry,
   getSettings: () => AppSettings,
   poolManager?: MemoryPoolManager,
+  embedFn?: EmbedFn,
 ): void {
   const settings = getSettings();
   for (const t of fileTools) registry.register(t);
@@ -25,7 +27,7 @@ export function registerBuiltinTools(
   // RAG 知识库工具（如果配置了）
   const ragConfig = settings.rag;
   if (ragConfig?.enabled) {
-    const ragStore = new RAGStore(ragConfig);
+    const ragStore = new RAGStore({ ...ragConfig, embedFn });
     registry.register(createRagTool(ragStore));
     registry.register(createRagManageTool(ragStore));
   }
