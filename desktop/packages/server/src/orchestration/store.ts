@@ -222,25 +222,29 @@ export class Store {
     // 优先使用内存计数器（避免 SELECT MAX 查询）
     const cached = this.eventSeqCounters.get(runId);
     if (cached !== undefined) {
-      return cached + 1;
+      const next = cached + 1;
+      this.eventSeqCounters.set(runId, next);
+      return next;
     }
-    // 首次查询，初始化计数器
+    // 首次查询，初始化计数器并返回
     const r = this.stmts.nextEventSeq.get(runId) as any;
-    const seq = Number(r?.max_seq ?? 0);
+    const seq = Number(r?.max_seq ?? 0) + 1;
     this.eventSeqCounters.set(runId, seq);
-    return seq + 1;
+    return seq;
   }
 
   /** run 内下一个 job 序号 */
   nextJobSeq(runId: string): number {
     const cached = this.jobSeqCounters.get(runId);
     if (cached !== undefined) {
-      return cached + 1;
+      const next = cached + 1;
+      this.jobSeqCounters.set(runId, next);
+      return next;
     }
     const r = this.stmts.nextJobSeq.get(runId) as any;
-    const seq = Number(r?.s ?? 0);
+    const seq = Number(r?.s ?? 0) + 1;
     this.jobSeqCounters.set(runId, seq);
-    return seq + 1;
+    return seq;
   }
 
   /**
