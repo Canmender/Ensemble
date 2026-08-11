@@ -19,8 +19,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@ensemble/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "bonjour-service": "^1.4.4",
     "express": "^4.19.0",
     "js-yaml": "^4.1.0",
     "socket.io-client": "^4.7.0",

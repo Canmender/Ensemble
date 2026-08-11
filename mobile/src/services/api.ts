@@ -361,9 +361,9 @@ class ApiService {
     return this.request<Task[]>("GET", "/api/tasks");
   }
 
-  /** 创建任务 */
-  async createTask(task: CreateTaskInput): Promise<ApiResponse<{ task: Task; run?: Run }>> {
-    return this.request<{ task: Task; run?: Run }>("POST", "/api/tasks", task);
+  /** 创建任务（返回新建的 Run） */
+  async createTask(task: CreateTaskInput): Promise<ApiResponse<Run>> {
+    return this.request<Run>("POST", "/api/tasks", task);
   }
 
   /** 删除任务 */
@@ -402,6 +402,11 @@ class ApiService {
     return this.request<Job[]>(`GET`, `/api/runs/${runId}/jobs`);
   }
 
+  /** 取消运行 */
+  async cancelRun(runId: string): Promise<ApiResponse<{ cancelled: string }>> {
+    return this.request<{ cancelled: string }>("POST", `/api/runs/${runId}/cancel`);
+  }
+
   // ========== Workflow API ==========
 
   /** 获取所有工作流 */
@@ -421,14 +426,27 @@ class ApiService {
 
   // ========== Chat API ==========
 
-  /** 创建群聊任务 */
-  async createChat(input: CreateChatInput): Promise<ApiResponse<{ task: Task; run: Run }>> {
-    return this.request<{ task: Task; run: Run }>("POST", "/api/chat", input);
+  /** 创建群聊任务（与桌面端 web 一致：POST /api/tasks, chat 模式；返回新建的 Run） */
+  async createChat(input: CreateChatInput): Promise<ApiResponse<Run>> {
+    return this.request<Run>("POST", "/api/tasks", {
+      title: input.title,
+      input: {
+        mode: "chat",
+        prompt: input.prompt ?? `群聊「${input.title}」已创建，请开始讨论。`,
+        participantIds: input.participantIds,
+        maxRounds: input.maxRounds ?? 10,
+      },
+    });
   }
 
   /** 获取群聊消息 */
   async getChatMessages(runId: string): Promise<ApiResponse<ChatMessage[]>> {
     return this.request<ChatMessage[]>(`GET`, `/api/chat/${runId}/messages`);
+  }
+
+  /** 发送群聊消息（fire-and-forget，回复通过 WS 实时推送） */
+  async sendChatMessage(runId: string, content: string): Promise<ApiResponse<{ sent: boolean }>> {
+    return this.request<{ sent: boolean }>("POST", `/api/chat/${runId}/messages`, { content });
   }
 
   // ========== Memory API ==========

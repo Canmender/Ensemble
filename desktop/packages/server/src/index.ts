@@ -27,7 +27,9 @@ async function main(): Promise<void> {
     }
   };
 
-  server.listen(env.port, () => {
+  // 默认绑定所有接口（headless/Docker 部署）；可配置 ENSEMBLE_LAN_HOST 收紧
+  const host = env.lanHost || undefined;
+  server.listen(env.port, host, () => {
     logger.info(`合鸣 server listening on http://localhost:${env.port}`);
     logger.info(
       `agents loaded: ${ctx.config.listAgents().map((a) => a.id).join(", ") || "(none)"}`,

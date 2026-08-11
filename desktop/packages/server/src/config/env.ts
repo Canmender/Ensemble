@@ -41,6 +41,11 @@ export interface ServerEnv {
    * - /api/ws-token 端点被禁用（公网绑定 0.0.0.0 时防止 token 被任意获取）
    */
   apiKey?: string;
+  /**
+   * 监听地址（桌面版默认 127.0.0.1）。设为 0.0.0.0 允许局域网访问，
+   * 用于移动端直连；此时建议配合 ENSEMBLE_API_KEY 或至少设置防火墙。
+   */
+  lanHost?: string;
 }
 
 export function getEnv(): ServerEnv {
@@ -53,5 +58,6 @@ export function getEnv(): ServerEnv {
     hermesUseWsl: process.env.HERMES_USE_WSL === "true",
     hermesWslDistro: process.env.HERMES_WSL_DISTRO ?? "Ubuntu",
     apiKey: process.env.ENSEMBLE_API_KEY || undefined,
+    lanHost: process.env.ENSEMBLE_LAN_HOST || undefined,
   };
 }
