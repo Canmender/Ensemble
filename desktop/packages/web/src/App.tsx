@@ -1,12 +1,13 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { NavLink, Route, Routes } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import {
   Bot, Brain, LayoutDashboard, MessageSquare, Moon, Settings, Sun,
-  Workflow, Zap, MonitorSmartphone, Archive
+  Workflow, Zap, MonitorSmartphone, Archive, LogOut, User as UserIcon
 } from "lucide-react";
 import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
 import { useTheme, type Theme } from "./lib/theme";
+import { useAuth } from "./lib/auth";
 import { cls } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -19,6 +20,8 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const MemoryPage = lazy(() => import("./pages/MemoryPage"));
 const WorkflowsPage = lazy(() => import("./pages/WorkflowsPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
@@ -103,29 +106,52 @@ function PageLoading() {
 }
 
 export default function App() {
+  const { state, logout } = useAuth();
+  const location = useLocation();
   const [serverOk, setServerOk] = useState<boolean | null>(null);
   const [agentCount, setAgentCount] = useState(0);
 
   useEffect(() => {
     wsClient.connect();
-    void api
-      .get("/health")
-      .then((d: any) => {
-        setServerOk(true);
-        setAgentCount(d.agents?.length ?? 0);
-      })
-      .catch(() => setServerOk(false));
-    const t = setInterval(() => {
+    const check = () =>
       api
         .get("/health")
         .then((d: any) => {
           setServerOk(true);
-          setAgentCount(d.agents?.length ?? 0);
+          setAgentCount(d.agents ?? 0);
         })
         .catch(() => setServerOk(false));
-    }, 10000);
+    check();
+    const t = setInterval(check, 10000);
     return () => clearInterval(t);
   }, []);
+
+  const authPaths = ["/login", "/register"];
+  const onAuthPage = authPaths.includes(location.pathname);
+
+  // 登录态判定中
+  if (state.status === "loading") return <PageLoading />;
+
+  // 未登录（服务器模式）：仅允许登录/注册页
+  if (state.status === "guest") {
+    if (!onAuthPage) return <Navigate to="/login" replace />;
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoading />}>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  // 已登录 / 本地模式：访问登录页 → 回首页
+  if (onAuthPage) return <Navigate to="/" replace />;
+
+  const isUser = state.status === "authenticated";
 
   return (
     <div className="flex h-full">
@@ -146,6 +172,23 @@ export default function App() {
           ))}
         </nav>
         <div className="space-y-2 border-t border-border px-3 py-3">
+          {/* 用户信息 */}
+          <div className="flex items-center justify-between px-1">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-fg/80">
+              <UserIcon className="h-3.5 w-3.5" />
+              {isUser ? state.user?.displayName ?? state.user?.username : "本地模式"}
+            </span>
+            {isUser && (
+              <button
+                onClick={logout}
+                className="text-muted transition-colors hover:text-fg"
+                title="退出登录"
+                aria-label="退出登录"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
           {/* 服务器状态 */}
           <div className="flex items-center justify-between px-1">
             <span className="flex items-center gap-1.5 text-xs">

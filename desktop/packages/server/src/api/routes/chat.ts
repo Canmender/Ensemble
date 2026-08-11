@@ -73,11 +73,15 @@ export function chatRouter(ctx: AppContext): Router {
         }
 
         // 单聊：创建一次性 Run 获取回复
-        const run = await ctx.engine.createAndExecuteTask(`单聊: ${message.slice(0, 30)}`, {
-          mode: "single",
-          prompt: message,
-          agentIds: [agentId],
-        });
+        const run = await ctx.engine.createAndExecuteTask(
+          `单聊: ${message.slice(0, 30)}`,
+          {
+            mode: "single",
+            prompt: message,
+            agentIds: [agentId],
+          },
+          req.user?.id,
+        );
 
         // 事件驱动等待执行完成（替代 200ms 忙等待轮询）
         const ev = await ctx.hub.waitForRun(

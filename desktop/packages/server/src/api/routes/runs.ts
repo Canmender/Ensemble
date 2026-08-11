@@ -7,14 +7,14 @@ export function runsRouter(ctx: AppContext): Router {
 
   r.get("/", (req, res) => {
     const { taskId, mode, status } = req.query as Record<string, string | undefined>;
-    ok(res, ctx.store.listRuns({ taskId, mode, status }));
+    ok(res, ctx.store.listRuns({ taskId, mode, status }, req.user?.id));
   });
 
   r.get("/:id", (req, res) => {
     const run = ctx.store.getRun(req.params.id);
     if (!run) return fail(res, new Error(`run not found: ${req.params.id}`), 404);
     const jobs = ctx.store.hydrateJobEvents(ctx.store.getJobs(run.id));
-    const chatMessages = ctx.store.listChatMessages(run.id);
+    const chatMessages = ctx.store.listChatMessages(run.id, req.user?.id);
     ok(res, { run, jobs, chatMessages });
   });
 

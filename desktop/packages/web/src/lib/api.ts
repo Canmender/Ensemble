@@ -1,7 +1,7 @@
 // 轻量 API 客户端：统一 { data } / { error } 解析
 // 所有请求携带 Authorization: Bearer <sessionToken>（见 token.ts）。
 
-import { getSessionToken, resetSessionToken } from "./token";
+import { getSessionToken, resetSessionToken, clearSessionToken, hasUserToken } from "./token";
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const doFetch = async (): Promise<Response> => {
@@ -19,8 +19,15 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   let res = await doFetch();
   if (res.status === 401) {
-    // 服务重启后 token 已变更：重置缓存并重试一次，避免首屏请求失败
+    // 用户 token 过期（服务器重启/会话失效）→ 清除并回登录页
+    const hadUserToken = hasUserToken();
+    clearSessionToken();
     resetSessionToken();
+    if (hadUserToken && window.location.pathname !== "/login") {
+      window.location.href = "/login";
+      throw new Error("登录已失效，请重新登录");
+    }
+    // 本地桌面模式：服务重启后设备 token 变更，重试一次
     res = await doFetch();
   }
 
