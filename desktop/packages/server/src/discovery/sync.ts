@@ -44,7 +44,7 @@ export async function syncAgentConfig(agent: DetectedAgent, configManager: Confi
     description: `通过本地命令接入的 ${agent.name}`,
     local: { command: agent.headless, promptMode: agent.promptMode },
     tools: [],
-    enabled: false,
+    enabled: true,
   } as any);
   return id;
 }
