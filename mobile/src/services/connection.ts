@@ -164,6 +164,8 @@ const MAX_HISTORY_ENTRIES = 20;
 
 class ConnectionService {
   private socket: Socket | null = null;
+  /** 当前连接的 URL（避免访问 socket.io 内部 private 的 Manager.uri） */
+  private currentUrl: string | null = null;
   private currentDeviceId: string | null = null;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private reconnectAttempts = 0;
@@ -374,6 +376,7 @@ class ConnectionService {
         timeout: CONNECT_TIMEOUT_MS,
         auth: this.relayConfig?.token ? { token: this.relayConfig.token } : undefined,
       });
+      this.currentUrl = url;
 
       this.setupSocketListeners();
 
@@ -429,7 +432,7 @@ class ConnectionService {
         disconnectedAt: Date.now(),
         durationMs: Date.now() - this.currentConnectionStart,
         mode: this.connectionMode,
-        url: this.socket?.io?.uri || "unknown",
+        url: this.currentUrl || "unknown",
         deviceName: useDeviceStore.getState().connectedDevice?.name,
         disconnectReason: reason || "user_initiated",
       };
@@ -441,6 +444,7 @@ class ConnectionService {
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
+      this.currentUrl = null;
     }
 
     useDeviceStore.getState().setConnectionState("disconnected");
@@ -687,7 +691,7 @@ class ConnectionService {
           disconnectedAt: Date.now(),
           durationMs: Date.now() - this.currentConnectionStart,
           mode: this.connectionMode,
-          url: this.socket?.io?.uri || "unknown",
+          url: this.currentUrl || "unknown",
           deviceName: useDeviceStore.getState().connectedDevice?.name,
           disconnectReason: reason,
         };
