@@ -36,9 +36,9 @@ export function agentsRouter(ctx: AppContext): Router {
     ok(res, cfg);
   });
 
-  r.post("/", (req, res) => {
+  r.post("/", async (req, res) => {
     try {
-      const cfg = ctx.config.createAgent(req.body);
+      const cfg = await ctx.config.createAgent(req.body);
       ctx.reloadAgents();
       ok(res, cfg, 201);
     } catch (err) {
@@ -46,9 +46,9 @@ export function agentsRouter(ctx: AppContext): Router {
     }
   });
 
-  r.put("/:id", (req, res) => {
+  r.put("/:id", async (req, res) => {
     try {
-      const cfg = ctx.config.updateAgent(req.params.id, req.body);
+      const cfg = await ctx.config.updateAgent(req.params.id, req.body);
       ctx.reloadAgents();
       ok(res, cfg);
     } catch (err) {
@@ -56,8 +56,8 @@ export function agentsRouter(ctx: AppContext): Router {
     }
   });
 
-  r.delete("/:id", (req, res) => {
-    ctx.config.deleteAgent(req.params.id);
+  r.delete("/:id", async (req, res) => {
+    await ctx.config.deleteAgent(req.params.id);
     ctx.reloadAgents();
     ok(res, { deleted: req.params.id });
   });

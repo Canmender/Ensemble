@@ -15,10 +15,10 @@ export function providersRouter(ctx: AppContext): Router {
     ok(res, cfg);
   });
 
-  r.post("/", (req, res) => {
+  r.post("/", async (req, res) => {
     try {
       const body = req.body ?? {};
-      const created = ctx.config.createProvider(body);
+      const created = await ctx.config.createProvider(body);
       if (body.apiKey) ctx.keyStore.set(created.id, body.apiKey);
       ctx.reloadProviders();
       ok(res, created, 201);
@@ -27,10 +27,10 @@ export function providersRouter(ctx: AppContext): Router {
     }
   });
 
-  r.put("/:id", (req, res) => {
+  r.put("/:id", async (req, res) => {
     try {
       const id = req.params.id;
-      const updated = ctx.config.updateProvider(id, req.body ?? {});
+      const updated = await ctx.config.updateProvider(id, req.body ?? {});
       if (req.body?.apiKey) ctx.keyStore.set(id, req.body.apiKey);
       ctx.reloadProviders();
       ok(res, updated);
@@ -39,8 +39,8 @@ export function providersRouter(ctx: AppContext): Router {
     }
   });
 
-  r.delete("/:id", (req, res) => {
-    ctx.config.deleteProvider(req.params.id);
+  r.delete("/:id", async (req, res) => {
+    await ctx.config.deleteProvider(req.params.id);
     ctx.keyStore.delete(req.params.id);
     ctx.reloadProviders();
     ok(res, { deleted: req.params.id });

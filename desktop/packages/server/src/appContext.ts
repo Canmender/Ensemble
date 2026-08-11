@@ -1,4 +1,5 @@
-import { mkdirSync, writeFileSync, unlinkSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { mkdir, writeFile, unlink } from "node:fs/promises";
 import { resolve } from "node:path";
 import yaml from "js-yaml";
 import {
@@ -33,22 +34,47 @@ export function deriveCapabilities(tools: string[]): AgentCapabilities {
 
 /**
  * 配置管理：config/agents/*.yaml 与 config/workflows/*.json 为 source of truth。
- * 启动时加载校验，CRUD 操作写回文件。
+ *
+ * 设计：
+ * - 读操作走内存缓存（agents / workflows / providers / settings），同步返回，不阻塞事件循环
+ * - 写操作（CRUD / saveSettings）异步化：fs/promises 写入 + 互斥队列串行化，避免并发写盘冲突
+ * - 写完成后刷新对应缓存
  */
 export class ConfigManager {
   agents: AgentConfig[] = [];
   workflows: WorkflowDef[] = [];
   errors: string[] = [];
+  private providersCache: ProviderConfig[] = [];
+  private settingsCache?: AppSettings;
+
+  /** 写操作互斥队列：保证同一时刻只有一个写盘在进行 */
+  private writeQueue: Promise<unknown> = Promise.resolve();
 
   constructor(private env: ServerEnv) {
     this.reload();
+    this.providersCache = this.loadProvidersSync();
   }
 
+  /** 串行化写操作（前一个完成后才执行下一个） */
+  private withWriteLock<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.writeQueue.then(fn, fn);
+    this.writeQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  /** 从磁盘重载 agents/workflows 到缓存（构造与写操作后调用） */
   reload(): void {
     const loaded = loadConfig(this.env.configDir);
     this.agents = loaded.agents;
     this.workflows = loaded.workflows;
     this.errors = loaded.errors;
+  }
+
+  private refreshProviders(): void {
+    this.providersCache = this.loadProvidersSync();
   }
 
   // ---------- Agents ----------
@@ -60,7 +86,7 @@ export class ConfigManager {
     return this.agents.find((a) => a.id === id);
   }
 
-  createAgent(input: AgentConfigInput): AgentConfig {
+  async createAgent(input: AgentConfigInput): Promise<AgentConfig> {
     const parsed = agentConfigSchema.parse({
       ...input,
       capabilities: input.capabilities ?? deriveCapabilities(input.tools ?? []),
@@ -68,12 +94,14 @@ export class ConfigManager {
       updatedAt: now(),
     }) as unknown as AgentConfig;
     if (this.getAgent(parsed.id)) throw new Error(`agent already exists: ${parsed.id}`);
-    this.saveAgentFile(parsed);
-    this.reload();
-    return parsed;
+    return this.withWriteLock(async () => {
+      await this.saveAgentFile(parsed);
+      this.reload();
+      return parsed;
+    });
   }
 
-  updateAgent(id: string, patch: Partial<AgentConfigInput>): AgentConfig {
+  async updateAgent(id: string, patch: Partial<AgentConfigInput>): Promise<AgentConfig> {
     const existing = this.getAgent(id);
     if (!existing) throw new Error(`agent not found: ${id}`);
     const merged: AgentConfig = {
@@ -85,24 +113,30 @@ export class ConfigManager {
       updatedAt: now(),
     };
     const parsed = agentConfigSchema.parse(merged) as unknown as AgentConfig;
-    this.saveAgentFile(parsed);
-    this.reload();
-    return parsed;
+    return this.withWriteLock(async () => {
+      await this.saveAgentFile(parsed);
+      this.reload();
+      return parsed;
+    });
   }
 
-  deleteAgent(id: string): void {
+  async deleteAgent(id: string): Promise<void> {
     const existing = this.getAgent(id);
     if (!existing) return;
-    const file = resolve(this.env.configDir, "agents", `${id}.yaml`);
-    if (existsSync(file)) unlinkSync(file);
-    this.reload();
+    await this.withWriteLock(async () => {
+      const file = resolve(this.env.configDir, "agents", `${id}.yaml`);
+      await unlink(file).catch(() => {
+        /* 文件已不存在 */
+      });
+      this.reload();
+    });
   }
 
-  private saveAgentFile(cfg: AgentConfig): void {
+  private async saveAgentFile(cfg: AgentConfig): Promise<void> {
     const dir = resolve(this.env.configDir, "agents");
-    mkdirSync(dir, { recursive: true });
+    await mkdir(dir, { recursive: true });
     const file = resolve(dir, `${cfg.id}.yaml`);
-    writeFileSync(file, yaml.dump(cfg, { noRefs: true }), "utf8");
+    await writeFile(file, yaml.dump(cfg, { noRefs: true }), "utf8");
     logger.info(`agent saved: ${file}`);
   }
 
@@ -115,26 +149,30 @@ export class ConfigManager {
     return this.workflows.find((w) => w.id === id);
   }
 
-  saveWorkflow(input: WorkflowDef): WorkflowDef {
+  async saveWorkflow(input: WorkflowDef): Promise<WorkflowDef> {
     const def = workflowDefSchema.parse(input);
-    const dir = resolve(this.env.configDir, "workflows");
-    mkdirSync(dir, { recursive: true });
-    const file = resolve(dir, `${def.id}.json`);
-    writeFileSync(file, JSON.stringify(def, null, 2), "utf8");
-    this.reload();
-    return def;
+    return this.withWriteLock(async () => {
+      const dir = resolve(this.env.configDir, "workflows");
+      await mkdir(dir, { recursive: true });
+      await writeFile(resolve(dir, `${def.id}.json`), JSON.stringify(def, null, 2), "utf8");
+      this.reload();
+      return def;
+    });
   }
 
-  deleteWorkflow(id: string): void {
-    const file = resolve(this.env.configDir, "workflows", `${id}.json`);
-    if (existsSync(file)) unlinkSync(file);
-    this.reload();
+  async deleteWorkflow(id: string): Promise<void> {
+    await this.withWriteLock(async () => {
+      const file = resolve(this.env.configDir, "workflows", `${id}.json`);
+      await unlink(file).catch(() => {
+        /* 文件已不存在 */
+      });
+      this.reload();
+    });
   }
 
   // ---------- Providers ----------
-  providers: ProviderConfig[] = [];
-
-  private loadProviders(): ProviderConfig[] {
+  /** 同步读 providers 目录（仅构造与写后刷新调用，低频） */
+  private loadProvidersSync(): ProviderConfig[] {
     const dir = resolve(this.env.configDir, "providers");
     let files: string[];
     try {
@@ -154,15 +192,14 @@ export class ConfigManager {
   }
 
   listProviders(): ProviderConfig[] {
-    this.providers = this.loadProviders();
-    return this.providers.map((p) => ({ ...p, apiKey: undefined, apiKeySet: !!p.apiKeySet }));
+    return this.providersCache.map((p) => ({ ...p, apiKey: undefined, apiKeySet: !!p.apiKeySet }));
   }
 
   getProvider(id: string): ProviderConfig | undefined {
     return this.listProviders().find((p) => p.id === id);
   }
 
-  createProvider(input: ProviderConfigInput): ProviderConfig {
+  async createProvider(input: ProviderConfigInput): Promise<ProviderConfig> {
     // apiKey 永不入配置（存 KeyStore），仅记录 apiKeySet 标记
     const { apiKey, ...rest } = input;
     const parsed = providerConfigSchema.parse({
@@ -171,17 +208,20 @@ export class ConfigManager {
       createdAt: input.createdAt ?? now(),
       updatedAt: now(),
     }) as unknown as ProviderConfig;
-    const dir = resolve(this.env.configDir, "providers");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(
-      resolve(dir, `${parsed.id}.json`),
-      JSON.stringify(parsed, null, 2),
-      "utf8",
-    );
-    return { ...parsed, apiKey: undefined };
+    return this.withWriteLock(async () => {
+      const dir = resolve(this.env.configDir, "providers");
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        resolve(dir, `${parsed.id}.json`),
+        JSON.stringify(parsed, null, 2),
+        "utf8",
+      );
+      this.refreshProviders();
+      return { ...parsed, apiKey: undefined };
+    });
   }
 
-  updateProvider(id: string, patch: Partial<ProviderConfigInput>): ProviderConfig {
+  async updateProvider(id: string, patch: Partial<ProviderConfigInput>): Promise<ProviderConfig> {
     const existing = this.getProvider(id);
     if (!existing) throw new Error(`provider not found: ${id}`);
     const { apiKey, ...rest } = patch;
@@ -193,20 +233,26 @@ export class ConfigManager {
       apiKeySet: apiKey ? true : existing.apiKeySet,
       updatedAt: now(),
     }) as unknown as ProviderConfig;
-    const dir = resolve(this.env.configDir, "providers");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(resolve(dir, `${id}.json`), JSON.stringify(merged, null, 2), "utf8");
-    return { ...merged, apiKey: undefined };
+    return this.withWriteLock(async () => {
+      const dir = resolve(this.env.configDir, "providers");
+      await mkdir(dir, { recursive: true });
+      await writeFile(resolve(dir, `${id}.json`), JSON.stringify(merged, null, 2), "utf8");
+      this.refreshProviders();
+      return { ...merged, apiKey: undefined };
+    });
   }
 
-  deleteProvider(id: string): void {
-    const file = resolve(this.env.configDir, "providers", `${id}.json`);
-    if (existsSync(file)) unlinkSync(file);
+  async deleteProvider(id: string): Promise<void> {
+    await this.withWriteLock(async () => {
+      const file = resolve(this.env.configDir, "providers", `${id}.json`);
+      await unlink(file).catch(() => {
+        /* 文件已不存在 */
+      });
+      this.refreshProviders();
+    });
   }
 
   // ---------- Settings ----------
-  private settingsCache?: AppSettings;
-
   getSettings(): AppSettings {
     if (this.settingsCache) return this.settingsCache;
     const file = resolve(this.env.configDir, "settings.json");
@@ -224,16 +270,18 @@ export class ConfigManager {
     return parsed;
   }
 
-  saveSettings(patch: Partial<AppSettings>): AppSettings {
+  async saveSettings(patch: Partial<AppSettings>): Promise<AppSettings> {
     const merged = {
       ...this.getSettings(),
       ...patch,
     };
     const parsed = appSettingsSchema.parse(merged) as unknown as AppSettings;
-    const file = resolve(this.env.configDir, "settings.json");
-    mkdirSync(this.env.configDir, { recursive: true });
-    writeFileSync(file, JSON.stringify(parsed, null, 2), "utf8");
-    this.settingsCache = parsed;
-    return parsed;
+    return this.withWriteLock(async () => {
+      const file = resolve(this.env.configDir, "settings.json");
+      await mkdir(this.env.configDir, { recursive: true });
+      await writeFile(file, JSON.stringify(parsed, null, 2), "utf8");
+      this.settingsCache = parsed;
+      return parsed;
+    });
   }
 }

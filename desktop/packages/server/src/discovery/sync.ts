@@ -33,11 +33,11 @@ export async function syncAgentMemory(agent: DetectedAgent, memoryProvider: Memo
 }
 
 /** 同步配置：为本地 harness 创建 local 类型 agent 实例（用其 headless 命令） */
-export function syncAgentConfig(agent: DetectedAgent, configManager: ConfigManager): string | undefined {
+export async function syncAgentConfig(agent: DetectedAgent, configManager: ConfigManager): Promise<string | undefined> {
   const id = `${agent.type}-local`;
   if (configManager.getAgent(id)) return undefined;
 
-  configManager.createAgent({
+  await configManager.createAgent({
     id,
     name: agent.name + " (本地)",
     kind: "local",
@@ -68,7 +68,7 @@ export async function syncAgent(agent: DetectedAgent, ctx: {
     result.errors.push(`memory: ${String(err)}`);
   }
   try {
-    result.createdAgent = syncAgentConfig(agent, ctx.configManager);
+    result.createdAgent = await syncAgentConfig(agent, ctx.configManager);
   } catch (err) {
     result.errors.push(`config: ${String(err)}`);
   }

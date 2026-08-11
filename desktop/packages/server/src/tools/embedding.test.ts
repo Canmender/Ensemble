@@ -9,8 +9,8 @@ describe("embedTexts", () => {
 
   it("posts to {baseUrl}/embeddings and parses vectors", async () => {
     let calledUrl = "";
-    let calledBody: { model?: string; input?: string[] };
-    let calledHeaders: Record<string, string>;
+    let calledBody: { model?: string; input?: string[] } = {};
+    let calledHeaders: Record<string, string> = {};
 
     vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
       calledUrl = url;

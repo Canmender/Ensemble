@@ -15,17 +15,17 @@ export function workflowsRouter(ctx: AppContext): Router {
     ok(res, def);
   });
 
-  r.post("/", (req, res) => {
+  r.post("/", async (req, res) => {
     try {
-      const def = ctx.config.saveWorkflow(req.body);
+      const def = await ctx.config.saveWorkflow(req.body);
       ok(res, def, 201);
     } catch (err) {
       fail(res, err);
     }
   });
 
-  r.delete("/:id", (req, res) => {
-    ctx.config.deleteWorkflow(req.params.id);
+  r.delete("/:id", async (req, res) => {
+    await ctx.config.deleteWorkflow(req.params.id);
     ok(res, { deleted: req.params.id });
   });
 
