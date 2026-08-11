@@ -17,7 +17,8 @@ export const workflowTaskSchema = z.object({
 export const chatTaskSchema = z.object({
   mode: z.literal("chat"),
   prompt: z.string().min(1),
-  participantIds: z.array(z.string()).min(2),
+  // min(1)：允许 1:1 个体对话（direct 会话 = 单 agent chat run）；群聊仍需 >=2
+  participantIds: z.array(z.string()).min(1),
   maxRounds: z.number().int().positive().default(3),
 });
 

@@ -15,6 +15,7 @@ import { memoryPoolRouter } from "./api/routes/memory-pool";
 import { discoveryRouter } from "./api/routes/discovery";
 import { relayRouter } from "./api/routes/relay";
 import { chatRouter } from "./api/routes/chat";
+import { conversationsRouter } from "./api/routes/conversations";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
 
@@ -107,6 +108,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/discovery", discoveryRouter(ctx));
   app.use("/api/relay", relayRouter(ctx));
   app.use("/api/chat", chatRouter(ctx));
+  app.use("/api/conversations", conversationsRouter(ctx));
 
   // WebSocket token endpoint：前端获取 session token 用于建立 WS 连接。
   // 配置固定 API key（headless/Docker）时禁用，防止公网绑定下 token 被任意获取。
