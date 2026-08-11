@@ -45,6 +45,8 @@ interface Contact {
   runId?: string;
   /** 群聊参与者 agent ID 列表 */
   participantIds?: string[];
+  /** 会话 ID（conversations API，企业级会话持久化） */
+  convId?: string;
 }
 
 /** 创建群聊对话框 */
@@ -66,22 +68,20 @@ function CreateGroupDialog({ onClose, onCreated }: { onClose: () => void; onCrea
     if (!name.trim() || selected.length < 2) return;
     setCreating(true);
     try {
-      // 创建 chat 模式的 Run
-      const run = await api.post<any>("/tasks", {
+      // 创建企业级群聊会话（conversations API，持久化 + 未读）
+      const conv = await api.post<any>("/conversations", {
+        type: "group",
         title: name,
-        input: {
-          mode: "chat",
-          prompt: `群聊「${name}」已创建，请开始讨论。`,
-          participantIds: selected,
-          maxRounds: 10,
-        },
+        participantIds: selected,
+        prompt: `群聊「${name}」已创建，请开始讨论。`,
       });
       onCreated({
-        id: `group-${Date.now()}`,
+        id: `conv-${conv.id}`,
         type: "group",
         name,
         status: "online",
-        runId: run.id,
+        runId: conv.runId,
+        convId: conv.id,
         participantIds: selected,
       });
       onClose();
@@ -236,7 +236,10 @@ export default function ChatPage() {
   }, [activeContact?.runId]);
 
   async function loadContacts() {
-    const agents = await api.get<Agent[]>("/agents");
+    const [agents, conversations] = await Promise.all([
+      api.get<Agent[]>("/agents"),
+      api.get<any[]>("/conversations").catch(() => []),
+    ]);
     const agentContacts: Contact[] = (agents ?? []).map((a) => ({
       id: a.id,
       type: "agent" as const,
@@ -244,12 +247,26 @@ export default function ChatPage() {
       status: a.enabled ? "online" : "offline",
     }));
 
+    // 企业级会话（conversations）：群聊/个体对话持久化，刷新不丢失
+    const groupContacts: Contact[] = (conversations ?? []).map((c) => ({
+      id: `conv-${c.id}`,
+      type: "group" as const,
+      name: c.title ?? (Array.isArray(c.participantIds) ? c.participantIds.join(", ") : "会话"),
+      status: "online",
+      runId: c.runId,
+      convId: c.id,
+      participantIds: c.participantIds,
+      unread: c.unread ?? 0,
+      lastMessage: c.lastMessage,
+      lastTime: c.lastMessageTs,
+    }));
+
     // 我的设备（预留手机端）
     const deviceContacts: Contact[] = [
       { id: "this-pc", type: "device", name: "本机（电脑端）", status: "online" },
     ];
 
-    setContacts([...deviceContacts, ...agentContacts]);
+    setContacts([...deviceContacts, ...groupContacts, ...agentContacts]);
   }
 
   // 发送消息
@@ -269,14 +286,19 @@ export default function ChatPage() {
 
     try {
       if (activeContact.type === "group" && activeContact.runId) {
-        // 群聊：通过 WS steer 发送，触发后端继续对话
-        // 同时本地立即显示用户消息
+        // 群聊：本地立即显示用户消息
         const store = useRunStore.getState();
         store.appendMessage(activeContact.runId, {
           agentId: "user",
           content: text,
         });
-        wsClient.steer(activeContact.runId, text);
+        if (activeContact.convId) {
+          // 企业级会话：走后端落库 + 广播（修复 WS steer 不落库的问题）
+          void api.post(`/conversations/${activeContact.convId}/messages`, { content: text });
+        } else {
+          // 旧式群聊：WS steer 触发后端继续对话
+          wsClient.steer(activeContact.runId, text);
+        }
       } else if (activeContact.type === "agent") {
         // 单聊：立即显示用户消息
         setSingleMessages((prev) => ({
