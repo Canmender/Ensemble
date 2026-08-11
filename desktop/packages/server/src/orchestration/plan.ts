@@ -25,7 +25,7 @@ export class PlanMode {
     const job: Job = {
       id: newId("job"),
       runId: run.id,
-      seq: 1,
+      seq: this.engine.getStore().nextJobSeq(run.id),
       agentId,
       agentName: this.engine.getAgentName(agentId),
       prompt: input.prompt,

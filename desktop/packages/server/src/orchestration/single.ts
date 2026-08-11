@@ -43,10 +43,11 @@ export class SingleMode {
       return results.join("\n\n---\n\n");
     }
 
-    // 单 agent 或多 agent 拼接
+    // 单 agent 或多 agent 拼接（保留 agentName 标签，避免过滤后数组下标错位）
     if (results.length === 1) return results[0];
-    return results
-      .map((r, i) => `--- ${agentIds[i] ?? `Result ${i + 1}`} ---\n${r}`)
+    return jobs
+      .filter((j) => j.status === "success" && j.result)
+      .map((j) => `--- ${j.agentName} ---\n${j.result}`)
       .join("\n\n");
   }
 }
