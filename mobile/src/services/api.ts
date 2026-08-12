@@ -312,7 +312,7 @@ class ApiService {
         let detail: string | undefined;
         try {
           const errBody = await response.json();
-          detail = errBody.error || errBody.message;
+          detail = errBody?.error?.message || errBody?.message || errBody?.error;
         } catch {
           // 响应体不是 JSON，忽略
         }
@@ -324,8 +324,9 @@ class ApiService {
         };
       }
 
-      const data = await response.json();
-      return { data };
+      // 解包服务器 { data: <payload> } 信封：res.data 即业务数据
+      const json = await response.json();
+      return { data: json.data };
     } catch (err) {
       const code = this.getErrorCode(err);
       const message =
