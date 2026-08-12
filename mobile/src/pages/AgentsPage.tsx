@@ -483,7 +483,7 @@ export default function AgentsPage() {
                 onValueChange={(value) =>
                   setFormData({ ...formData, enabled: value })
                 }
-                trackColor={{ false: "#374151", true: "#10b981" }}
+                trackColor={{ false: "#d1d5db", true: "#10b981" }}
                 thumbColor={formData.enabled ? "#fff" : "#9ca3af"}
               />
             </View>
