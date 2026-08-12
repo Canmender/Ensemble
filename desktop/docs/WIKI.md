@@ -361,17 +361,20 @@ const tools = await loadToolsFromOpenApi("https://api.github.com/openapi.json", 
 
 | 端点 | 说明 |
 |---|---|
-| `GET /api/conversations` | 会话列表（含 lastMessage / 未读）|
+| `GET /api/conversations` | 会话列表（含 lastMessage / 当前用户未读）|
 | `POST /api/conversations` | 创建会话（`type: direct \| group`）|
 | `GET /api/conversations/:id/messages` | 消息分页（`before` 游标 + `limit`）|
 | `POST /api/conversations/:id/messages` | 发送消息（fire-and-forget，回复走 WS）|
-| `POST /api/conversations/:id/read` | 标记已读 |
+| `POST /api/conversations/:id/read` | 标记已读（当前用户）|
+| `POST /api/conversations/:id/archive` | 归档 / 恢复会话 |
 | `DELETE /api/conversations/:id` | 删除会话 |
 
-- **direct** = 用户与单个 agent 的持续对话（chat run + 1 participant）；**group** = 多 agent 群聊
-- 会话生命周期：关联 run 终态后拒绝发送（防"只进不出"）
-- 未读：agent 回复自动 +1，`/read` 清零
+- **direct** = 用户与单个 agent 的持续对话（chat run + 1 participant）或**用户与用户**的 1:1 IM（无 run，消息直接落库 + 定向推送）；**group** = 多 agent 群聊
+- 会话生命周期：关联 run 终态后拒绝发送（防"只进不出"）；用户-用户会话无 run，不受此限
+- **未读（per-user）**：agent/群聊会话按归属计共享未读；用户-用户会话各自计数（`conversation_reads` 表），`/read` 只清当前用户
+- **访问控制**：用户-用户会话仅归属用户与参与者可读写；agent 会话仅归属用户或共享会话可访问
 - 消息统一落 `chat_messages`（发送经后端广播，修复 WS steer 不落库问题）
+- 桌面 web 端与移动端均已接入：用户联系人分区、首次发送懒创建会话、历史 + WS 实时合并、发送者昵称显示
 
 ---
 
@@ -584,6 +587,27 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 ---
 
 ## 变更日志
+
+### v0.7.0 (2026-08-12) — 用户-用户 IM 全链路（桌面端）+ 会话加固
+
+**用户-用户 IM（桌面 web 端补全，与移动端对齐）**
+- 新增「用户」联系人分区（`/api/auth/users` 排除自己），已有会话显示未读 / 最后消息
+- 点击用户首次发送时懒创建 direct 会话；消息方向按发送者==当前用户判定（用户会话双方 role 都是 user）
+- 发送者昵称显示；历史 + WS 实时合并去重；打开会话清空旧 live 以历史为准
+- 新消息到达节流刷新会话列表（未读 / 最后消息实时更新）
+
+**服务端修复（Node 集成验证，4 处真实 bug）**
+- `sendToUser` 补传 runId（原为空串，用户-用户实时消息两端关联不上会话）
+- 用户-用户会话历史不过滤 userId（原按归属过滤，对方看不到消息）
+- `listConversations` 增加 participant_ids 匹配（原只按归属，会话在对方列表不可见）
+- 用户-用户推送接收者含会话归属用户（原只遍历 participantIds，创建者收不到对方回复）
+
+**会话加固**
+- **per-user 未读**：新增 `conversation_reads` 表，用户-用户会话各自计数，`/read` 只清当前用户（原共享计数，A 读会清 B 的未读）
+- **访问控制**：用户-用户会话仅参与者可读写；agent 会话仅归属用户或共享会话可访问（原任意登录用户知道 conv id 即可读历史/发消息）
+
+**测试**
+- server 145 单元测试（新增 per-user 未读回归）；Node 双用户集成验证 12 项全通过
 
 ### v0.6.0 (2026-08-11) — 企业级升级：账号系统 + agent 原生支持 + 会话系统
 
