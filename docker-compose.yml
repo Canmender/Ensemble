@@ -7,6 +7,30 @@
 version: "3.8"
 
 services:
+  # ========== Ensemble Server（主服务：账号/Agent/会话/RAG） ==========
+  server:
+    build:
+      context: ./desktop
+      dockerfile: Dockerfile
+    container_name: ensemble-server
+    ports:
+      - "${ENSEMBLE_PORT:-8787}:8787"
+    environment:
+      - PORT=8787
+      - ENSEMBLE_STATIC_DIR=/app/web-dist
+      - DB_PATH=/data/ensemble.db
+      - CONFIG_DIR=/data/config
+      # 公网部署必须设置 ENSEMBLE_API_KEY（机器级凭证 + 禁用 /api/ws-token 防绕过）；
+      # 用户通过 Web 登录页注册/登录账号
+      - ENSEMBLE_API_KEY=${ENSEMBLE_API_KEY:-}
+      - ENSEMBLE_LAN_HOST=127.0.0.1
+      - ENSEMBLE_AUTO_SYNC_LOCAL=false
+    volumes:
+      - ensemble-data:/data
+    restart: unless-stopped
+    networks:
+      - ensemble-net
+
   # ========== 中继服务器 ==========
   relay:
     build:
@@ -54,3 +78,6 @@ services:
 networks:
   ensemble-net:
     driver: bridge
+
+volumes:
+  ensemble-data:
