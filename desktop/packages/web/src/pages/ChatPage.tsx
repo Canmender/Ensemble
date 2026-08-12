@@ -195,6 +195,20 @@ function ContactItem({
   );
 }
 
+/** 高亮消息中的 @提及（@agent 或 @agent:任务），服务端据此解析委派 */
+function renderContent(text: string): React.ReactNode {
+  const parts = text.split(/(@[a-zA-Z0-9-]+(?:\s*[:：]\s*\S+)?)/g);
+  return parts.map((part, i) =>
+    /^@[a-zA-Z0-9-]+/.test(part) ? (
+      <span key={i} className="font-medium text-primary">
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+}
+
 export default function ChatPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
@@ -513,7 +527,7 @@ export default function ChatPage() {
                       {activeContact.type === "group" && msg.agentId && msg.agentId !== "user" && (
                         <div className="mb-1 text-[11px] font-semibold text-violet-600">@{msg.agentId}</div>
                       )}
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</div>
+                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{renderContent(msg.content)}</div>
                       <div className={cls(
                         "mt-1 text-[10px]",
                         msg.sender === "user" ? "text-primary-fg/70" : "text-muted",
