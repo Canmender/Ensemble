@@ -18,14 +18,13 @@ COPY packages/shared packages/shared
 COPY packages/server packages/server
 COPY packages/web packages/web
 
-# 构建：shared → web；server 用 esbuild 打包单文件（含 @ensemble/shared，external node: 内置）
+# 构建：shared → web；server 用 esbuild 打包单文件（platform=node 自动 external node: 内置）
 RUN pnpm --filter @ensemble/shared build \
   && pnpm --filter @ensemble/web build \
   && npx esbuild packages/server/src/index.ts \
        --bundle \
        --platform=node \
        --format=cjs \
-       --external:node:* \
        --outfile=packages/server/dist/headless.cjs
 
 # ── 运行阶段 ──
