@@ -276,12 +276,16 @@ class ConnectionService {
     this.relayConfig = config;
   }
 
-  /** 连接到桌面端（局域网直连：REST 验证 + 原生 WebSocket 事件流） */
+  /** 连接到云端服务器/桌面端（REST 验证 + 原生 WebSocket 事件流） */
   async connect(ip: string, port: number): Promise<boolean> {
     this.connectionMode = "lan";
-    // 清理旧连接（socket.io 中继 + WS 直连）
-    if (this.socket?.connected) this.disconnect();
-    wsLink.disconnect();
+    // 清理旧连接（socket.io 中继 + WS 直连），失败不阻断
+    try {
+      if (this.socket?.connected) this.disconnect();
+      wsLink.disconnect();
+    } catch {
+      /* 忽略清理异常 */
+    }
 
     useDeviceStore.getState().setConnectionState("connecting");
     useDeviceStore.getState().setError(null);

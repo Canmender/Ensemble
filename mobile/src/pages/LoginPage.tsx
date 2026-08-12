@@ -41,6 +41,10 @@ export default function LoginPage() {
       setError("请输入用户名，密码至少 6 位");
       return;
     }
+    if (!connected) {
+      setError("未连接服务器，请点击上方「重连」");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -49,14 +53,20 @@ export default function LoginPage() {
           ? await api.login(username.trim(), password)
           : await api.register(username.trim(), password, displayName.trim() || undefined);
       if (res.data?.token) {
-        // 用用户 token 重新建立 WS 连接（实时推送）
-        await connectionService.connectToCloud();
+        // 用用户 token 重建 WS 实时连接（尽力而为，失败不阻断登录）
+        try {
+          await connectionService.connectToCloud();
+        } catch {
+          /* 重连失败不阻断进入主界面 */
+        }
         setGate("in");
       } else {
-        setError(res.error ?? "操作失败");
+        console.error("[login] server error:", res);
+        setError(res.error || "登录失败，请稍后重试");
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "操作失败");
+      console.error("[login] unexpected:", e);
+      setError(e instanceof Error ? e.message : `登录失败：${String(e)}`);
     } finally {
       setSubmitting(false);
     }
