@@ -602,6 +602,11 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 **移动端白色主题**
 - `theme.ts` 浅色系配色 + `userInterfaceStyle: light` + 启动页/图标白底
 
+**移动端联系人（后续补充）**
+- 底部导航新增「联系人」标签：用户（好友）+ Agent 分组、搜索、点击开聊（参考微信/Telegram 通讯录）
+- 聊天页顶部连接状态条（已连接云端/未连接/重连中）；Dashboard 移除局域网设备发现
+- APK versionCode 5 → 6
+
 **版本**：0.7.0 → 0.7.1（bug 修复 → patch），APK versionCode 5
 
 ### v0.7.0 (2026-08-12) — 用户-用户 IM 全链路（桌面端）+ 会话加固
