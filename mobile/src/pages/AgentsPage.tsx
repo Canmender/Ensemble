@@ -528,8 +528,8 @@ export default function AgentsPage() {
       {!isConnected ? (
         <View style={styles.emptyState}>
           <Text style={styles.emptyIcon}>{"\u{1F50C}"}</Text>
-          <Text style={styles.emptyText}>未连接到桌面端</Text>
-          <Text style={styles.emptySubtext}>请先在设置页面连接到桌面端</Text>
+          <Text style={styles.emptyText}>未连接服务器</Text>
+          <Text style={styles.emptySubtext}>启动时已自动连接云端服务器</Text>
         </View>
       ) : !loadError && agents.length === 0 && !loading ? (
         <View style={styles.emptyState}>
