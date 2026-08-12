@@ -37,6 +37,9 @@
 - **双记忆池** — 显式记忆（长期持久化）+ 隐式记忆（项目/Run 作用域）
 - **实时监控** — WebSocket 推送，日志/时间线/画布三视图
 - **IM 聊天** — 与 Agent 直接对话（消息持久化）+ **用户-用户 IM**（团队 1:1 实时会话，per-user 未读）
+- **移动端** — 账号登录门禁 / 联系人通讯录（好友 + Agent）/ 会话与实时消息，自动直连云端服务器
+- **账号系统** — 多用户注册/登录、数据按用户隔离；`ENSEMBLE_API_KEY` 机器级凭证
+- **云部署** — Docker Compose（server + relay + nginx），域名 HTTPS 就绪
 
 ---
 
@@ -118,6 +121,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 - [多 Agent 架构](desktop/docs/MULTI_AGENT_ARCHITECTURE.md) — 编排协议、RAG、对抗迭代
 - [性能优化](desktop/docs/PERFORMANCE.md) — 前端/引擎优化措施
 - [完整 Wiki](desktop/docs/WIKI.md) — 模块详解、开发指南、故障排查
+- [更新日志](CHANGELOG.md) — 版本历史与发布说明（v0.1.0 → v0.7.2）
 
 ---
 
