@@ -45,17 +45,21 @@ export class WsLink {
     this.callbacks = { ...this.callbacks, ...cb };
   }
 
-  /** 直连桌面端：先取 session token，再建立 WS 连接 */
-  async connect(ip: string, httpPort: number): Promise<boolean> {
-    try {
-      const res = await fetch(`http://${ip}:${httpPort}/api/ws-token`);
-      if (!res.ok) return false;
-      const data = (await res.json()) as { token?: unknown };
-      if (typeof data.token !== "string") return false;
-      this.token = data.token;
-    } catch {
-      return false;
+  /** 直连桌面端/云服务器：优先使用传入 token（用户会话），缺省回退 /api/ws-token bootstrap */
+  async connect(ip: string, httpPort: number, token?: string | null): Promise<boolean> {
+    let wsToken = token;
+    if (!wsToken) {
+      try {
+        const res = await fetch(`http://${ip}:${httpPort}/api/ws-token`);
+        if (!res.ok) return false;
+        const data = (await res.json()) as { token?: unknown };
+        if (typeof data.token !== "string") return false;
+        wsToken = data.token;
+      } catch {
+        return false;
+      }
     }
+    this.token = wsToken;
     this.url = `ws://${ip}:${httpPort}/ws?token=${this.token}`;
     this.manuallyClosed = false;
     this.open();

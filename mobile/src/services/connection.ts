@@ -27,6 +27,9 @@ import { wsLink } from "./wslink";
 
 // ==================== 类型定义 ====================
 
+/** 自用云端服务器（默认直连；账号/会话/IM 走这里） */
+export const CLOUD_SERVER = { host: "SERVER_IP_REDACTED", port: 8787 } as const;
+
 /** 连接模式 */
 export type ConnectionMode = "lan" | "relay";
 
@@ -207,7 +210,7 @@ class ConnectionService {
       name: await this.getDeviceName(),
       type: "mobile",
       os: "React Native",
-      appVersion: "0.6.0",
+      appVersion: "0.7.0",
       wsPort: 0,
       httpPort: 0,
       ip: "0.0.0.0",
@@ -309,9 +312,9 @@ class ConnectionService {
       useDeviceStore.getState().setConnectionState("connected");
       this.emit("connection:state", "connected");
 
-      // 3. 启动原生 WS 事件流
+      // 3. 启动原生 WS 事件流（携带用户会话 token，云服务器无需 ws-token bootstrap）
       wsLink.on({ onConnectionState: (s) => this.handleWsState(s) });
-      await wsLink.connect(ip, port);
+      await wsLink.connect(ip, port, await api.getAuthToken());
 
       // 4. 拉取初始数据
       await this.syncData();
@@ -320,6 +323,11 @@ class ConnectionService {
       this.connectFailed(err instanceof Error ? err.message : "连接失败");
       return false;
     }
+  }
+
+  /** 直连自用云端服务器（启动时自动调用；账号/会话/IM 全走云端） */
+  async connectToCloud(): Promise<boolean> {
+    return this.connect(CLOUD_SERVER.host, CLOUD_SERVER.port);
   }
 
   /** 直连失败处理 */

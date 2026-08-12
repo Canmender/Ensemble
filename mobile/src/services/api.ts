@@ -4,6 +4,7 @@
  */
 
 import { useDeviceStore } from "../store/deviceStore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {
   AgentConfig,
   Task,
@@ -173,6 +174,11 @@ class ApiService {
   private apiToken: string | null = null;
   /** token 获取中（防止并发重复请求） */
   private tokenPromise: Promise<string | null> | null = null;
+  /** 用户会话 token（云服务器登录；undefined = 尚未从存储加载） */
+  private authToken: string | null | undefined = undefined;
+
+  /** 用户 token 持久化 key（AsyncStorage） */
+  private static readonly AUTH_TOKEN_KEY = "@ensemble/auth_token";
 
   /** 设置请求超时 */
   setTimeoutMs(ms: number): void {
@@ -186,8 +192,16 @@ class ApiService {
     return `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
   }
 
-  /** 获取桌面端 session token（缓存；桌面端重启或切换设备后 401 会触发重置） */
+  /** 获取请求凭据：用户会话 token 优先（云服务器），缺省回退本地桌面端 ws-token */
   private async getToken(): Promise<string | null> {
+    if (this.authToken === undefined) {
+      try {
+        this.authToken = await AsyncStorage.getItem(ApiService.AUTH_TOKEN_KEY);
+      } catch {
+        this.authToken = null;
+      }
+    }
+    if (this.authToken) return this.authToken;
     if (this.apiToken) return this.apiToken;
     if (!this.tokenPromise) {
       const baseUrl = this.getBaseUrl();
@@ -214,6 +228,11 @@ class ApiService {
       })();
     }
     return this.tokenPromise;
+  }
+
+  /** 当前请求凭据（WS 连接等场景复用） */
+  async getAuthToken(): Promise<string | null> {
+    return this.getToken();
   }
 
   /** 清除 token 缓存（桌面端重启 / 切换设备后旧 token 失效） */
@@ -261,7 +280,7 @@ class ApiService {
   ): Promise<ApiResponse<T>> {
     const baseUrl = this.getBaseUrl();
     if (!baseUrl) {
-      return { error: "未连接到桌面端", errorCode: "NO_CONNECTION" };
+      return { error: "未连接到服务器", errorCode: "NO_CONNECTION" };
     }
 
     const controller = new AbortController();
@@ -476,6 +495,55 @@ class ApiService {
   /** 用户列表（用户-用户会话选人） */
   async getUsers(): Promise<ApiResponse<UserInfo[]>> {
     return this.request<UserInfo[]>("GET", "/api/auth/users");
+  }
+
+  /** 登录（云服务器账号）——成功后持久化用户 token，后续请求自动携带 */
+  async login(username: string, password: string): Promise<ApiResponse<{ token: string; user: UserInfo }>> {
+    const res = await this.request<{ token: string; user: UserInfo }>("POST", "/api/auth/login", { username, password });
+    if (res.data?.token) {
+      this.authToken = res.data.token;
+      try {
+        await AsyncStorage.setItem(ApiService.AUTH_TOKEN_KEY, res.data.token);
+      } catch {
+        /* 存储不可用时仅内存 */
+      }
+    }
+    return res;
+  }
+
+  /** 注册（云服务器账号）——成功后自动登录 */
+  async register(username: string, password: string, displayName?: string): Promise<ApiResponse<{ token: string; user: UserInfo }>> {
+    const res = await this.request<{ token: string; user: UserInfo }>("POST", "/api/auth/register", {
+      username,
+      password,
+      ...(displayName ? { displayName } : {}),
+    });
+    if (res.data?.token) {
+      this.authToken = res.data.token;
+      try {
+        await AsyncStorage.setItem(ApiService.AUTH_TOKEN_KEY, res.data.token);
+      } catch {
+        /* ignore */
+      }
+    }
+    return res;
+  }
+
+  /** 当前登录用户信息 */
+  async getMe(): Promise<ApiResponse<UserInfo>> {
+    return this.request<UserInfo>("GET", "/api/auth/me");
+  }
+
+  /** 登出：服务端删除会话 + 清除本地用户 token */
+  async logout(): Promise<ApiResponse<{ loggedOut: boolean }>> {
+    const res = await this.request<{ loggedOut: boolean }>("POST", "/api/auth/logout");
+    this.authToken = null;
+    try {
+      await AsyncStorage.removeItem(ApiService.AUTH_TOKEN_KEY);
+    } catch {
+      /* ignore */
+    }
+    return res;
   }
 
   // ========== Conversation API（企业级会话） ==========
