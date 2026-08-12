@@ -19,6 +19,7 @@ import { connectionService } from "../services/connection";
 import type { AgentEvent, RunStatus } from "@ensemble/shared-protocol";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
+import { colors } from "../theme";
 
 type RunPageProps = NativeStackScreenProps<RootStackParamList, "Run">;
 
@@ -237,7 +238,7 @@ export default function RunPage({ route, navigation }: RunPageProps) {
   useEffect(() => {
     navigation.setOptions({
       title: run?.taskTitle || "运行详情",
-      headerStyle: { backgroundColor: "#111827" },
+      headerStyle: { backgroundColor: colors.bg },
       headerTintColor: "#fff",
     });
   }, [navigation, run?.taskTitle]);
@@ -434,11 +435,11 @@ export default function RunPage({ route, navigation }: RunPageProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.bg,
   },
   emptyContainer: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.bg,
     justifyContent: "center",
     alignItems: "center",
     padding: 32,
@@ -448,13 +449,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 8,
   },
   emptySubtext: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 14,
   },
   statusBar: {
@@ -464,7 +465,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#374151",
+    borderBottomColor: colors.border,
   },
   statusLeft: {
     flexDirection: "row",
@@ -477,7 +478,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusLabel: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 15,
     fontWeight: "500",
   },
@@ -492,12 +493,12 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   cancelButtonText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 13,
     fontWeight: "500",
   },
   infoCard: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     margin: 12,
     borderRadius: 10,
     padding: 14,
@@ -508,11 +509,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   infoLabel: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 13,
   },
   infoValue: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 13,
     fontWeight: "500",
     flex: 1,
@@ -528,13 +529,13 @@ const styles = StyleSheet.create({
     borderColor: "#10b981",
   },
   resultTitle: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 13,
     fontWeight: "600",
     marginBottom: 8,
   },
   resultText: {
-    color: "#d1d5db",
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
   },
@@ -548,7 +549,7 @@ const styles = StyleSheet.create({
     borderColor: "#ef4444",
   },
   errorTitle: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 13,
     fontWeight: "600",
     marginBottom: 8,
@@ -566,11 +567,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   noJobsText: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 14,
   },
   jobCard: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     marginHorizontal: 12,
     marginBottom: 12,
     borderRadius: 10,
@@ -583,7 +584,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   jobAgentName: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 15,
     fontWeight: "600",
   },
@@ -593,29 +594,29 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   jobStatusText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 11,
     fontWeight: "500",
   },
   jobPromptContainer: {
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 6,
     padding: 10,
     marginBottom: 10,
   },
   jobPromptLabel: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 11,
     marginBottom: 4,
   },
   jobPromptText: {
-    color: "#d1d5db",
+    color: colors.text,
     fontSize: 13,
     lineHeight: 18,
   },
   eventsList: {
     borderTopWidth: 1,
-    borderTopColor: "#374151",
+    borderTopColor: colors.border,
     paddingTop: 10,
   },
   jobResultContainer: {
@@ -625,13 +626,13 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   jobResultLabel: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 11,
     fontWeight: "500",
     marginBottom: 4,
   },
   jobResultText: {
-    color: "#d1d5db",
+    color: colors.text,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -642,20 +643,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   jobUsageText: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 11,
   },
   scrollToBottomButton: {
     position: "absolute",
     bottom: 16,
     alignSelf: "center",
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 20,
   },
   scrollToBottomText: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 13,
     fontWeight: "500",
   },
@@ -669,7 +670,7 @@ const eventStyles = StyleSheet.create({
     flexWrap: "wrap",
   },
   timestamp: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 11,
     width: 70,
   },
@@ -680,12 +681,12 @@ const eventStyles = StyleSheet.create({
     marginRight: 6,
   },
   badgeText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 11,
     fontWeight: "500",
   },
   detail: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
     flex: 1,
   },
@@ -720,7 +721,7 @@ const eventStyles = StyleSheet.create({
     marginBottom: 4,
   },
   toolBadgeText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 10,
     fontWeight: "500",
   },
@@ -731,7 +732,7 @@ const eventStyles = StyleSheet.create({
     marginBottom: 4,
   },
   toolInput: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
     fontFamily: "monospace",
     lineHeight: 16,
@@ -751,12 +752,12 @@ const eventStyles = StyleSheet.create({
     marginBottom: 4,
   },
   toolResultBadgeText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 10,
     fontWeight: "500",
   },
   toolOutput: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
     fontFamily: "monospace",
     lineHeight: 16,
@@ -788,12 +789,12 @@ const eventStyles = StyleSheet.create({
     marginBottom: 6,
   },
   doneBadgeText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 12,
     fontWeight: "600",
   },
   doneResult: {
-    color: "#d1d5db",
+    color: colors.text,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 4,
@@ -805,7 +806,7 @@ const eventStyles = StyleSheet.create({
     gap: 12,
   },
   usageText: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 11,
   },
 });

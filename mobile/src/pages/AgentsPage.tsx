@@ -21,6 +21,7 @@ import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { api } from "../services/api";
 import type { AgentConfig } from "@ensemble/shared-protocol";
+import { colors } from "../theme";
 
 interface AgentFormData {
   name: string;
@@ -557,7 +558,7 @@ export default function AgentsPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: "row",
@@ -565,15 +566,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#374151",
+    borderBottomColor: colors.border,
   },
   headerTitle: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 20,
     fontWeight: "600",
   },
   headerSubtitle: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
     marginTop: 2,
   },
@@ -584,7 +585,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addButtonText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -595,7 +596,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   loadingText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
     marginLeft: 8,
   },
@@ -607,19 +608,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   errorText: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 14,
     textAlign: "center",
     marginBottom: 12,
   },
   retryButton: {
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderRadius: 6,
   },
   retryButtonText: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 14,
     fontWeight: "500",
   },
@@ -627,7 +628,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   agentItem: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -644,12 +645,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   agentName: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "600",
   },
   agentKind: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
     marginTop: 2,
   },
@@ -659,7 +660,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   agentDescription: {
-    color: "#d1d5db",
+    color: colors.text,
     fontSize: 14,
     marginTop: 8,
     lineHeight: 20,
@@ -670,7 +671,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   agentModel: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 12,
     backgroundColor: "rgba(16, 185, 129, 0.1)",
     paddingHorizontal: 8,
@@ -678,7 +679,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   agentProvider: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
   },
   agentTools: {
@@ -687,7 +688,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   toolBadge: {
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -695,11 +696,11 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   toolText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 11,
   },
   moreTools: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 11,
     alignSelf: "center",
   },
@@ -714,18 +715,18 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 8,
   },
   emptySubtext: {
-    color: "#6b7280",
+    color: colors.textFaint,
     textAlign: "center",
   },
   modalContainer: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.bg,
   },
   modalHeader: {
     flexDirection: "row",
@@ -733,24 +734,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#374151",
+    borderBottomColor: colors.border,
   },
   modalCancel: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 16,
   },
   modalTitle: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "600",
   },
   modalSave: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 16,
     fontWeight: "600",
   },
   modalSaveDisabled: {
-    color: "#6b7280",
+    color: colors.textFaint,
   },
   modalContent: {
     flex: 1,
@@ -760,19 +761,19 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   formLabel: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "500",
     marginBottom: 8,
   },
   formInput: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 12,
-    color: "#fff",
+    color: colors.text,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: "#374151",
+    borderColor: colors.border,
   },
   formTextarea: {
     minHeight: 80,
@@ -784,43 +785,43 @@ const styles = StyleSheet.create({
   },
   kindOption: {
     flex: 1,
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 12,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#374151",
+    borderColor: colors.border,
   },
   kindOptionActive: {
     borderColor: "#10b981",
     backgroundColor: "rgba(16, 185, 129, 0.1)",
   },
   kindText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
   },
   kindTextActive: {
-    color: "#10b981",
+    color: colors.primary,
   },
   providerOption: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginRight: 8,
     borderWidth: 1,
-    borderColor: "#374151",
+    borderColor: colors.border,
   },
   providerOptionActive: {
     borderColor: "#10b981",
     backgroundColor: "rgba(16, 185, 129, 0.1)",
   },
   providerText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
   },
   providerTextActive: {
-    color: "#10b981",
+    color: colors.primary,
   },
   sliderContainer: {
     flexDirection: "row",
@@ -828,13 +829,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sliderLabel: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
   },
   sliderTrack: {
     flex: 1,
     height: 4,
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 2,
     position: "relative",
   },
@@ -853,23 +854,23 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   toolChip: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: "#374151",
+    borderColor: colors.border,
   },
   toolChipActive: {
     borderColor: "#10b981",
     backgroundColor: "rgba(16, 185, 129, 0.1)",
   },
   toolChipText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
   },
   toolChipTextActive: {
-    color: "#10b981",
+    color: colors.primary,
   },
   switchRow: {
     flexDirection: "row",

@@ -19,6 +19,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
 import { discoveryService } from "../services/discovery";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { colors } from "../theme";
 
 const APP_VERSION = "0.6.0";
 const MAX_HISTORY = 10;
@@ -564,7 +565,7 @@ export default function SettingsPage() {
             {lastError && (
               <View style={styles.debugRow}>
                 <Text style={styles.debugLabel}>最后错误</Text>
-                <Text style={[styles.debugValue, { color: "#ef4444" }]}>
+                <Text style={[styles.debugValue, { color: colors.danger }]}>
                   {lastError}
                 </Text>
               </View>
@@ -623,10 +624,10 @@ export default function SettingsPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.bg,
   },
   statusCard: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     margin: 16,
     padding: 16,
     borderRadius: 12,
@@ -642,7 +643,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "500",
   },
@@ -650,20 +651,20 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#374151",
+    borderTopColor: colors.border,
   },
   deviceLabel: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
     marginBottom: 4,
   },
   deviceName: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "500",
   },
   deviceIp: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
     marginTop: 2,
   },
@@ -671,10 +672,10 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#374151",
+    borderTopColor: colors.border,
   },
   errorBannerText: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 13,
   },
   section: {
@@ -688,29 +689,29 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 12,
   },
   refreshButton: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 14,
   },
   dangerLink: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 14,
   },
   card: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
   },
   input: {
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     padding: 12,
-    color: "#fff",
+    color: colors.text,
     marginBottom: 12,
   },
   row: {
@@ -719,14 +720,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   secondaryButton: {
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginRight: 12,
   },
   secondaryButtonText: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 14,
     fontWeight: "500",
   },
@@ -747,18 +748,18 @@ const styles = StyleSheet.create({
     backgroundColor: "#ef4444",
   },
   connectButtonText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "600",
   },
   hintText: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
     marginTop: 8,
     textAlign: "center",
   },
   emptyText: {
-    color: "#6b7280",
+    color: colors.textFaint,
     textAlign: "center",
     padding: 20,
   },
@@ -768,7 +769,7 @@ const styles = StyleSheet.create({
   },
   modeButton: {
     flex: 1,
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 4,
@@ -780,16 +781,16 @@ const styles = StyleSheet.create({
     borderColor: "#34d399",
   },
   modeButtonText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 4,
   },
   modeButtonTextActive: {
-    color: "#fff",
+    color: colors.text,
   },
   modeDescription: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 11,
     textAlign: "center",
   },
@@ -797,7 +798,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -806,19 +807,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   discoveredDeviceName: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "500",
   },
   discoveredDeviceIp: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
     marginTop: 2,
   },
   deviceType: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -827,24 +828,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
   },
   deviceCardLabel: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
   },
   deviceCardValue: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
   },
   settingItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 16,
     marginBottom: 8,
@@ -854,30 +855,30 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   settingLabel: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "500",
   },
   settingDescription: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
     marginTop: 2,
   },
   aboutText: {
-    color: "#d1d5db",
+    color: colors.text,
     fontSize: 14,
     lineHeight: 20,
     marginBottom: 8,
   },
   versionText: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
   },
   historyItem: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
@@ -886,17 +887,17 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   historyLabel: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "500",
   },
   historyMeta: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
     marginTop: 2,
   },
   historyArrow: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 20,
   },
   debugRow: {
@@ -905,14 +906,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#374151",
+    borderBottomColor: colors.border,
   },
   debugLabel: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 13,
   },
   debugValue: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 13,
     fontWeight: "500",
     maxWidth: "60%",

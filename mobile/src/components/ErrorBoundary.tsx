@@ -11,6 +11,8 @@ import {
   TouchableOpacity,
   ScrollView,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { colors } from "../theme";
 
 interface Props {
   children: ReactNode;
@@ -50,7 +52,9 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <View style={styles.container}>
           <View style={styles.card}>
-            <Text style={styles.icon}>⚠️</Text>
+            <View style={styles.iconWrap}>
+              <Ionicons name="alert-circle" size={40} color={colors.danger} />
+            </View>
             <Text style={styles.title}>应用发生错误</Text>
             <Text style={styles.subtitle}>
               很抱歉，应用遇到了一个意外错误。请尝试重新加载。
@@ -88,63 +92,68 @@ export class ErrorBoundary extends Component<Props, State> {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.bg,
     justifyContent: "center",
     alignItems: "center",
     padding: 24,
   },
   card: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 16,
     padding: 32,
     alignItems: "center",
     width: "100%",
     maxWidth: 400,
   },
-  icon: {
-    fontSize: 48,
+  iconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(239,68,68,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 16,
   },
   title: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 20,
     fontWeight: "600",
     marginBottom: 8,
   },
   subtitle: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 24,
   },
   reloadButton: {
-    backgroundColor: "#10b981",
+    backgroundColor: colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderRadius: 8,
     marginBottom: 16,
   },
   reloadButtonText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "600",
   },
   debugContainer: {
     maxHeight: 200,
     width: "100%",
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     padding: 12,
   },
   debugTitle: {
-    color: "#f59e0b",
+    color: colors.warning,
     fontSize: 12,
     fontWeight: "600",
     marginBottom: 8,
   },
   debugText: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 11,
     fontFamily: "monospace",
   },

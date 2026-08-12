@@ -20,6 +20,7 @@ import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
 import type { TaskMode } from "@ensemble/shared-protocol";
+import { colors } from "../theme";
 
 export default function TasksPage({ navigation }: { navigation: any }) {
   const { tasks, runs, agents } = useTaskStore();
@@ -338,7 +339,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.bg,
   },
   header: {
     flexDirection: "row",
@@ -346,10 +347,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#374151",
+    borderBottomColor: colors.border,
   },
   headerTitle: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 20,
     fontWeight: "600",
   },
@@ -360,10 +361,10 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   addButtonDisabled: {
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
   },
   addButtonText: {
-    color: "#fff",
+    color: colors.text,
     fontWeight: "500",
   },
   errorBanner: {
@@ -375,12 +376,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   errorBannerText: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 13,
     flex: 1,
   },
   errorBannerDismiss: {
-    color: "#ef4444",
+    color: colors.danger,
     fontSize: 16,
     fontWeight: "600",
     paddingLeft: 12,
@@ -389,14 +390,14 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   taskItem: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 16,
     marginBottom: 12,
   },
   taskItemTouchable: {
     borderLeftWidth: 3,
-    borderLeftColor: "#10b981",
+    borderLeftColor: colors.primary,
   },
   taskHeader: {
     flexDirection: "row",
@@ -404,7 +405,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   taskTitle: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "500",
     flex: 1,
@@ -416,7 +417,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 12,
     fontWeight: "500",
   },
@@ -426,11 +427,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   taskMode: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
   },
   taskTime: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
   },
   taskRunInfo: {
@@ -440,15 +441,15 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#374151",
+    borderTopColor: colors.border,
   },
   runInfoText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
     flex: 1,
   },
   viewDetailText: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 12,
     fontWeight: "500",
     marginLeft: 8,
@@ -462,7 +463,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   cancelButtonText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 12,
   },
   emptyState: {
@@ -476,13 +477,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   emptyText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 8,
   },
   emptySubtext: {
-    color: "#6b7280",
+    color: colors.textFaint,
     textAlign: "center",
   },
   modalOverlay: {
@@ -492,21 +493,21 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalContent: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 24,
   },
   modalTitle: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 20,
     fontWeight: "600",
     marginBottom: 16,
   },
   input: {
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     padding: 12,
-    color: "#fff",
+    color: colors.text,
     marginBottom: 12,
   },
   textArea: {
@@ -521,7 +522,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 6,
     marginHorizontal: 4,
     alignItems: "center",
@@ -530,11 +531,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#10b981",
   },
   modeButtonText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
   },
   modeButtonTextActive: {
-    color: "#fff",
+    color: colors.text,
     fontWeight: "500",
   },
   modalButtons: {
@@ -548,7 +549,7 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   cancelModalButtonText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 16,
   },
   createButton: {
@@ -563,7 +564,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   createButtonText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "500",
   },

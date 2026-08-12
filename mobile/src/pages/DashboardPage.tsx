@@ -17,6 +17,7 @@ import { useTaskStore } from "../store/taskStore";
 import { discoveryService } from "../services/discovery";
 import { connectionService } from "../services/connection";
 import { api } from "../services/api";
+import { colors } from "../theme";
 
 type ConnectionQuality = "excellent" | "good" | "poor" | "unknown";
 
@@ -140,14 +141,14 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
   const getStatusColor = () => {
     switch (connectionState) {
       case "connected":
-        return "#10b981";
+        return colors.primary;
       case "connecting":
       case "reconnecting":
-        return "#f59e0b";
+        return colors.warning;
       case "error":
-        return "#ef4444";
+        return colors.danger;
       default:
-        return "#6b7280";
+        return colors.textFaint;
     }
   };
 
@@ -169,13 +170,13 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
   const getQualityColor = (quality: ConnectionQuality) => {
     switch (quality) {
       case "excellent":
-        return "#10b981";
+        return colors.primary;
       case "good":
-        return "#f59e0b";
+        return colors.warning;
       case "poor":
-        return "#ef4444";
+        return colors.danger;
       default:
-        return "#6b7280";
+        return colors.textFaint;
     }
   };
 
@@ -213,17 +214,17 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
   const getRunStatusColor = (status: string) => {
     switch (status) {
       case "success":
-        return "#10b981";
+        return colors.primary;
       case "running":
-        return "#f59e0b";
+        return colors.warning;
       case "error":
-        return "#ef4444";
+        return colors.danger;
       case "cancelled":
-        return "#6b7280";
+        return colors.textFaint;
       case "queued":
-        return "#6366f1";
+        return colors.accent;
       default:
-        return "#374151";
+        return colors.border;
     }
   };
 
@@ -251,8 +252,8 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor="#10b981"
-          colors={["#10b981"]}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
         />
       }
     >
@@ -315,19 +316,19 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
 
       {/* Stats */}
       <View style={styles.statsContainer}>
-        <View style={[styles.statCard, { backgroundColor: "#1e3a5f" }]}>
+        <View style={[styles.statCard, { backgroundColor: "rgba(59,130,246,0.15)" }]}>
           <Text style={styles.statNumber}>{stats.totalTasks}</Text>
           <Text style={styles.statLabel}>总任务</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#1e4d3f" }]}>
+        <View style={[styles.statCard, { backgroundColor: "rgba(16,185,129,0.15)" }]}>
           <Text style={styles.statNumber}>{stats.runningRuns}</Text>
           <Text style={styles.statLabel}>进行中</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#3f1e4d" }]}>
+        <View style={[styles.statCard, { backgroundColor: "rgba(16,185,129,0.15)" }]}>
           <Text style={styles.statNumber}>{stats.completedRuns}</Text>
           <Text style={styles.statLabel}>已完成</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "#4d1e1e" }]}>
+        <View style={[styles.statCard, { backgroundColor: "rgba(239,68,68,0.15)" }]}>
           <Text style={styles.statNumber}>{stats.errorRuns}</Text>
           <Text style={styles.statLabel}>错误</Text>
         </View>
@@ -402,11 +403,11 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#111827",
+    backgroundColor: colors.bg,
     padding: 16,
   },
   statusCard: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
@@ -422,7 +423,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   statusText: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 16,
     fontWeight: "500",
   },
@@ -432,7 +433,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: 1,
-    borderTopColor: "#374151",
+    borderTopColor: colors.border,
   },
   qualityDot: {
     width: 8,
@@ -441,7 +442,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   qualityText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 13,
   },
   syncRow: {
@@ -450,12 +451,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   syncLabel: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
     marginRight: 4,
   },
   syncValue: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
   },
   syncErrorRow: {
@@ -471,27 +472,27 @@ const styles = StyleSheet.create({
   deviceList: {
     marginTop: 12,
     borderTopWidth: 1,
-    borderTopColor: "#374151",
+    borderTopColor: colors.border,
     paddingTop: 12,
   },
   deviceListTitle: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 14,
     marginBottom: 8,
   },
   deviceItem: {
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
   },
   deviceName: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "500",
   },
   deviceIp: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
     marginTop: 4,
   },
@@ -508,12 +509,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   statNumber: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 24,
     fontWeight: "bold",
   },
   statLabel: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
     marginTop: 4,
   },
@@ -521,25 +522,25 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 18,
     fontWeight: "600",
     marginBottom: 12,
   },
   emptyText: {
-    color: "#6b7280",
+    color: colors.textFaint,
     textAlign: "center",
     padding: 20,
   },
   taskCard: {
-    backgroundColor: "#1f2937",
+    backgroundColor: colors.surface,
     borderRadius: 8,
     padding: 12,
     marginBottom: 8,
   },
   taskCardTouchable: {
     borderLeftWidth: 3,
-    borderLeftColor: "#10b981",
+    borderLeftColor: colors.primary,
   },
   taskHeader: {
     flexDirection: "row",
@@ -547,15 +548,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   taskTitle: {
-    color: "#fff",
+    color: colors.text,
     fontSize: 14,
     fontWeight: "500",
     flex: 1,
   },
   taskMode: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
-    backgroundColor: "#374151",
+    backgroundColor: colors.surfaceAlt,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 4,
@@ -572,11 +573,11 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   taskStatusText: {
-    color: "#9ca3af",
+    color: colors.textMuted,
     fontSize: 12,
   },
   runningIndicator: {
-    color: "#f59e0b",
+    color: colors.warning,
     fontSize: 11,
     fontStyle: "italic",
   },
@@ -587,16 +588,16 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   taskTime: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 11,
   },
   viewDetail: {
-    color: "#10b981",
+    color: colors.primary,
     fontSize: 12,
     fontWeight: "500",
   },
   syncText: {
-    color: "#6b7280",
+    color: colors.textFaint,
     fontSize: 12,
     textAlign: "center",
     marginTop: 8,
