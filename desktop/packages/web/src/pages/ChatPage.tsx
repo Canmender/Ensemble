@@ -7,19 +7,20 @@
  * 单聊消息：本地 state 管理（实时对话，不持久化）。
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive
+  Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive, User as UserIcon
 } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
 import { loadRunDetail } from "../lib/loadRunDetail";
+import { useAuth } from "../lib/auth";
 import type { Agent } from "../types";
 import { Button, Card, Input, Label, Modal, Spinner, cls, showToast } from "../components/ui";
 
 /** 联系人类型 */
-type ContactType = "agent" | "device" | "group";
+type ContactType = "agent" | "device" | "group" | "user";
 
 /** 聊天消息 */
 interface ChatMessage {
@@ -27,8 +28,24 @@ interface ChatMessage {
   contactId: string;
   content: string;
   sender: "user" | "assistant";
-  agentId?: string; // 群聊时标识是哪个智能体
+  agentId?: string; // 群聊/用户会话中标识发送者
+  senderName?: string; // 用户会话显示发送者昵称
   timestamp: number;
+}
+
+/** 注册用户（/api/auth/users） */
+interface UserInfo {
+  id: string;
+  username: string;
+  displayName?: string;
+  role?: string;
+}
+
+/** 解析用户昵称（渲染发送者名） */
+function userName(usersById: Map<string, UserInfo>, id?: string): string | undefined {
+  if (!id) return undefined;
+  const u = usersById.get(id);
+  return u ? (u.displayName || u.username) : undefined;
 }
 
 /** 联系人 */
@@ -140,7 +157,7 @@ function ContactItem({
   onClick: () => void;
   onArchive?: (contact: Contact) => void;
 }) {
-  const icon = contact.type === "agent" ? Bot : contact.type === "device" ? Smartphone : Users;
+  const icon = contact.type === "agent" ? Bot : contact.type === "device" ? Smartphone : contact.type === "user" ? UserIcon : Users;
   const Icon = icon;
   const statusColor = contact.status === "online" ? "bg-success" : contact.status === "busy" ? "bg-warning" : "bg-muted";
 
@@ -158,6 +175,7 @@ function ContactItem({
           "flex h-10 w-10 items-center justify-center rounded-full",
           contact.type === "agent" ? "bg-violet-500/10 text-violet-500" :
           contact.type === "device" ? "bg-primary/10 text-primary" :
+          contact.type === "user" ? "bg-accent/10 text-accent" :
           "bg-success/10 text-success",
         )}>
           <Icon className="h-5 w-5" />
@@ -210,14 +228,104 @@ function renderContent(text: string): React.ReactNode {
 }
 
 export default function ChatPage() {
+  const { state: authState } = useAuth();
+  // 当前登录用户（用户-用户 IM 的方向判定；本地桌面模式无用户）
+  const me = authState.user;
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [activeContact, setActiveContact] = useState<Contact | null>(null);
   // 单聊消息（本地管理）
   const [singleMessages, setSingleMessages] = useState<Record<string, ChatMessage[]>>({});
+  // 企业级会话历史（conversations API，原始数据；方向/昵称在渲染时解析）
+  const [convHistory, setConvHistory] = useState<Record<string, Array<{ id: string; content: string; agentId?: string; role: string; ts: string }>>>({});
+  const [users, setUsers] = useState<UserInfo[]>([]);
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastContactsReload = useRef(0);
+
+  // 用户 id → 用户信息（渲染发送者昵称）
+  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
+
+  const loadContacts = useCallback(async () => {
+    const [agents, conversations, allUsers] = await Promise.all([
+      api.get<Agent[]>("/agents"),
+      api.get<any[]>("/conversations").catch(() => []),
+      api.get<UserInfo[]>("/auth/users").catch(() => []),
+    ]);
+    setUsers(allUsers ?? []);
+    const usersByIdMap = new Map((allUsers ?? []).map((u) => [u.id, u]));
+
+    const agentContacts: Contact[] = (agents ?? []).map((a) => ({
+      id: a.id,
+      type: "agent" as const,
+      name: a.name,
+      status: a.enabled ? "online" : "offline",
+    }));
+
+    // 企业级会话（conversations）：用户会话进"用户"分区，其余（群聊/agent 直连）进"群聊"
+    const groupContacts: Contact[] = [];
+    const userContactByUser = new Map<string, Contact>();
+    for (const c of (conversations ?? [])) {
+      const pids = Array.isArray(c.participantIds) ? c.participantIds : [];
+      const isUserConv = pids.length > 0 && pids.every((id: string) => usersByIdMap.has(id));
+      if (isUserConv) {
+        for (const pid of pids) {
+          const u = usersByIdMap.get(pid);
+          if (!u || (me && pid === me.id)) continue;
+          userContactByUser.set(pid, {
+            id: `user-${pid}`,
+            type: "user" as const,
+            name: u.displayName || u.username,
+            status: "online",
+            runId: c.runId,
+            convId: c.id,
+            participantIds: pids,
+            unread: c.unread ?? 0,
+            lastMessage: c.lastMessage,
+            lastTime: c.lastMessageTs,
+          });
+        }
+      } else {
+        groupContacts.push({
+          id: `conv-${c.id}`,
+          type: "group" as const,
+          name: c.title ?? (pids.join(", ") || "会话"),
+          status: "online",
+          runId: c.runId,
+          convId: c.id,
+          participantIds: pids,
+          unread: c.unread ?? 0,
+          lastMessage: c.lastMessage,
+          lastTime: c.lastMessageTs,
+        });
+      }
+    }
+
+    // 用户列表（未建会话的也列出，首次发送时创建会话）
+    const userContacts: Contact[] = [];
+    if (me) {
+      for (const u of (allUsers ?? [])) {
+        if (u.id === me.id) continue;
+        userContacts.push(
+          userContactByUser.get(u.id) ?? {
+            id: `user-${u.id}`,
+            type: "user" as const,
+            name: u.displayName || u.username,
+            status: "online",
+            participantIds: [u.id],
+          },
+        );
+      }
+    }
+
+    // 我的设备（预留手机端）
+    const deviceContacts: Contact[] = [
+      { id: "this-pc", type: "device", name: "本机（电脑端）", status: "online" },
+    ];
+
+    setContacts([...deviceContacts, ...userContacts, ...groupContacts, ...agentContacts]);
+  }, [me]);
 
   // 从 Zustand store 读取群聊消息
   const groupLive = useRunStore((s) => activeContact?.runId ? s.live[activeContact.runId] : undefined);
@@ -231,8 +339,41 @@ export default function ChatPage() {
     prevGroupLen.current = groupMessages.length;
   }
 
-  // 当前显示的消息（单聊用本地 state，群聊用 store）—— memoized 避免每次渲染重新计算
+  // 当前显示的消息（企业级会话 = 历史 + 实时；单聊用本地 state；旧群聊用 store）
   const messages = useMemo(() => {
+    if (activeContact?.convId) {
+      // 用户-用户会话：双方 role 都是 user，方向按发送者是否为自己判定
+      const isUserConv = activeContact.type === "user";
+      const rawHistory = convHistory[activeContact.convId] ?? [];
+      const history: ChatMessage[] = rawHistory.map((m) => ({
+        id: m.id,
+        contactId: activeContact.id,
+        content: m.content,
+        sender: isUserConv
+          ? (m.agentId === me?.id ? "user" as const : "assistant" as const)
+          : (m.role === "user" ? "user" as const : "assistant" as const),
+        agentId: m.agentId,
+        senderName: isUserConv ? userName(usersById, m.agentId) : undefined,
+        timestamp: new Date(m.ts).getTime(),
+      }));
+      // 相邻去重：WS 回显 + 乐观追加会产生相同消息（如群聊里自己的发言）
+      const deduped = groupMessages.filter((m, i) => {
+        if (i === 0) return true;
+        const prev = groupMessages[i - 1];
+        return !(m.agentId === prev.agentId && m.content === prev.content);
+      });
+      const live: ChatMessage[] = deduped.map((m, i) => ({
+        id: `live-${i}`,
+        contactId: activeContact.id,
+        content: m.content,
+        sender: m.agentId === me?.id || m.agentId === "user" ? "user" as const : "assistant" as const,
+        agentId: m.agentId,
+        senderName: isUserConv && m.agentId ? userName(usersById, m.agentId) : undefined,
+        timestamp: groupBaseTs.current - (deduped.length - 1 - i) * 60000,
+      }));
+      // 历史 + 实时（打开会话时已清空旧 live，历史为准）
+      return [...history, ...live];
+    }
     if (activeContact?.type === "group") {
       return groupMessages.map((m, i) => ({
         id: `group-${i}`,
@@ -240,11 +381,12 @@ export default function ChatPage() {
         content: m.content,
         sender: m.agentId === "user" ? "user" as const : "assistant" as const,
         agentId: m.agentId,
+        senderName: undefined,
         timestamp: groupBaseTs.current - (groupMessages.length - 1 - i) * 60000,
       }));
     }
     return singleMessages[activeContact?.id ?? ""] ?? [];
-  }, [activeContact?.type, activeContact?.id, groupMessages, singleMessages]);
+  }, [activeContact?.type, activeContact?.id, activeContact?.convId, groupMessages, singleMessages, convHistory, me?.id, usersById]);
 
   // 加载联系人
   useEffect(() => {
@@ -256,7 +398,7 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
-  // 切换群聊联系人时：订阅 WebSocket + 加载历史消息
+  // 切换联系人：订阅 WebSocket + 加载历史消息
   useEffect(() => {
     if (!activeContact?.runId) return;
     const runId = activeContact.runId;
@@ -264,47 +406,50 @@ export default function ChatPage() {
     // 订阅 WebSocket
     wsClient.subscribe(runId);
 
-    // 加载历史消息（如果 store 中还没有）
-    void loadRunDetail(runId, { loadEvents: false, loadChatMessages: true });
+    if (activeContact.convId) {
+      // 企业级会话（含用户-用户 IM）：历史走 conversations API
+      void api.get<any>(`/conversations/${activeContact.convId}/messages`).then((d) => {
+        if (d?.messages) {
+          setConvHistory((prev) => ({
+            ...prev,
+            [activeContact.convId!]: d.messages.map((m: any) => ({
+              id: m.id,
+              content: m.content,
+              agentId: m.agentId,
+              role: m.role,
+              ts: m.ts,
+            })),
+          }));
+          // 历史为准：清空打开前残留的 live，只保留打开后到达的新消息
+          useRunStore.getState().clearMessages(runId);
+        }
+      });
+    } else {
+      // 旧式群聊：加载历史消息（如果 store 中还没有）
+      void loadRunDetail(runId, { loadEvents: false, loadChatMessages: true });
+    }
 
     return () => {
       wsClient.unsubscribe(runId);
     };
-  }, [activeContact?.runId]);
+  }, [activeContact?.runId, activeContact?.convId]);
 
-  async function loadContacts() {
-    const [agents, conversations] = await Promise.all([
-      api.get<Agent[]>("/agents"),
-      api.get<any[]>("/conversations").catch(() => []),
-    ]);
-    const agentContacts: Contact[] = (agents ?? []).map((a) => ({
-      id: a.id,
-      type: "agent" as const,
-      name: a.name,
-      status: a.enabled ? "online" : "offline",
-    }));
-
-    // 企业级会话（conversations）：群聊/个体对话持久化，刷新不丢失
-    const groupContacts: Contact[] = (conversations ?? []).map((c) => ({
-      id: `conv-${c.id}`,
-      type: "group" as const,
-      name: c.title ?? (Array.isArray(c.participantIds) ? c.participantIds.join(", ") : "会话"),
-      status: "online",
-      runId: c.runId,
-      convId: c.id,
-      participantIds: c.participantIds,
-      unread: c.unread ?? 0,
-      lastMessage: c.lastMessage,
-      lastTime: c.lastMessageTs,
-    }));
-
-    // 我的设备（预留手机端）
-    const deviceContacts: Contact[] = [
-      { id: "this-pc", type: "device", name: "本机（电脑端）", status: "online" },
-    ];
-
-    setContacts([...deviceContacts, ...groupContacts, ...agentContacts]);
-  }
+  // 新消息到达 → 刷新会话列表（未读 / 最后消息），节流避免高频重载
+  useEffect(() => {
+    const activeRunId = activeContact?.runId;
+    return useRunStore.subscribe((state, prev) => {
+      for (const [runId, run] of Object.entries(state.live)) {
+        const prevCount = prev.live[runId]?.messages.length ?? 0;
+        if (run && run.messages.length > prevCount && runId !== activeRunId) {
+          if (Date.now() - lastContactsReload.current > 2000) {
+            lastContactsReload.current = Date.now();
+            void loadContacts();
+          }
+          return;
+        }
+      }
+    });
+  }, [activeContact?.runId, loadContacts]);
 
   /** 归档会话（企业级会话，非本地 group） */
   async function archiveContact(contact: Contact) {
@@ -333,20 +478,36 @@ export default function ChatPage() {
     };
 
     try {
-      if (activeContact.type === "group" && activeContact.runId) {
-        // 群聊：本地立即显示用户消息
+      if (activeContact.convId) {
+        // 企业级会话（群聊 / 用户-用户）：落库 + 广播
+        const store = useRunStore.getState();
+        store.appendMessage(activeContact.runId ?? activeContact.convId, {
+          // 用户会话服务端不向发送者回显（agentId 用自己 user id）；agent/群聊用 "user" 标识，与回显一致以便去重
+          agentId: activeContact.type === "user" ? (me?.id ?? "user") : "user",
+          content: text,
+        });
+        void api.post(`/conversations/${activeContact.convId}/messages`, { content: text }).catch((e) => {
+          showToast("发送失败: " + (e as Error).message, "error");
+        });
+      } else if (activeContact.type === "user") {
+        // 用户-用户：首次发送时创建会话（无 run，消息直接落库 + 定向推送）
+        const conv = await api.post<{ id: string; runId: string }>("/conversations", {
+          type: "direct",
+          participantIds: activeContact.participantIds,
+        });
+        await api.post(`/conversations/${conv.id}/messages`, { content: text });
+        const patch = { convId: conv.id, runId: conv.runId } as const;
+        setContacts((prev) => prev.map((c) => (c.id === activeContact.id ? { ...c, ...patch } : c)));
+        setActiveContact((prev) => (prev && prev.id === activeContact.id ? { ...prev, ...patch } : prev));
+        void loadContacts();
+      } else if (activeContact.type === "group" && activeContact.runId) {
+        // 旧式群聊（无会话）：本地立即显示 + WS steer
         const store = useRunStore.getState();
         store.appendMessage(activeContact.runId, {
           agentId: "user",
           content: text,
         });
-        if (activeContact.convId) {
-          // 企业级会话：走后端落库 + 广播（修复 WS steer 不落库的问题）
-          void api.post(`/conversations/${activeContact.convId}/messages`, { content: text });
-        } else {
-          // 旧式群聊：WS steer 触发后端继续对话
-          wsClient.steer(activeContact.runId, text);
-        }
+        wsClient.steer(activeContact.runId, text);
       } else if (activeContact.type === "agent") {
         // 单聊：立即显示用户消息
         setSingleMessages((prev) => ({
@@ -395,6 +556,7 @@ export default function ChatPage() {
 
   // 联系人分组
   const deviceContacts = contacts.filter((c) => c.type === "device");
+  const userContacts = contacts.filter((c) => c.type === "user");
   const agentContacts = contacts.filter((c) => c.type === "agent");
   const groupContacts = contacts.filter((c) => c.type === "group");
 
@@ -422,6 +584,24 @@ export default function ChatPage() {
                 我的设备
               </div>
               {deviceContacts.map((c) => (
+                <ContactItem
+                onArchive={archiveContact}
+                  key={c.id}
+                  contact={c}
+                  active={activeContact?.id === c.id}
+                  onClick={() => setActiveContact(c)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* 用户 */}
+          {userContacts.length > 0 && (
+            <div>
+              <div className="px-3 py-1 text-[10px] font-semibold uppercase text-muted">
+                用户
+              </div>
+              {userContacts.map((c) => (
                 <ContactItem
                 onArchive={archiveContact}
                   key={c.id}
@@ -481,10 +661,12 @@ export default function ChatPage() {
                 "flex h-9 w-9 items-center justify-center rounded-full",
                 activeContact.type === "agent" ? "bg-violet-500/10 text-violet-500" :
                 activeContact.type === "device" ? "bg-primary/10 text-primary" :
+                activeContact.type === "user" ? "bg-accent/10 text-accent" :
                 "bg-success/10 text-success",
               )}>
                 {activeContact.type === "agent" ? <Bot className="h-4 w-4" /> :
                  activeContact.type === "device" ? <Smartphone className="h-4 w-4" /> :
+                 activeContact.type === "user" ? <UserIcon className="h-4 w-4" /> :
                  <Users className="h-4 w-4" />}
               </div>
               <div>
@@ -524,8 +706,10 @@ export default function ChatPage() {
                           : "bg-muted/20 text-fg rounded-bl-md",
                       )}
                     >
-                      {activeContact.type === "group" && msg.agentId && msg.agentId !== "user" && (
-                        <div className="mb-1 text-[11px] font-semibold text-violet-600">@{msg.agentId}</div>
+                      {(activeContact.type === "group" || activeContact.type === "user") && msg.agentId && msg.agentId !== "user" && msg.agentId !== me?.id && (
+                        <div className="mb-1 text-[11px] font-semibold text-violet-600">
+                          {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
+                        </div>
                       )}
                       <div className="whitespace-pre-wrap text-sm leading-relaxed">{renderContent(msg.content)}</div>
                       <div className={cls(

@@ -93,6 +93,8 @@ interface RunStore {
   upsertJob: (runId: string, jobId: string, patch: Partial<LiveJob>) => void;
   appendEvent: (runId: string, item: AgentEventItem) => void;
   appendMessage: (runId: string, m: LiveRun["messages"][number]) => void;
+  /** 清空某 run 的实时消息（打开会话时以历史为准，避免与实时重复） */
+  clearMessages: (runId: string) => void;
   setFinal: (runId: string, finalResult?: string, error?: string) => void;
   setPendingConfirm: (runId: string, confirm: ToolConfirmRequest) => void;
   clearPendingConfirm: (runId: string) => void;
@@ -154,6 +156,14 @@ export const useRunStore = create<RunStore>((set, get) => ({
       const run = s.live[runId];
       if (!run) return s;
       return { live: { ...s.live, [runId]: { ...run, messages: [...run.messages, m] } } };
+    });
+  },
+
+  clearMessages(runId) {
+    set((s) => {
+      const run = s.live[runId];
+      if (!run) return s;
+      return { live: { ...s.live, [runId]: { ...run, messages: [] } } };
     });
   },
 

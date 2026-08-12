@@ -226,6 +226,23 @@ describe("Store chat messages", () => {
     expect(msgs).toHaveLength(2);
     expect(msgs[0].id).toBe("m2"); // ts 升序
   });
+
+  it("shared run history is not filtered by owner (user-to-user conv)", () => {
+    const { store } = setup();
+    store.createTask(task("t1"));
+    store.createRun(run("r1", "t1"));
+
+    const msg = (id: string, owner: string | undefined, ts: string): ChatMessage => ({
+      id, runId: "r1", jobId: "j1", agentId: owner ?? "u1", role: "user", content: "内容", ts, ...(owner ? { userId: owner } : {}),
+    });
+    store.createChatMessage(msg("m1", "u1", "2026-01-01T00:00:01.000Z"));
+    store.createChatMessage(msg("m2", "u2", "2026-01-01T00:00:02.000Z"));
+
+    // 用户-用户会话历史（路由层不过滤 userId）：双方都可见
+    expect(store.listChatMessages("r1").map((m) => m.id).sort()).toEqual(["m1", "m2"]);
+    // 单人视角：只看到自己的或共享（user_id=''）的消息
+    expect(store.listChatMessages("r1", "u1").map((m) => m.id)).toEqual(["m1"]);
+  });
 });
 
 // ── Workflows ───────────────────────────────────────────────────────────────
@@ -279,6 +296,18 @@ describe("Store conversations", () => {
     const mine = store.listConversations("u1");
     expect(mine.some((c) => c.id === "c1")).toBe(true);
     expect(mine.some((c) => c.id === "c2")).toBe(false);
+  });
+
+  it("lists user-to-user conversations for both owner and participant", () => {
+    const { store } = setup();
+    // u1 创建与 u2 的会话（participantIds 只含对方，归属在 userId）
+    store.createConversation({ ...conv("c1", "r1"), userId: "u1", participantIds: ["u2"] });
+    // u1 与 u3 的会话（u2 不应看到）
+    store.createConversation({ ...conv("c2", "r2"), userId: "u1", participantIds: ["u3"] });
+
+    expect(store.listConversations("u1").map((c) => c.id).sort()).toEqual(["c1", "c2"]);
+    expect(store.listConversations("u2").map((c) => c.id)).toEqual(["c1"]);
+    expect(store.listConversations("u3").map((c) => c.id)).toEqual(["c2"]);
   });
 
   it("updates lastMessage metadata and unread", () => {

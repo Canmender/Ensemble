@@ -102,7 +102,10 @@ export function conversationsRouter(ctx: AppContext): Router {
       const before = typeof req.query.before === "string" ? req.query.before : undefined;
       const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 200);
 
-      const all = ctx.store.listChatMessages(conv.runId, req.user?.id);
+      // 用户-用户会话（runId = conv id）：消息双方共享，不做 userId 过滤（否则对方看不到自己的消息）
+      const all = conv.runId.startsWith("conv_")
+        ? ctx.store.listChatMessages(conv.runId)
+        : ctx.store.listChatMessages(conv.runId, req.user?.id);
       const filtered = before ? all.filter((m) => m.ts < before) : all;
       ok(res, { messages: filtered.slice(-limit), total: all.length });
     }),
@@ -133,15 +136,17 @@ export function conversationsRouter(ctx: AppContext): Router {
           ts: now(),
         });
         ctx.store.updateConversationMeta(conv.id, content, now());
-        // 推送参与者（除发送者）+ 未读
-        for (const pid of conv.participantIds) {
+        // 推送参与者（除发送者）+ 未读。接收者 = 归属用户 + participants（创建者不在 participants 里）
+        // runId = conv.runId（conv id），客户端据此把实时消息关联到会话
+        const recipients = new Set<string>([conv.userId, ...conv.participantIds].filter((x): x is string => !!x));
+        for (const pid of recipients) {
           if (pid === senderId) continue;
           ctx.hub.sendToUser(pid, {
             type: "chat.message",
             jobId: "",
             agentId: senderId,
             content,
-          });
+          }, conv.runId);
           ctx.store.incrementUnread(conv.id);
         }
         ok(res, { sent: true });
