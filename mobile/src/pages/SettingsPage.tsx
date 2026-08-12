@@ -1,6 +1,7 @@
 /**
- * Settings Page
- * Connection management, relay config, debug info, app version.
+ * Settings Page（简化版）
+ * 账号登录/注册 + 连接状态 + 本机信息 + 版本。
+ * 已移除手动连接模式：应用启动自动直连自用云端服务器（见 App.tsx / connection.ts）。
  */
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -16,700 +17,293 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useDeviceStore } from "../store/deviceStore";
-import { connectionService } from "../services/connection";
-import { discoveryService } from "../services/discovery";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { connectionService, CLOUD_SERVER } from "../services/connection";
+import { api, type UserInfo } from "../services/api";
 import { colors } from "../theme";
 
-const APP_VERSION = "0.6.0";
-const MAX_HISTORY = 10;
-/** 连接历史持久化 key（AsyncStorage） */
-const HISTORY_KEY = "@ensemble/settings_connection_history";
-
-/** Connection history entry */
-interface ConnectionRecord {
-  id: string;
-  label: string;
-  address: string;
-  mode: "lan" | "relay";
-  lastConnected: number;
-}
-
-/** Connection history（进程内缓存，持久化到 AsyncStorage） */
-let connectionHistory: ConnectionRecord[] = [];
-/** 自用系统默认服务器（中继模式：云端 relay + RELAY_AUTH_KEY） */
-const DEFAULT_RELAY_URL = "http://47.92.39.184:8888";
-const DEFAULT_RELAY_TOKEN = "1b88dc48cfba0673174d5a766a96c5cd";
-let savedRelayUrl = DEFAULT_RELAY_URL;
-let savedRelayToken = DEFAULT_RELAY_TOKEN;
+const APP_VERSION = "0.7.0";
 
 export default function SettingsPage() {
-  const { currentDevice, connectedDevice, connectionState, discoveredDevices, lastError } =
-    useDeviceStore();
-  const [manualIp, setManualIp] = useState("");
-  const [manualPort, setManualPort] = useState("3000");
-  const [relayUrl, setRelayUrl] = useState(savedRelayUrl);
-  const [relayToken, setRelayToken] = useState(savedRelayToken);
+  const { currentDevice, connectedDevice, connectionState, lastError } = useDeviceStore();
+
+  // 账号状态
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [submitting, setSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [me, setMe] = useState<UserInfo | null>(null);
+  const [loadingMe, setLoadingMe] = useState(true);
+
+  // 设置项
   const [autoConnect, setAutoConnect] = useState(true);
   const [notifications, setNotifications] = useState(true);
-  const [connectionMode, setConnectionMode] = useState<"lan" | "relay">("lan");
-  const [isPinging, setIsPinging] = useState(false);
-  const [pingResult, setPingResult] = useState<string | null>(null);
-  const [history, setHistory] = useState<ConnectionRecord[]>(connectionHistory);
-  const [showDebug, setShowDebug] = useState(false);
-  const [connectStartTime, setConnectStartTime] = useState<number | null>(null);
-  const [lastConnectDuration, setLastConnectDuration] = useState<number | null>(null);
-  const [connectAttempts, setConnectAttempts] = useState(0);
 
-  const isConnected = connectionState === "connected";
-
-  // 启动时从 AsyncStorage 加载连接历史
-  useEffect(() => {
-    void AsyncStorage.getItem(HISTORY_KEY).then((raw) => {
-      if (!raw) return;
-      try {
-        connectionHistory = JSON.parse(raw) as ConnectionRecord[];
-        setHistory([...connectionHistory]);
-      } catch {
-        // 损坏数据忽略，回退空列表
-      }
-    });
+  // 启动时读取登录态（有 token 则拉取当前用户）
+  const loadMe = useCallback(async () => {
+    setLoadingMe(true);
+    try {
+      const res = await api.getMe();
+      if (res.data) setMe(res.data);
+      else setMe(null);
+    } catch {
+      setMe(null);
+    } finally {
+      setLoadingMe(false);
+    }
   }, []);
 
-  /** Add entry to connection history */
-  const addToHistory = useCallback(
-    (label: string, address: string, mode: "lan" | "relay") => {
-      const entry: ConnectionRecord = {
-        id: `${mode}-${address}-${Date.now()}`,
-        label,
-        address,
-        mode,
-        lastConnected: Date.now(),
-      };
-      connectionHistory = [
-        entry,
-        ...connectionHistory.filter((h) => h.address !== address || h.mode !== mode),
-      ].slice(0, MAX_HISTORY);
-      setHistory([...connectionHistory]);
-      void AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(connectionHistory));
-    },
-    []
-  );
+  useEffect(() => {
+    void loadMe();
+    // 连接成功后重新检查登录态
+    if (connectionState === "connected") void loadMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connectionState]);
 
-  /** Ping before connecting (LAN only) */
-  const handlePing = async () => {
-    if (!manualIp.trim()) {
-      Alert.alert("提示", "请先输入 IP 地址");
+  /** 登录 / 注册 */
+  const handleSubmit = async () => {
+    if (!username.trim() || password.length < 6) {
+      Alert.alert("提示", "请输入用户名，密码至少 6 位");
       return;
     }
-    const port = parseInt(manualPort, 10) || 3000;
-    setIsPinging(true);
-    setPingResult(null);
-
+    setSubmitting(true);
+    setAuthError(null);
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const start = Date.now();
-      const response = await fetch(`http://${manualIp.trim()}:${port}/api/health`, {
-        method: "GET",
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
-      const latency = Date.now() - start;
-
-      if (response.ok) {
-        setPingResult(`可达 (${latency}ms)`);
+      const res =
+        mode === "login"
+          ? await api.login(username.trim(), password)
+          : await api.register(username.trim(), password, displayName.trim() || undefined);
+      if (res.data?.token) {
+        setMe(res.data.user);
+        setPassword("");
+        Alert.alert("成功", mode === "login" ? "已登录" : "注册成功，已自动登录");
+        // 重新建立带用户 token 的 WS 连接（云服务器实时推送）
+        void connectionService.connectToCloud();
       } else {
-        setPingResult(`响应异常 (${response.status})`);
+        setAuthError(res.error ?? "操作失败");
       }
     } catch (err) {
-      setPingResult("不可达");
+      setAuthError(err instanceof Error ? err.message : "操作失败");
     } finally {
-      setIsPinging(false);
+      setSubmitting(false);
     }
   };
 
-  /** Manual LAN connect */
-  const handleManualConnect = async () => {
-    if (!manualIp.trim()) {
-      Alert.alert("错误", "请输入 IP 地址");
-      return;
-    }
-    const port = parseInt(manualPort, 10);
-    if (isNaN(port) || port <= 0 || port > 65535) {
-      Alert.alert("错误", "请输入有效的端口号");
-      return;
-    }
-
-    setConnectStartTime(Date.now());
-    setConnectAttempts((prev) => prev + 1);
-    const success = await connectionService.connect(manualIp.trim(), port);
-    setLastConnectDuration(Date.now() - (connectStartTime || Date.now()));
-
-    if (success) {
-      addToHistory(
-        `${manualIp.trim()}:${port}`,
-        `${manualIp.trim()}:${port}`,
-        "lan"
-      );
-      Alert.alert("成功", "已连接到桌面端");
-    } else {
-      Alert.alert("失败", "无法连接到桌面端，请检查 IP 和端口");
-    }
+  /** 登出 */
+  const handleLogout = async () => {
+    await api.logout();
+    setMe(null);
+    setUsername("");
+    Alert.alert("已退出", "已退出登录");
   };
 
-  /** Relay connect */
-  const handleRelayConnect = async () => {
-    if (!relayUrl.trim()) {
-      Alert.alert("错误", "请输入中继服务器地址");
-      return;
-    }
-
-    // Save relay config
-    savedRelayUrl = relayUrl.trim();
-    savedRelayToken = relayToken.trim();
-    connectionService.setRelayConfig({
-      url: relayUrl.trim(),
-      token: relayToken.trim() || undefined,
-    });
-
-    setConnectStartTime(Date.now());
-    setConnectAttempts((prev) => prev + 1);
-    const success = await connectionService.connectViaRelay();
-    setLastConnectDuration(Date.now() - (connectStartTime || Date.now()));
-
-    if (success) {
-      addToHistory(relayUrl.trim(), relayUrl.trim(), "relay");
-      Alert.alert("成功", "已连接到中继服务器");
-    } else {
-      Alert.alert("失败", "无法连接到中继服务器，请检查地址");
-    }
-  };
-
-  /** Disconnect */
-  const handleDisconnect = () => {
-    connectionService.disconnect();
-    setConnectAttempts(0);
-  };
-
-  /** Connect from history entry */
-  const handleHistoryConnect = async (record: ConnectionRecord) => {
-    if (record.mode === "lan") {
-      const parts = record.address.split(":");
-      const ip = parts[0];
-      const port = parseInt(parts[1], 10) || 3000;
-      setManualIp(ip);
-      setManualPort(String(port));
-      setConnectStartTime(Date.now());
-      setConnectAttempts((prev) => prev + 1);
-      const success = await connectionService.connect(ip, port);
-      setLastConnectDuration(Date.now() - (connectStartTime || Date.now()));
-      if (!success) {
-        Alert.alert("失败", "无法连接到该设备");
-      }
-    } else {
-      setRelayUrl(record.address);
-      connectionService.setRelayConfig({
-        url: record.address,
-        token: savedRelayToken || undefined,
-      });
-      setConnectStartTime(Date.now());
-      setConnectAttempts((prev) => prev + 1);
-      const success = await connectionService.connectViaRelay();
-      setLastConnectDuration(Date.now() - (connectStartTime || Date.now()));
-      if (!success) {
-        Alert.alert("失败", "无法连接到中继服务器");
-      }
-    }
-  };
-
-  /** Refresh device list */
-  const handleRefreshDevices = () => {
-    discoveryService.startScan();
-    Alert.alert("提示", "正在扫描设备...");
-  };
-
-  /** Clear history */
-  const handleClearHistory = () => {
-    connectionHistory = [];
-    setHistory([]);
-  };
-
-  // Connection status rendering
-  const renderConnectionStatus = () => {
-    const statusColor =
-      connectionState === "connected"
-        ? "#10b981"
-        : connectionState === "connecting" || connectionState === "reconnecting"
+  const statusColor =
+    connectionState === "connected"
+      ? "#10b981"
+      : connectionState === "connecting" || connectionState === "reconnecting"
         ? "#f59e0b"
         : connectionState === "error"
-        ? "#ef4444"
-        : "#6b7280";
-
-    const statusText =
-      connectionState === "connected"
-        ? "已连接"
-        : connectionState === "connecting"
+          ? "#ef4444"
+          : "#9ca3af";
+  const statusText =
+    connectionState === "connected"
+      ? "已连接云端服务器"
+      : connectionState === "connecting"
         ? "连接中..."
         : connectionState === "reconnecting"
-        ? "重连中..."
-        : connectionState === "error"
-        ? "连接错误"
-        : "未连接";
+          ? "重连中..."
+          : connectionState === "error"
+            ? "连接错误"
+            : "未连接";
 
-    return (
-      <View style={styles.statusCard}>
-        <View style={styles.statusHeader}>
+  return (
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
+      {/* 连接状态 */}
+      <View style={styles.card}>
+        <View style={styles.statusRow}>
           <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
           <Text style={styles.statusText}>{statusText}</Text>
         </View>
-
+        <Text style={styles.serverInfo}>
+          {CLOUD_SERVER.host}:{CLOUD_SERVER.port}
+        </Text>
         {connectedDevice && (
-          <View style={styles.connectedDevice}>
-            <Text style={styles.deviceLabel}>已连接设备:</Text>
-            <Text style={styles.deviceName}>{connectedDevice.name}</Text>
-            <Text style={styles.deviceIp}>{connectedDevice.ip}</Text>
-            {lastConnectDuration !== null && (
-              <Text style={styles.deviceIp}>
-                连接耗时: {lastConnectDuration}ms
-              </Text>
-            )}
-          </View>
+          <Text style={styles.mutedText}>设备 {connectedDevice.name}</Text>
         )}
-
-        {lastError && (
-          <View style={styles.errorBanner}>
-            <Text style={styles.errorBannerText}>{lastError}</Text>
-          </View>
-        )}
+        {lastError && <Text style={styles.errorText}>{lastError}</Text>}
       </View>
-    );
-  };
 
-  return (
-    <ScrollView style={styles.container}>
-      {/* Connection status */}
-      {renderConnectionStatus()}
-
-      {/* Connection mode selector */}
+      {/* 账号 */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>连接模式</Text>
-        <View style={styles.modeSelector}>
-          <TouchableOpacity
-            style={[
-              styles.modeButton,
-              connectionMode === "lan" && styles.modeButtonActive,
-            ]}
-            onPress={() => setConnectionMode("lan")}
-          >
-            <Text
-              style={[
-                styles.modeButtonText,
-                connectionMode === "lan" && styles.modeButtonTextActive,
-              ]}
-            >
-              LAN 直连
-            </Text>
-            <Text style={styles.modeDescription}>同一 WiFi 下直接连接</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.modeButton,
-              connectionMode === "relay" && styles.modeButtonActive,
-            ]}
-            onPress={() => setConnectionMode("relay")}
-          >
-            <Text
-              style={[
-                styles.modeButtonText,
-                connectionMode === "relay" && styles.modeButtonTextActive,
-              ]}
-            >
-              云端中继
-            </Text>
-            <Text style={styles.modeDescription}>跨网络通过服务器连接</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* LAN connect */}
-      {connectionMode === "lan" && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>局域网连接</Text>
+        <Text style={styles.sectionTitle}>账号</Text>
+        {me ? (
           <View style={styles.card}>
-            <TextInput
-              style={styles.input}
-              placeholder="IP 地址 (如 192.168.1.100)"
-              placeholderTextColor="#6b7280"
-              value={manualIp}
-              onChangeText={setManualIp}
-              keyboardType="numeric"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="端口 (默认 3000)"
-              placeholderTextColor="#6b7280"
-              value={manualPort}
-              onChangeText={setManualPort}
-              keyboardType="numeric"
-            />
-
-            <View style={styles.row}>
-              <TouchableOpacity
-                style={[styles.secondaryButton, isPinging && styles.buttonDisabled]}
-                onPress={handlePing}
-                disabled={isPinging}
-              >
-                {isPinging ? (
-                  <ActivityIndicator size="small" color="#10b981" />
-                ) : (
-                  <Text style={styles.secondaryButtonText}>Ping 测试</Text>
-                )}
-              </TouchableOpacity>
-              {pingResult && (
-                <Text
-                  style={[
-                    styles.pingResult,
-                    { color: pingResult.includes("可达") ? "#10b981" : "#ef4444" },
-                  ]}
-                >
-                  {pingResult}
-                </Text>
-              )}
+            <View style={styles.userRow}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{me.displayName?.[0] || me.username[0]?.toUpperCase() || "?"}</Text>
+              </View>
+              <View style={styles.userInfo}>
+                <Text style={styles.userName}>{me.displayName || me.username}</Text>
+                <Text style={styles.mutedText}>@{me.username}</Text>
+              </View>
             </View>
-
-            <TouchableOpacity
-              style={[
-                styles.connectButton,
-                isConnected && styles.disconnectButton,
-              ]}
-              onPress={isConnected ? handleDisconnect : handleManualConnect}
-            >
-              {connectionState === "connecting" ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.connectButtonText}>
-                  {isConnected ? "断开连接" : "连接"}
-                </Text>
-              )}
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutButtonText}>退出登录</Text>
             </TouchableOpacity>
           </View>
-        </View>
-      )}
-
-      {/* Relay connect */}
-      {connectionMode === "relay" && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>云端中继服务器</Text>
+        ) : loadingMe ? (
           <View style={styles.card}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <View style={styles.modeRow}>
+              {(["login", "register"] as const).map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.modeBtn, mode === m && styles.modeBtnActive]}
+                  onPress={() => setMode(m)}
+                >
+                  <Text style={[styles.modeBtnText, mode === m && styles.modeBtnTextActive]}>
+                    {m === "login" ? "登录" : "注册"}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
             <TextInput
               style={styles.input}
-              placeholder="服务器地址 (如 http://your-server:3001)"
-              placeholderTextColor="#6b7280"
-              value={relayUrl}
-              onChangeText={setRelayUrl}
+              placeholder="用户名"
+              placeholderTextColor={colors.textFaint}
+              value={username}
+              onChangeText={setUsername}
               autoCapitalize="none"
+              autoCorrect={false}
             />
+            {mode === "register" && (
+              <TextInput
+                style={styles.input}
+                placeholder="昵称（可选）"
+                placeholderTextColor={colors.textFaint}
+                value={displayName}
+                onChangeText={setDisplayName}
+              />
+            )}
             <TextInput
               style={styles.input}
-              placeholder="认证 Token (可选)"
-              placeholderTextColor="#6b7280"
-              value={relayToken}
-              onChangeText={setRelayToken}
-              autoCapitalize="none"
+              placeholder="密码（至少 6 位）"
+              placeholderTextColor={colors.textFaint}
+              value={password}
+              onChangeText={setPassword}
               secureTextEntry
             />
 
+            {authError && <Text style={styles.errorText}>{authError}</Text>}
+
             <TouchableOpacity
-              style={[
-                styles.connectButton,
-                isConnected && styles.disconnectButton,
-              ]}
-              onPress={isConnected ? handleDisconnect : handleRelayConnect}
+              style={[styles.primaryButton, submitting && styles.buttonDisabled]}
+              onPress={handleSubmit}
+              disabled={submitting}
             >
-              {connectionState === "connecting" ? (
+              {submitting ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.connectButtonText}>
-                  {isConnected ? "断开连接" : "连接中继服务器"}
+                <Text style={styles.primaryButtonText}>
+                  {mode === "login" ? "登录" : "注册并登录"}
                 </Text>
               )}
             </TouchableOpacity>
             <Text style={styles.hintText}>
-              需要先在阿里云部署中继服务器，详见文档
+              登录后可进行用户-用户实时聊天（与桌面端/其他用户互通）
             </Text>
           </View>
-        </View>
-      )}
-
-      {/* Connection history */}
-      {history.length > 0 && (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>连接历史</Text>
-            <TouchableOpacity onPress={handleClearHistory}>
-              <Text style={styles.dangerLink}>清空</Text>
-            </TouchableOpacity>
-          </View>
-          {history.map((record) => (
-            <TouchableOpacity
-              key={record.id}
-              style={styles.historyItem}
-              onPress={() => handleHistoryConnect(record)}
-            >
-              <View style={styles.historyInfo}>
-                <Text style={styles.historyLabel}>{record.label}</Text>
-                <Text style={styles.historyMeta}>
-                  {record.mode === "lan" ? "LAN" : "Relay"} ·{" "}
-                  {new Date(record.lastConnected).toLocaleDateString()}
-                </Text>
-              </View>
-              <Text style={styles.historyArrow}>›</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
-      {/* Device discovery */}
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>发现的设备</Text>
-          <TouchableOpacity onPress={handleRefreshDevices}>
-            <Text style={styles.refreshButton}>刷新</Text>
-          </TouchableOpacity>
-        </View>
-
-        {discoveredDevices.length === 0 ? (
-          <Text style={styles.emptyText}>未发现设备</Text>
-        ) : (
-          discoveredDevices.map((device) => (
-            <TouchableOpacity
-              key={device.id}
-              style={styles.deviceItem}
-              onPress={() => {
-                connectionService.connect(device.ip, device.wsPort);
-              }}
-            >
-              <View style={styles.deviceInfo}>
-                <Text style={styles.discoveredDeviceName}>{device.name}</Text>
-                <Text style={styles.discoveredDeviceIp}>{device.ip}</Text>
-              </View>
-              <Text style={styles.deviceType}>{device.type}</Text>
-            </TouchableOpacity>
-          ))
         )}
       </View>
 
-      {/* Device info */}
+      {/* 本机信息 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>本机信息</Text>
-        <View style={styles.deviceCard}>
-          <Text style={styles.deviceCardLabel}>设备名称</Text>
-          <Text style={styles.deviceCardValue}>
-            {currentDevice?.name || "未知"}
-          </Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>设备名称</Text>
+          <Text style={styles.infoValue}>{currentDevice?.name || "未知"}</Text>
         </View>
-        <View style={styles.deviceCard}>
-          <Text style={styles.deviceCardLabel}>设备 ID</Text>
-          <Text style={styles.deviceCardValue}>
-            {currentDevice?.id || "未知"}
-          </Text>
-        </View>
-        <View style={styles.deviceCard}>
-          <Text style={styles.deviceCardLabel}>应用版本</Text>
-          <Text style={styles.deviceCardValue}>{APP_VERSION}</Text>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>应用版本</Text>
+          <Text style={styles.infoValue}>v{APP_VERSION}</Text>
         </View>
       </View>
 
-      {/* Debug info */}
-      <View style={styles.section}>
-        <TouchableOpacity
-          style={styles.sectionHeader}
-          onPress={() => setShowDebug(!showDebug)}
-        >
-          <Text style={styles.sectionTitle}>调试信息</Text>
-          <Text style={styles.refreshButton}>
-            {showDebug ? "收起" : "展开"}
-          </Text>
-        </TouchableOpacity>
-
-        {showDebug && (
-          <View style={styles.card}>
-            <View style={styles.debugRow}>
-              <Text style={styles.debugLabel}>连接状态</Text>
-              <Text style={styles.debugValue}>{connectionState}</Text>
-            </View>
-            <View style={styles.debugRow}>
-              <Text style={styles.debugLabel}>连接模式</Text>
-              <Text style={styles.debugValue}>
-                {connectionService.getConnectionMode()}
-              </Text>
-            </View>
-            <View style={styles.debugRow}>
-              <Text style={styles.debugLabel}>连接尝试次数</Text>
-              <Text style={styles.debugValue}>{connectAttempts}</Text>
-            </View>
-            {lastConnectDuration !== null && (
-              <View style={styles.debugRow}>
-                <Text style={styles.debugLabel}>上次连接耗时</Text>
-                <Text style={styles.debugValue}>{lastConnectDuration}ms</Text>
-              </View>
-            )}
-            <View style={styles.debugRow}>
-              <Text style={styles.debugLabel}>发现设备数</Text>
-              <Text style={styles.debugValue}>{discoveredDevices.length}</Text>
-            </View>
-            <View style={styles.debugRow}>
-              <Text style={styles.debugLabel}>已连接设备</Text>
-              <Text style={styles.debugValue}>
-                {connectedDevice?.name || "无"}
-              </Text>
-            </View>
-            {lastError && (
-              <View style={styles.debugRow}>
-                <Text style={styles.debugLabel}>最后错误</Text>
-                <Text style={[styles.debugValue, { color: colors.danger }]}>
-                  {lastError}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-      </View>
-
-      {/* Settings */}
+      {/* 设置 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>设置</Text>
-
         <View style={styles.settingItem}>
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>自动连接</Text>
-            <Text style={styles.settingDescription}>
-              启动时自动连接到上次的设备
-            </Text>
+            <Text style={styles.settingDescription}>启动时自动连接云端服务器</Text>
           </View>
           <Switch
             value={autoConnect}
             onValueChange={setAutoConnect}
-            trackColor={{ false: "#374151", true: "#10b981" }}
-            thumbColor={autoConnect ? "#fff" : "#9ca3af"}
+            trackColor={{ false: "#d1d5db", true: "#10b981" }}
+            thumbColor="#fff"
           />
         </View>
-
         <View style={styles.settingItem}>
           <View style={styles.settingInfo}>
             <Text style={styles.settingLabel}>通知</Text>
-            <Text style={styles.settingDescription}>
-              接收任务状态更新通知
-            </Text>
+            <Text style={styles.settingDescription}>接收任务状态更新通知</Text>
           </View>
           <Switch
             value={notifications}
             onValueChange={setNotifications}
-            trackColor={{ false: "#374151", true: "#10b981" }}
-            thumbColor={notifications ? "#fff" : "#9ca3af"}
+            trackColor={{ false: "#d1d5db", true: "#10b981" }}
+            thumbColor="#fff"
           />
         </View>
       </View>
 
-      {/* About */}
+      {/* 关于 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>关于</Text>
         <Text style={styles.aboutText}>
-          合鸣（Ensemble）是一款桌面原生多 Agent 协作平台，支持手机与电脑端联动。
+          合鸣（Ensemble）多 Agent 协作平台。手机端直连自用云端服务器，支持账号登录、用户-用户实时聊天与任务联动。
         </Text>
-        <Text style={styles.versionText}>版本 {APP_VERSION}</Text>
+        <Text style={styles.versionText}>版本 v{APP_VERSION}</Text>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bg,
-  },
-  statusCard: {
-    backgroundColor: colors.surface,
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-  },
-  statusHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  statusDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    marginRight: 8,
-  },
-  statusText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "500",
-  },
-  connectedDevice: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  deviceLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  deviceName: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  deviceIp: {
-    color: colors.textFaint,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  errorBanner: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  errorBannerText: {
-    color: colors.danger,
-    fontSize: 13,
-  },
-  section: {
-    marginBottom: 24,
-    paddingHorizontal: 16,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: 12,
-  },
-  refreshButton: {
-    color: colors.primary,
-    fontSize: 14,
-  },
-  dangerLink: {
-    color: colors.danger,
-    fontSize: 14,
-  },
+  container: { flex: 1, backgroundColor: colors.bg },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 12,
     padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
   },
+  statusRow: { flexDirection: "row", alignItems: "center" },
+  statusDot: { width: 12, height: 12, borderRadius: 6, marginRight: 8 },
+  statusText: { color: colors.text, fontSize: 16, fontWeight: "500" },
+  serverInfo: { color: colors.textMuted, fontSize: 13, marginTop: 8 },
+  mutedText: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  errorText: { color: colors.danger, fontSize: 13, marginTop: 8 },
+  section: { marginTop: 24, paddingHorizontal: 16 },
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "600", marginBottom: 12 },
+  modeRow: { flexDirection: "row", marginBottom: 16 },
+  modeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: "center",
+    backgroundColor: colors.surfaceAlt,
+    marginHorizontal: 4,
+  },
+  modeBtnActive: { backgroundColor: colors.primary },
+  modeBtnText: { color: colors.textMuted, fontSize: 14, fontWeight: "600" },
+  modeBtnTextActive: { color: "#fff" },
   input: {
     backgroundColor: colors.surfaceAlt,
     borderRadius: 8,
@@ -717,117 +311,37 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 12,
   },
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 12,
-  },
-  secondaryButton: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginRight: 12,
-  },
-  secondaryButtonText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  buttonDisabled: {
-    opacity: 0.5,
-  },
-  pingResult: {
-    fontSize: 13,
-    fontWeight: "500",
-  },
-  connectButton: {
-    backgroundColor: "#10b981",
+  primaryButton: {
+    backgroundColor: colors.primary,
     borderRadius: 8,
     padding: 14,
     alignItems: "center",
+    marginTop: 4,
   },
-  disconnectButton: {
-    backgroundColor: "#ef4444",
-  },
-  connectButtonText: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  hintText: {
-    color: colors.textFaint,
-    fontSize: 12,
-    marginTop: 8,
-    textAlign: "center",
-  },
-  emptyText: {
-    color: colors.textFaint,
-    textAlign: "center",
-    padding: 20,
-  },
-  modeSelector: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  modeButton: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    marginHorizontal: 4,
+  primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "600" },
+  buttonDisabled: { opacity: 0.6 },
+  hintText: { color: colors.textFaint, fontSize: 12, marginTop: 10, textAlign: "center" },
+  userRow: { flexDirection: "row", alignItems: "center" },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.primarySoft,
     alignItems: "center",
+    justifyContent: "center",
   },
-  modeButtonActive: {
-    backgroundColor: "#10b981",
-    borderWidth: 2,
-    borderColor: "#34d399",
-  },
-  modeButtonText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  modeButtonTextActive: {
-    color: colors.text,
-  },
-  modeDescription: {
-    color: colors.textFaint,
-    fontSize: 11,
-    textAlign: "center",
-  },
-  deviceItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  deviceInfo: {
-    flex: 1,
-  },
-  discoveredDeviceName: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  discoveredDeviceIp: {
-    color: colors.textFaint,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  deviceType: {
-    color: colors.textMuted,
-    fontSize: 12,
+  avatarText: { color: colors.primary, fontSize: 18, fontWeight: "700" },
+  userInfo: { flex: 1, marginLeft: 12 },
+  userName: { color: colors.text, fontSize: 16, fontWeight: "600" },
+  logoutButton: {
     backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
+    borderRadius: 8,
+    padding: 12,
+    alignItems: "center",
+    marginTop: 16,
   },
-  deviceCard: {
+  logoutButtonText: { color: colors.danger, fontSize: 15, fontWeight: "600" },
+  infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -836,14 +350,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
   },
-  deviceCardLabel: {
-    color: colors.textMuted,
-    fontSize: 14,
-  },
-  deviceCardValue: {
-    color: colors.text,
-    fontSize: 14,
-  },
+  infoLabel: { color: colors.textMuted, fontSize: 14 },
+  infoValue: { color: colors.text, fontSize: 14 },
   settingItem: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -853,73 +361,9 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 8,
   },
-  settingInfo: {
-    flex: 1,
-    marginRight: 16,
-  },
-  settingLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  settingDescription: {
-    color: colors.textFaint,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  aboutText: {
-    color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 8,
-  },
-  versionText: {
-    color: colors.textFaint,
-    fontSize: 12,
-  },
-  historyItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  historyInfo: {
-    flex: 1,
-  },
-  historyLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "500",
-  },
-  historyMeta: {
-    color: colors.textFaint,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  historyArrow: {
-    color: colors.textFaint,
-    fontSize: 20,
-  },
-  debugRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  debugLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-  },
-  debugValue: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: "500",
-    maxWidth: "60%",
-    textAlign: "right",
-  },
+  settingInfo: { flex: 1, marginRight: 16 },
+  settingLabel: { color: colors.text, fontSize: 14, fontWeight: "500" },
+  settingDescription: { color: colors.textFaint, fontSize: 12, marginTop: 2 },
+  aboutText: { color: colors.text, fontSize: 14, lineHeight: 20, marginBottom: 8 },
+  versionText: { color: colors.textFaint, fontSize: 12 },
 });

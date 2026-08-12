@@ -1,10 +1,11 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
+import { connectionService } from "./services/connection";
 
 // Pages
 import DashboardPage from "./pages/DashboardPage";
@@ -67,12 +68,17 @@ function MainTabs() {
 }
 
 export default function App() {
+  // 启动即连接自用云端服务器（账号/会话/IM 全走云端；无需手动选择连接模式）
+  useEffect(() => {
+    void connectionService.init().then(() => connectionService.connectToCloud());
+  }, []);
+
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
         <NavigationContainer
           theme={{
-            dark: true,
+            dark: false,
             colors: {
               primary: colors.primary,
               background: colors.bg,
@@ -103,7 +109,7 @@ export default function App() {
               }}
             />
           </Stack.Navigator>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
         </NavigationContainer>
       </SafeAreaProvider>
     </ErrorBoundary>
