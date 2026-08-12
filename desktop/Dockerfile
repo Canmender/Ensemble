@@ -21,11 +21,8 @@ COPY packages/web packages/web
 # 构建：shared → web；server 用 esbuild 打包单文件（platform=node 自动 external node: 内置）
 RUN pnpm --filter @ensemble/shared build \
   && pnpm --filter @ensemble/web build \
-  && npx esbuild packages/server/src/index.ts \
-       --bundle \
-       --platform=node \
-       --format=cjs \
-       --outfile=packages/server/dist/headless.cjs
+  && cd packages/server \
+  && npx esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/headless.cjs
 
 # ── 运行阶段 ──
 FROM node:20-slim
