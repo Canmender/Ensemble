@@ -18,8 +18,9 @@ COPY packages/shared packages/shared
 COPY packages/server packages/server
 COPY packages/web packages/web
 
-# 构建
-RUN pnpm --filter @ensemble/shared build \
+# 构建（先清理旧产物，避免层缓存残留不完整 dist）
+RUN rm -rf packages/shared/dist packages/server/dist packages/web/dist \
+  && pnpm --filter @ensemble/shared build \
   && pnpm --filter @ensemble/server build \
   && pnpm --filter @ensemble/web build
 
