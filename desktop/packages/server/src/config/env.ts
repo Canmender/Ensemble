@@ -50,6 +50,10 @@ export interface ServerEnv {
   autoSyncLocal?: boolean;
   /** 托管前端静态资源目录（headless/Docker 部署时提供 web 界面） */
   staticDir?: string;
+  /** 中继服务器地址（自用：桌面端默认连接云端中继，移动端经此 IM/遥控） */
+  relayUrl?: string;
+  /** 中继服务器鉴权密钥（RELAY_AUTH_KEY） */
+  relayKey?: string;
 }
 
 export function getEnv(): ServerEnv {
@@ -65,5 +69,8 @@ export function getEnv(): ServerEnv {
     lanHost: process.env.ENSEMBLE_LAN_HOST || undefined,
     autoSyncLocal: process.env.ENSEMBLE_AUTO_SYNC_LOCAL !== "false",
     staticDir: process.env.ENSEMBLE_STATIC_DIR || undefined,
+    // 自用默认连接云端中继（服务器只作中介，桌面端为主办公、移动端 IM/遥控）
+    relayUrl: process.env.RELAY_URL || "http://47.92.39.184:8888",
+    relayKey: process.env.RELAY_AUTH_KEY || "1b88dc48cfba0673174d5a766a96c5cd",
   };
 }
