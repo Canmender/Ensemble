@@ -37,8 +37,11 @@ interface ConnectionRecord {
 
 /** Connection history（进程内缓存，持久化到 AsyncStorage） */
 let connectionHistory: ConnectionRecord[] = [];
-let savedRelayUrl = "";
-let savedRelayToken = "";
+/** 自用系统默认服务器（中继模式：云端 relay + RELAY_AUTH_KEY） */
+const DEFAULT_RELAY_URL = "http://SERVER_IP_REDACTED:8888";
+const DEFAULT_RELAY_TOKEN = "RELAY_AUTH_KEY_REDACTED";
+let savedRelayUrl = DEFAULT_RELAY_URL;
+let savedRelayToken = DEFAULT_RELAY_TOKEN;
 
 export default function SettingsPage() {
   const { currentDevice, connectedDevice, connectionState, discoveredDevices, lastError } =
