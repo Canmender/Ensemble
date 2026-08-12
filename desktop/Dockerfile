@@ -2,7 +2,7 @@
 # esbuild 打包 server 为单文件（解决 Node ESM 无扩展名导入问题），运行时零依赖解析
 
 # ── 构建阶段 ──
-FROM node:20-slim AS build
+FROM node:22-slim AS build
 WORKDIR /app
 RUN corepack enable
 
@@ -25,7 +25,7 @@ RUN pnpm --filter @ensemble/shared build \
   && npx esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/headless.cjs
 
 # ── 运行阶段 ──
-FROM node:20-slim
+FROM node:22-slim
 ENV NODE_ENV=production
 WORKDIR /app
 
