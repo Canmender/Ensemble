@@ -578,212 +578,17 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 
 采用语义化版本 `x.y.z`（主版本.次版本.修订）：
 
-- **修订号（z）**：小提交或 Bug 修复 → 第三位 +1，并**必须**在下方变更日志记录
+- **修订号（z）**：小提交或 Bug 修复 → 第三位 +1，并**必须**在 [CHANGELOG.md](../../CHANGELOG.md) 记录
 - **次版本号（y）**：中型修改（新功能、重构、非破坏性变更、依赖升级）→ 第二位 +1
 - **主版本号（x）**：破坏性变更或重大里程碑 → 第一位 +1
 
-发布流程：每次 bump 版本号时，同步更新各 package.json 与下方变更日志，再打包发布。
+发布流程：每次 bump 版本号时，同步更新各 package.json 与 [CHANGELOG.md](../../CHANGELOG.md)，再打包发布。
 
 ---
 
 ## 变更日志
 
-### v0.7.1 (2026-08-12) — 修复：桌面端启动崩溃 + 移动端直连云服务器 + 白色主题
-
-**桌面端（v0.7.0 安装后打不开）**
-- 修复数据库迁移崩溃：`migrateUserColumns` 重建 `chat_messages` 时兼容无 `user_id` 列的旧库（v0.6.0 之前的库升级时 `no such column: user_id`）
-- 已用真实旧库副本 + 构造旧库验证迁移，数据保留
-
-**移动端**
-- 移除「连接模式」设置（LAN 直连/云端中继/手动 IP/连接历史/设备发现），应用启动自动直连云服务器 `SERVER_IP_REDACTED:8787`
-- 新增账号登录/注册（用户 token AsyncStorage 持久化）；WS 携带用户会话 token（云服务器 ws-token 已禁用，登录鉴权）
-- 修复设置页版本号显示（原硬编码 0.6.0）
-
-**移动端白色主题**
-- `theme.ts` 浅色系配色 + `userInterfaceStyle: light` + 启动页/图标白底
-
-**移动端联系人（后续补充）**
-- 底部导航新增「联系人」标签：用户（好友）+ Agent 分组、搜索、点击开聊（参考微信/Telegram 通讯录）
-- 聊天页顶部连接状态条（已连接云端/未连接/重连中）；Dashboard 移除局域网设备发现
-- APK versionCode 5 → 6
-
-**版本**：0.7.0 → 0.7.1（bug 修复 → patch），APK versionCode 5
-
-### v0.7.0 (2026-08-12) — 用户-用户 IM 全链路（桌面端）+ 会话加固
-
-**用户-用户 IM（桌面 web 端补全，与移动端对齐）**
-- 新增「用户」联系人分区（`/api/auth/users` 排除自己），已有会话显示未读 / 最后消息
-- 点击用户首次发送时懒创建 direct 会话；消息方向按发送者==当前用户判定（用户会话双方 role 都是 user）
-- 发送者昵称显示；历史 + WS 实时合并去重；打开会话清空旧 live 以历史为准
-- 新消息到达节流刷新会话列表（未读 / 最后消息实时更新）
-
-**服务端修复（Node 集成验证，4 处真实 bug）**
-- `sendToUser` 补传 runId（原为空串，用户-用户实时消息两端关联不上会话）
-- 用户-用户会话历史不过滤 userId（原按归属过滤，对方看不到消息）
-- `listConversations` 增加 participant_ids 匹配（原只按归属，会话在对方列表不可见）
-- 用户-用户推送接收者含会话归属用户（原只遍历 participantIds，创建者收不到对方回复）
-
-**会话加固**
-- **per-user 未读**：新增 `conversation_reads` 表，用户-用户会话各自计数，`/read` 只清当前用户（原共享计数，A 读会清 B 的未读）
-- **访问控制**：用户-用户会话仅参与者可读写；agent 会话仅归属用户或共享会话可访问（原任意登录用户知道 conv id 即可读历史/发消息）
-
-**测试**
-- server 145 单元测试（新增 per-user 未读回归）；Node 双用户集成验证 12 项全通过
-
-### v0.6.0 (2026-08-11) — 企业级升级：账号系统 + agent 原生支持 + 会话系统
-
-**账号系统（P0）**
-- users/sessions 表 + 密码登录（scrypt，零新依赖）
-- 认证双凭证：用户 session token / 机器 API key / 设备 token（桌面本地）
-- `/api/auth`：注册 / 登录 / 当前用户 / 登出
-- 数据隔离：任务 / 运行 / 聊天按用户隔离（userId 全链传播）；agents 团队共享
-- Web 登录/注册页 + 路由守卫 + token 持久化
-
-**agent 原生支持（P1）**
-- 启动自动检测并接入本机 harness（opencode / claude-code / hermes 等）
-- 缺失一键安装（npm/pip，走中文镜像 npmmirror/阿里）
-- 已安装的本地 agent 默认启用
-
-**会话系统 / 企业级 IM（P2）**
-- conversations 表：direct（1:1 个体对话）/ group（多 agent 群聊）
-- `/api/conversations`：列表 / 创建 / 消息分页 / 发送 / 已读 / 删除
-- 未读计数、会话生命周期（终态拒绝发送）
-- 前端会话列表持久化 + 消息落库统一
-
-**其他**
-- 版本号规则（x.y.z：bug→patch，中型→minor）写入 WIKI
-
-### v0.5.0 (2026-08-11) — 安全加固 + RAG 向量检索 + 移动端局域网直连 + 依赖升级
-
-**安全加固**
-- HTTP API 认证：所有 `/api/*` Bearer token；`/api/ws-token` Origin 校验；`ENSEMBLE_API_KEY` 支持
-- relay-server 鉴权：`RELAY_AUTH_KEY` 握手鉴权 + `/devices` 保护 + 同设备顶替防串扰
-- 三轮代码审查修复：headless 默认回环绑定 + 对外强制 API key；workflow id 路径穿越；settings 第三方 key 掩蔽；MCP 解释器命令白名单；全量写限流；health 收敛
-- 取消语义：run 级取消（plan/adversarial 取消不再误标成功；取消终止本地子进程）
-
-**新功能**
-- RAG 向量检索：OpenAI 兼容 embedding 接入，vector/BM25/混合（RRF 融合）
-- Chat 事件驱动：`WsHub.waitForRun` 替代 200ms 忙等待轮询
-- 移动端局域网直连：桌面端 `ENSEMBLE_LAN_HOST` + mDNS；移动端原生 WebSocket 事件流（wslink）
-- ConfigManager async：读缓存 + 异步写 + 互斥串行
-
-**依赖升级**
-- Express 5、reactflow → @xyflow/react v12、vitest 3、Vite base "./" + target es2022
-
-**测试**
-- server 128 单元测试 + relay-server 9 集成测试；移动端 typecheck 0 错误
-
-### v0.4.3 (2026-08-10) — 安全加固 + 画布修复 + 内部弹窗 + 移动端全面改进
-
-**桌面端安全加固（两轮深度审查，16 项高危修复）**
-- 命令注入防护：Shell 元字符检测 + 词边界黑名单 + MCP 命令审计
-- API Key AES-256-GCM 加密存储
-- WebSocket Token 认证 + timingSafeEqual
-- Electron CSP + will-navigate + 权限拒绝
-- SSRF 防护（私有 IP + 符号链接穿越 + OpenAPI loader）
-- 速率限制（API + WebSocket 双层）
-- 数据库级联删除 + 复合索引
-
-**桌面端新增功能**
-- 工具确认内部弹窗（ToolConfirmDialog，替代 native dialog）
-- ErrorBoundary 全局错误边界
-- LLM 指数退避重试（尊重 Retry-After）
-- RAGStore 持久化 + 中文 bigram 分词
-- CI/CD 流水线（GitHub Actions）
-- 58 个单元测试（vitest）
-
-**桌面端修复**
-- 协作画布：AgentNode 注册 + 历史事件绕过节流
-- 前端性能：Dashboard/ChatPage/TasksPage memo 优化
-- 编排引擎：错误传播 + DAG 死锁改进
-- 记忆池：LIKE 转义 + 过期清理 + ID 碰撞消除
-- 错误处理：silent catch → 日志 + toast 反馈
-- 无障碍：7 个页面 ARIA 属性
-
-**移动端全面改进**
-- 新增 RunPage：任务执行详情页（实时事件流、工具调用、取消操作）
-- ChatPage 改进：直接 Agent 对话 + Agent 选择器 + 错误反馈
-- API 服务：全面类型化 + 15s 超时 + 用户友好错误信息
-- 连接服务：事件发射器 + 指数退避重连 + 连接质量监控
-- DashboardPage：任务卡片可点击 + REST API 刷新 + 连接质量显示
-- SettingsPage：Ping 测试 + 连接历史 + 调试信息 + 中继认证
-- ErrorBoundary 全局错误边界
-- Store：事件订阅 + 类型化选择器 + 级联删除
-
-**安全加固（两轮深度审查，16 项高危修复）**
-- 命令注入防护：Shell 元字符检测 + 词边界黑名单 + MCP 命令审计
-- API Key AES-256-GCM 加密存储
-- WebSocket Token 认证 + timingSafeEqual
-- Electron CSP + will-navigate + 权限拒绝
-- SSRF 防护（私有 IP + 符号链接穿越 + OpenAPI loader）
-- 速率限制（API + WebSocket 双层）
-- 数据库级联删除 + 复合索引
-
-**新增功能**
-- 工具确认内部弹窗（ToolConfirmDialog，替代 native dialog）
-- ErrorBoundary 全局错误边界
-- LLM 指数退避重试（尊重 Retry-After）
-- RAGStore 持久化 + 中文 bigram 分词
-- CI/CD 流水线（GitHub Actions）
-- 58 个单元测试（vitest）
-
-**修复**
-- 协作画布：AgentNode 注册 + 历史事件绕过节流
-- 前端性能：Dashboard/ChatPage/TasksPage memo 优化
-- 编排引擎：错误传播 + DAG 死锁改进
-- 记忆池：LIKE 转义 + 过期清理 + ID 碰撞消除
-- 错误处理：silent catch → 日志 + toast 反馈
-- 无障碍：7 个页面 ARIA 属性
-
-### v0.4.2 (2026-08-10) — 测试与依赖清理
-- 新增 vitest 单元测试框架
-- 新增 `security.ts` 单元测试（shell 元字符检测、命令黑白名单、边界情况）
-- 新增 `retry.ts` 单元测试（重试逻辑、Retry-After、AbortSignal）
-- 移除未使用的 `p-limit` 依赖
-- 更新架构文档：补充记忆池系统与 plan/adversarial 编排模式说明
-
-### v0.4.1 (2026-08-10) — 深色模式修复
-- 修复硬编码颜色，统一使用语义化 token
-- 深色模式完全兼容
-
-### v0.4.0 (2026-08-10) — 双记忆池系统
-- 显式记忆池: 长期持久化，导航栏可见
-- 隐式记忆池: 项目/Run 作用域，多 Agent 共享
-- 记忆池工具 + API
-
-### v0.3.0 (2026-08-10) — 多 Agent 架构
-- Plan-Execute-Reflect 三阶段编排
-- Coder vs Tester 对抗迭代
-- RAG 知识库 + Function Calling 适配层
-- 容器化部署 (Docker + Nginx)
-
-### v0.2.0 (2026-08-09) — 性能优化
-
-**前端**:
-- React.lazy 路由懒加载（首屏 ↓55%）
-- reactflow 动态加载（RunPage ↓92%）
-- Vite vendor chunk 拆分
-- 移除死依赖 -94 包
-
-**Electron**:
-- GPU 光栅化 + 零拷贝
-- 后台渲染节流
-
-**引擎**:
-- Auto-Compact 阈值 0.5→0.95（参考 OpenCode）
-- 工具循环恢复（参考 OpenClaw）
-- Steering 消息注入（参考 OpenClaw）
-- 预编译 SQL 语句（参考 OpenCode sqlc）
-
-### v0.1.0 — 初始版本
-
-- 内置 Agent + 本地 harness 接入
-- 多 Agent 协作（single/workflow/chat）
-- 实时监控 + 日志/时间线/画布
-- 分层记忆 + Skill 系统
-- Electron 桌面应用 + 自动更新
-
----
+完整版本历史见 **[CHANGELOG.md](../../CHANGELOG.md)**（v0.1.0 → v0.7.2，含历次发布说明）。
 
 ## 移动端
 
@@ -792,42 +597,41 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 ```
 ┌─────────────────────────────────────────────┐
 │  手机端 (Expo + React Native)               │
-│  ├─ DashboardPage: 看板 + 设备发现          │
+│  ├─ LoginPage: 登录/注册（应用门禁）        │
+│  ├─ DashboardPage: 看板 + 任务统计          │
 │  ├─ TasksPage: 任务管理 + 创建              │
-│  ├─ ChatPage: Agent 直接对话                │
+│  ├─ ChatPage: 会话列表 + 实时消息 + 连接状态 │
+│  ├─ ContactsPage: 联系人（用户 + Agent）    │
 │  ├─ RunPage: 任务执行详情 (实时事件流)       │
-│  ├─ AgentsPage: Agent CRUD                  │
-│  └─ SettingsPage: 连接管理 + 调试           │
+│  ├─ AgentsPage: Agent 管理                  │
+│  └─ SettingsPage: 账号/服务器/关于          │
 ├─────────────────────────────────────────────┤
 │  Services                                    │
-│  ├─ connection.ts: WebSocket + 事件发射器    │
-│  ├─ api.ts: REST API (类型化 + 超时)        │
-│  └─ discovery.ts: mDNS 设备发现             │
+│  ├─ connection.ts: 自动连云端 + 事件发射器   │
+│  ├─ api.ts: REST API（类型化 + 解包信封）    │
+│  └─ wslink.ts: 原生 WebSocket 事件流        │
 ├─────────────────────────────────────────────┤
 │  Store (Zustand)                             │
-│  ├─ deviceStore: 连接状态 + 质量 + 历史     │
+│  ├─ authGateStore: 登录门禁（in/out/loading）│
+│  ├─ chatTargetStore: 联系人→聊天跳转        │
+│  ├─ deviceStore: 连接状态 + 当前服务器       │
 │  └─ taskStore: 任务/运行/Agent + 事件订阅   │
 └─────────────────────────────────────────────┘
 ```
 
-### 通信协议
+### 连接模式（仅云端）
 
-| 方式 | 用途 | 说明 |
-|------|------|------|
-| mDNS | 设备发现 | 自动发现同网段桌面端 |
-| WebSocket | 实时通信 | socket.io，支持局域网和云端中继 |
-| REST API | 数据查询 | HTTP 请求桌面端 API |
+- 应用启动自动直连自用云端服务器（`http://SERVER_IP_REDACTED:8787`），无手动连接配置
+- 通信：REST API（Bearer 认证）+ 原生 WebSocket（`/ws`，实时事件流）
+- 登录门禁：未登录进登录页，登录后进主界面；登录 token 持久化（AsyncStorage）
+- 网络安全配置：仅放行自用服务器明文 HTTP（Android 9+），其余强制 HTTPS
+- 注：域名 `DOMAIN_REDACTED` HTTPS 受阿里云备案拦截，待备案合规后切换
 
-### 连接模式
+### 实时与 IM
 
-1. **局域网直连** — 同一 WiFi 下直接连接桌面端 IP
-2. **云端中继** — 通过阿里云服务器中继，支持跨网络
-
-### 连接质量监控
-
-- 延迟采样（10 次 ping/pong）
-- 等级：excellent (<50ms) / good (<150ms) / fair (<500ms) / poor (≥500ms)
-- 自动重连（指数退避 + 抖动，最大 10 次）
+- 用户-用户 1:1 会话、Agent 对话、多 Agent 群聊（conversations API + WS 实时推送）
+- 联系人页：好友（注册用户）+ Agent 分组、搜索、点击开聊
+- 聊天页顶部连接状态条（已连接云端/未连接/重连中）
 
 ### 构建 APK
 
