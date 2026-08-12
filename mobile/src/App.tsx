@@ -4,7 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 // Pages
 import DashboardPage from "./pages/DashboardPage";
@@ -17,8 +17,8 @@ import RunPage from "./pages/RunPage";
 // Error boundary
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
-// State management
-import { useDeviceStore } from "./store/deviceStore";
+// Theme
+import { colors } from "./theme";
 
 /** 根导航栈参数表 */
 export type RootStackParamList = {
@@ -29,58 +29,39 @@ export type RootStackParamList = {
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator();
 
+type IconName = keyof typeof Ionicons.glyphMap;
+
+/** Tab 图标（Ionicons，聚焦/非聚焦两种形态） */
+const TAB_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
+  Dashboard: { active: "grid", inactive: "grid-outline" },
+  Tasks: { active: "document-text", inactive: "document-text-outline" },
+  Chat: { active: "chatbubble-ellipses", inactive: "chatbubble-ellipses-outline" },
+  Agents: { active: "hardware-chip", inactive: "hardware-chip-outline" },
+  Settings: { active: "settings", inactive: "settings-outline" },
+};
+
 // 底部标签导航
 function MainTabs() {
   return (
     <Tab.Navigator
-      screenOptions={{
-        tabBarActiveTintColor: "#10b981",
-        tabBarInactiveTintColor: "#6b7280",
-        headerStyle: { backgroundColor: "#111827" },
-        headerTintColor: "#fff",
-        tabBarStyle: { backgroundColor: "#111827", borderTopColor: "#374151" },
-      }}
+      screenOptions={({ route }) => ({
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textFaint,
+        headerStyle: { backgroundColor: colors.bg },
+        headerTintColor: colors.text,
+        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
+        tabBarIcon: ({ color, focused }) => {
+          const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
+          return <Ionicons name={focused ? icon.active : icon.inactive} size={22} color={color} />;
+        },
+      })}
     >
-      <Tab.Screen
-        name="Dashboard"
-        component={DashboardPage}
-        options={{
-          title: "看板",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>📊</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="Tasks"
-        component={TasksPage}
-        options={{
-          title: "任务",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>📋</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="Chat"
-        component={ChatPage}
-        options={{
-          title: "聊天",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>💬</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="Agents"
-        component={AgentsPage}
-        options={{
-          title: "Agent",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>🤖</Text>,
-        }}
-      />
-      <Tab.Screen
-        name="Settings"
-        component={SettingsPage}
-        options={{
-          title: "设置",
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 20 }}>⚙️</Text>,
-        }}
-      />
+      <Tab.Screen name="Dashboard" component={DashboardPage} options={{ title: "看板" }} />
+      <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务" }} />
+      <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天" }} />
+      <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent" }} />
+      <Tab.Screen name="Settings" component={SettingsPage} options={{ title: "设置" }} />
     </Tab.Navigator>
   );
 }
@@ -88,43 +69,43 @@ function MainTabs() {
 export default function App() {
   return (
     <ErrorBoundary>
-    <SafeAreaProvider>
-      <NavigationContainer
-        theme={{
-          dark: true,
-          colors: {
-            primary: "#10b981",
-            background: "#111827",
-            card: "#1f2937",
-            text: "#ffffff",
-            border: "#374151",
-            notification: "#10b981",
-          },
-          fonts: {
-            regular: { fontFamily: "System", fontWeight: "400" },
-            medium: { fontFamily: "System", fontWeight: "500" },
-            bold: { fontFamily: "System", fontWeight: "700" },
-            heavy: { fontFamily: "System", fontWeight: "900" },
-          },
-        }}
-      >
-        <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Main" component={MainTabs} />
-          <Stack.Screen
-            name="Run"
-            component={RunPage}
-            options={{
-              headerShown: true,
-              title: "运行详情",
-              headerStyle: { backgroundColor: "#111827" },
-              headerTintColor: "#fff",
-              headerBackTitle: "返回",
-            }}
-          />
-        </Stack.Navigator>
-        <StatusBar style="light" />
-      </NavigationContainer>
-    </SafeAreaProvider>
+      <SafeAreaProvider>
+        <NavigationContainer
+          theme={{
+            dark: true,
+            colors: {
+              primary: colors.primary,
+              background: colors.bg,
+              card: colors.surface,
+              text: colors.text,
+              border: colors.border,
+              notification: colors.primary,
+            },
+            fonts: {
+              regular: { fontFamily: "System", fontWeight: "400" },
+              medium: { fontFamily: "System", fontWeight: "500" },
+              bold: { fontFamily: "System", fontWeight: "700" },
+              heavy: { fontFamily: "System", fontWeight: "900" },
+            },
+          }}
+        >
+          <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen
+              name="Run"
+              component={RunPage}
+              options={{
+                headerShown: true,
+                title: "运行详情",
+                headerStyle: { backgroundColor: colors.bg },
+                headerTintColor: colors.text,
+                headerBackTitle: "返回",
+              }}
+            />
+          </Stack.Navigator>
+          <StatusBar style="light" />
+        </NavigationContainer>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
