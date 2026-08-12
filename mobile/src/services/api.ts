@@ -103,6 +103,14 @@ export interface CreateChatInput {
   prompt?: string;
 }
 
+/** 用户（创建用户-用户会话选人） */
+export interface UserInfo {
+  id: string;
+  username: string;
+  displayName?: string;
+  role: string;
+}
+
 /** 会话（企业级 IM） */
 export interface Conversation {
   id: string;
@@ -461,6 +469,13 @@ class ApiService {
   /** 发送群聊消息（fire-and-forget，回复通过 WS 实时推送） */
   async sendChatMessage(runId: string, content: string): Promise<ApiResponse<{ sent: boolean }>> {
     return this.request<{ sent: boolean }>("POST", `/api/chat/${runId}/messages`, { content });
+  }
+
+  // ========== 用户 API ==========
+
+  /** 用户列表（用户-用户会话选人） */
+  async getUsers(): Promise<ApiResponse<UserInfo[]>> {
+    return this.request<UserInfo[]>("GET", "/api/auth/users");
   }
 
   // ========== Conversation API（企业级会话） ==========

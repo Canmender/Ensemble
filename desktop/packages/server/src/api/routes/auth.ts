@@ -61,6 +61,14 @@ export function authRouter(ctx: AppContext): Router {
     ok(res, user);
   });
 
+  /** 用户列表（创建用户-用户会话选人；不含敏感信息） */
+  r.get("/users", (req, res) => {
+    const rows = ctx.db
+      .prepare("SELECT id, username, display_name, role FROM users ORDER BY created_at ASC")
+      .all() as Array<Record<string, unknown>>;
+    ok(res, rows.map((u) => ({ id: String(u.id), username: String(u.username), displayName: u.display_name as string | undefined, role: String(u.role) })));
+  });
+
   /** 登出：删除会话 */
   r.post("/logout", (req, res) => {
     const token = bearerToken(req.headers.authorization);

@@ -37,10 +37,12 @@ export default function ChatPage() {
   const { agents } = useTaskStore();
   const { connectionState } = useDeviceStore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [users, setUsers] = useState<import("../services/api").UserInfo[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState("");
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [showAgentSelector, setShowAgentSelector] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -50,13 +52,16 @@ export default function ChatPage() {
   const isConnected = connectionState === "connected";
   const selectedConv = conversations.find((c) => c.id === selectedConvId);
 
-  // 加载会话列表
+  // 加载会话列表 + 用户列表（用户-用户 IM）
   const loadConversations = useCallback(async () => {
     const res = await api.getConversations();
     if (res.data) setConversations(res.data);
   }, []);
   useEffect(() => {
     void loadConversations();
+    void api.getUsers().then((r) => {
+      if (r.data) setUsers(r.data);
+    });
   }, [loadConversations]);
 
   // 选中会话：记录关联 run（供 WS 匹配）、加载消息、标记已读
@@ -126,13 +131,14 @@ export default function ChatPage() {
       return;
     }
 
-    if (!selectedAgentId) return;
+    if (!selectedAgentId && !selectedUserId) return;
     setIsSending(true);
     setSendError(null);
     try {
+      const targetId = selectedUserId ?? selectedAgentId!;
       const res = await api.createConversation({
         type: "direct",
-        participantIds: [selectedAgentId],
+        participantIds: [targetId],
       });
       if (res.data) {
         await api.sendConversationMessage(res.data.id, text);
@@ -148,7 +154,7 @@ export default function ChatPage() {
     } finally {
       setIsSending(false);
     }
-  }, [inputText, selectedConvId, selectedAgentId, isConnected, isSending, loadConversations]);
+  }, [inputText, selectedConvId, selectedAgentId, selectedUserId, isConnected, isSending, loadConversations]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -164,6 +170,14 @@ export default function ChatPage() {
 
   const handleSelectAgent = (agent: AgentConfig) => {
     setSelectedAgentId(agent.id);
+    setSelectedUserId(null);
+    setShowAgentSelector(false);
+    setSelectedConvId(null);
+  };
+
+  const handleSelectUser = (u: { id: string; username: string }) => {
+    setSelectedUserId(u.id);
+    setSelectedAgentId(null);
     setShowAgentSelector(false);
     setSelectedConvId(null);
   };
@@ -186,7 +200,8 @@ export default function ChatPage() {
   };
 
   const selectedAgent = agents.find((a) => a.id === selectedAgentId);
-  const canSend = inputText.trim() && isConnected && !isSending && (!!selectedConvId || !!selectedAgentId);
+  const selectedUser = users.find((u) => u.id === selectedUserId);
+  const canSend = inputText.trim() && isConnected && !isSending && (!!selectedConvId || !!selectedAgentId || !!selectedUserId);
 
   return (
     <KeyboardAvoidingView
@@ -234,12 +249,12 @@ export default function ChatPage() {
           <View style={styles.agentBar}>
             <TouchableOpacity style={styles.agentPicker} onPress={() => setShowAgentSelector(true)} activeOpacity={0.7}>
               <Ionicons
-                name={selectedAgent?.kind === "builtin" ? "flash" : "terminal"}
+                name={selectedUserId ? "person" : selectedAgent?.kind === "builtin" ? "flash" : "terminal"}
                 size={16}
                 color={colors.primary}
               />
               <Text style={styles.agentPickerText} numberOfLines={1}>
-                {selectedAgent ? selectedAgent.name : "选择 Agent"}
+                {selectedUserId ? (selectedUser?.displayName || selectedUser?.username || "用户") : selectedAgent ? selectedAgent.name : "选择 Agent 或用户"}
               </Text>
               <Ionicons name="chevron-down" size={14} color={colors.textFaint} />
             </TouchableOpacity>
@@ -267,13 +282,13 @@ export default function ChatPage() {
         <View style={styles.newConvWrap}>
           <EmptyState
             icon={<Ionicons name="chatbubbles-outline" size={28} color={colors.textFaint} />}
-            title={selectedAgentId ? `与 ${selectedAgent?.name} 对话` : "开始新对话"}
+            title={selectedAgentId ? `与 ${selectedAgent?.name} 对话` : selectedUserId ? `与 ${selectedUser?.displayName || selectedUser?.username} 对话` : "开始新对话"}
             subtitle={
-              selectedAgentId
+              selectedAgentId || selectedUserId
                 ? "输入消息，回车发送"
-                : agents.length > 0
-                  ? "选择一个 Agent 开始对话"
-                  : "请先在桌面端创建 Agent"
+                : agents.length > 0 || users.length > 0
+                  ? "选择 Agent 或用户开始对话"
+                  : "暂无对话对象"
             }
           />
         </View>
@@ -294,7 +309,7 @@ export default function ChatPage() {
       <View style={styles.inputBar}>
         <TextInput
           style={styles.input}
-          placeholder={selectedConvId ? "输入消息…" : selectedAgentId ? "输入消息…" : "请先选择 Agent"}
+          placeholder={selectedConvId ? "输入消息…" : (selectedAgentId || selectedUserId) ? "输入消息…" : "请先选择 Agent 或用户"}
           placeholderTextColor={colors.textFaint}
           value={inputText}
           onChangeText={(t) => {
@@ -321,31 +336,60 @@ export default function ChatPage() {
         )}
       </View>
 
-      {/* Agent 选择器 */}
+      {/* 选择对话对象（用户 + Agent） */}
       {showAgentSelector && (
         <View style={styles.overlay}>
           <View style={styles.sheet}>
             <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>选择 Agent</Text>
+              <Text style={styles.sheetTitle}>选择对话对象</Text>
               <TouchableOpacity onPress={() => setShowAgentSelector(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
-            {agents.filter((a) => a.enabled).length === 0 ? (
-              <EmptyState title="暂无可用 Agent" subtitle="请先在桌面端配置" />
-            ) : (
-              <FlatList
-                data={agents.filter((a) => a.enabled)}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
+            <FlatList
+              data={[
+                ...users.map((u) => ({
+                  key: `user-${u.id}`,
+                  kind: "user" as const,
+                  id: u.id,
+                  name: u.displayName || u.username,
+                  subtitle: "用户",
+                })),
+                ...agents
+                  .filter((a) => a.enabled)
+                  .map((a) => ({
+                    key: `agent-${a.id}`,
+                    kind: "agent" as const,
+                    id: a.id,
+                    name: a.name,
+                    subtitle: a.model || "Agent",
+                    agentKind: a.kind,
+                  })),
+              ]}
+              keyExtractor={(item) => item.key}
+              renderItem={({ item }) => {
+                const selected = item.kind === "user" ? selectedUserId : selectedAgentId;
+                return (
                   <TouchableOpacity
-                    style={[styles.agentItem, selectedAgentId === item.id && styles.agentItemActive]}
-                    onPress={() => handleSelectAgent(item)}
+                    style={[styles.agentItem, selected === item.id && styles.agentItemActive]}
+                    onPress={() =>
+                      item.kind === "user"
+                        ? handleSelectUser({ id: item.id, username: item.name })
+                        : handleSelectAgent(
+                            agents.find((a) => a.id === item.id) as AgentConfig,
+                          )
+                    }
                     activeOpacity={0.7}
                   >
                     <View style={styles.agentIcon}>
                       <Ionicons
-                        name={item.kind === "builtin" ? "flash" : "terminal"}
+                        name={
+                          item.kind === "user"
+                            ? "person"
+                            : item.agentKind === "builtin"
+                              ? "flash"
+                              : "terminal"
+                        }
                         size={20}
                         color={colors.primary}
                       />
@@ -353,16 +397,16 @@ export default function ChatPage() {
                     <View style={styles.agentInfo}>
                       <Text style={styles.agentName}>{item.name}</Text>
                       <Text style={styles.agentModel} numberOfLines={1}>
-                        {item.model || "未配置模型"}
+                        {item.subtitle}
                       </Text>
                     </View>
-                    {selectedAgentId === item.id && (
+                    {selected === item.id && (
                       <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
                     )}
                   </TouchableOpacity>
-                )}
-              />
-            )}
+                );
+              }}
+            />
           </View>
         </View>
       )}
