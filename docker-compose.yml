@@ -48,7 +48,8 @@ services:
       - LOG_LEVEL=info
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
+      # node:20-slim 无 curl，用 node 内置 fetch 探活
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8888/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 3s
       retries: 3
