@@ -23,14 +23,26 @@ RUN pnpm --filter @ensemble/shared build \
   && pnpm --filter @ensemble/server build \
   && pnpm --filter @ensemble/web build
 
-# 提取 server 运行时（含 workspace 依赖解析，仅生产依赖；pnpm v10 需 --legacy）
-RUN pnpm --filter @ensemble/server deploy --prod --legacy /app/deploy
-
 # ── 运行阶段 ──
 FROM node:20-slim
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /app/deploy ./server
+
+# server 运行时（完整 dist + workspace 根 node_modules）
+COPY --from=build /app/packages/server/dist ./dist
+COPY --from=build /app/packages/server/package.json ./package.json
+
+# pnpm workspace 依赖（根 node_modules，含 .pnpm store 与包 link）
+COPY --from=build /app/node_modules ./node_modules
+
+# 修复 workspace 链接：@ensemble/shared → 实体（symlink 目标须存在）
+COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+RUN mkdir -p node_modules/@ensemble \
+  && ln -sfn ../../packages/shared node_modules/@ensemble/shared
+
+# 前端静态资源（headless 托管）
 COPY --from=build /app/packages/web/dist ./web-dist
+
 EXPOSE 8787
-CMD ["node", "server/dist/index.js"]
+CMD ["node", "dist/index.js"]
