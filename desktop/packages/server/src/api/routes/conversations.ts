@@ -6,6 +6,21 @@ import type { Conversation } from "@ensemble/shared";
 
 const now = () => new Date().toISOString();
 
+/** 用户-用户会话（runId = conv id，无 agent run） */
+const isUserConv = (conv: Conversation): boolean => conv.runId.startsWith("conv_");
+
+/**
+ * 会话访问控制：
+ * - 用户-用户会话：仅归属用户与参与者可读写（多用户隔离）
+ * - Agent 会话：归属用户或共享会话（user_id 为空）可访问
+ */
+function canAccessConv(conv: Conversation, userId?: string): boolean {
+  if (isUserConv(conv)) {
+    return !!userId && (conv.userId === userId || conv.participantIds.includes(userId));
+  }
+  return !conv.userId || conv.userId === userId;
+}
+
 /**
  * 企业级会话 API（conversations）：
  * - direct：用户与单个 agent 的 1:1 对话（chat run + 1 participant）
@@ -98,12 +113,13 @@ export function conversationsRouter(ctx: AppContext): Router {
     asyncH(async (req, res) => {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
 
       const before = typeof req.query.before === "string" ? req.query.before : undefined;
       const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 200);
 
       // 用户-用户会话（runId = conv id）：消息双方共享，不做 userId 过滤（否则对方看不到自己的消息）
-      const all = conv.runId.startsWith("conv_")
+      const all = isUserConv(conv)
         ? ctx.store.listChatMessages(conv.runId)
         : ctx.store.listChatMessages(conv.runId, req.user?.id);
       const filtered = before ? all.filter((m) => m.ts < before) : all;
@@ -117,13 +133,14 @@ export function conversationsRouter(ctx: AppContext): Router {
     asyncH(async (req, res) => {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       const content = (req.body as { content?: unknown })?.content;
       if (typeof content !== "string" || !content.trim()) {
         return fail(res, new Error("content required"), 400);
       }
 
-      // 用户-用户会话（无 run）：消息落库 + 实时推送参与者用户 + 未读
-      if (conv.runId.startsWith("conv_")) {
+      // 用户-用户会话（无 run）：消息落库 + 实时推送参与者用户 + per-user 未读
+      if (isUserConv(conv)) {
         const senderId = req.user?.id ?? "user";
         ctx.store.createChatMessage({
           id: newId("msg"),
@@ -147,7 +164,7 @@ export function conversationsRouter(ctx: AppContext): Router {
             agentId: senderId,
             content,
           }, conv.runId);
-          ctx.store.incrementUnread(conv.id);
+          ctx.store.incrementUnread(conv.id, pid);
         }
         ok(res, { sent: true });
         return;
@@ -165,13 +182,14 @@ export function conversationsRouter(ctx: AppContext): Router {
     }),
   );
 
-  /** 标记已读（清零未读） */
+  /** 标记已读（清零当前用户未读；agent 会话清共享计数） */
   r.post(
     "/:id/read",
     asyncH(async (req, res) => {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
-      ctx.store.markRead(conv.id);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      ctx.store.markRead(conv.id, isUserConv(conv) ? req.user?.id : undefined);
       ok(res, { read: true });
     }),
   );
@@ -182,6 +200,7 @@ export function conversationsRouter(ctx: AppContext): Router {
     asyncH(async (req, res) => {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       const archived = (req.body as { archived?: boolean })?.archived !== false;
       ctx.store.setConversationArchived(conv.id, archived);
       ok(res, { archived });
@@ -194,6 +213,7 @@ export function conversationsRouter(ctx: AppContext): Router {
     asyncH(async (req, res) => {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       ctx.store.deleteConversation(conv.id);
       ok(res, { deleted: conv.id });
     }),

@@ -113,6 +113,16 @@ CREATE TABLE IF NOT EXISTS conversations (
   updated_at      TEXT NOT NULL
 );
 
+-- 用户-用户会话的 per-user 未读（多用户 IM：每个参与者各自计数）
+CREATE TABLE IF NOT EXISTS conversation_reads (
+  conv_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  unread  INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (conv_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_conv_reads_user ON conversation_reads(user_id);
+
 CREATE TABLE IF NOT EXISTS workflows (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,

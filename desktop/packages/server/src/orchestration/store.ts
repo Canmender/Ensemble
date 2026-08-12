@@ -59,6 +59,8 @@ export class Store {
     updateConvMeta: ReturnType<DatabaseSync["prepare"]>;
     incrementUnread: ReturnType<DatabaseSync["prepare"]>;
     markRead: ReturnType<DatabaseSync["prepare"]>;
+    upsertUnread: ReturnType<DatabaseSync["prepare"]>;
+    markReadUser: ReturnType<DatabaseSync["prepare"]>;
     setConversationArchived: ReturnType<DatabaseSync["prepare"]>;
   };
 
@@ -100,6 +102,8 @@ export class Store {
       updateConvMeta: db.prepare("UPDATE conversations SET last_message = ?, last_message_ts = ?, updated_at = ? WHERE id = ?"),
       incrementUnread: db.prepare("UPDATE conversations SET unread = unread + 1, updated_at = ? WHERE id = ?"),
       markRead: db.prepare("UPDATE conversations SET unread = 0 WHERE id = ?"),
+      upsertUnread: db.prepare("INSERT INTO conversation_reads (conv_id, user_id, unread) VALUES (?, ?, 1) ON CONFLICT(conv_id, user_id) DO UPDATE SET unread = unread + 1"),
+      markReadUser: db.prepare("UPDATE conversation_reads SET unread = 0 WHERE conv_id = ? AND user_id = ?"),
     };
   }
 
@@ -368,8 +372,14 @@ export class Store {
     const archived = opts?.archived ?? false;
     const rows = userId
       ? (this.db
-          .prepare("SELECT * FROM conversations WHERE archived = ? AND (user_id = ? OR user_id = '' OR participant_ids LIKE ?) ORDER BY updated_at DESC")
-          .all(archived ? 1 : 0, userId, `%"${userId}"%`) as any[])
+          .prepare(`
+            SELECT c.*, COALESCE(cr.unread, c.unread, 0) AS unread
+            FROM conversations c
+            LEFT JOIN conversation_reads cr ON cr.conv_id = c.id AND cr.user_id = ?
+            WHERE c.archived = ? AND (c.user_id = ? OR c.user_id = '' OR c.participant_ids LIKE ?)
+            ORDER BY c.updated_at DESC
+          `)
+          .all(userId, archived ? 1 : 0, userId, `%"${userId}"%`) as any[])
       : (this.db.prepare("SELECT * FROM conversations WHERE archived = ? ORDER BY updated_at DESC").all(archived ? 1 : 0) as any[]);
     return rows.map(rowToConversation);
   }
@@ -383,16 +393,30 @@ export class Store {
     this.stmts.updateConvMeta.run(lastMessage, lastMessageTs, new Date().toISOString(), id);
   }
 
-  incrementUnread(id: string): void {
-    this.stmts.incrementUnread.run(new Date().toISOString(), id);
+  /**
+   * 未读 +1。userId 提供时计入该用户的 conversation_reads（用户-用户会话 per-user 未读）；
+   * 缺省回退 conversations.unread 共享计数（agent/群聊会话按归属）。
+   */
+  incrementUnread(id: string, userId?: string): void {
+    if (userId) {
+      this.stmts.upsertUnread.run(id, userId);
+    } else {
+      this.stmts.incrementUnread.run(new Date().toISOString(), id);
+    }
   }
 
-  markRead(id: string): void {
-    this.stmts.markRead.run(id);
+  /** 清零未读。userId 提供时只清该用户（per-user），缺省清共享计数。 */
+  markRead(id: string, userId?: string): void {
+    if (userId) {
+      this.stmts.markReadUser.run(id, userId);
+    } else {
+      this.stmts.markRead.run(id);
+    }
   }
 
   deleteConversation(id: string): void {
     this.stmts.deleteConversation.run(id);
+    this.db.prepare("DELETE FROM conversation_reads WHERE conv_id = ?").run(id);
   }
 }
 

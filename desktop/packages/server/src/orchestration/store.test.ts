@@ -327,6 +327,24 @@ describe("Store conversations", () => {
     expect(store.getConversation("c1")?.unread).toBe(0);
   });
 
+  it("tracks per-user unread independently (user-to-user conv)", () => {
+    const { store } = setup();
+    store.createConversation({ ...conv("c1", "conv_c1"), userId: "u1", participantIds: ["u2"] });
+
+    store.incrementUnread("c1", "u2");
+    store.incrementUnread("c1", "u2");
+    store.incrementUnread("c1", "u1");
+
+    // 双方各自计数：u2 = 2，u1 = 1
+    expect(store.listConversations("u2").find((x) => x.id === "c1")?.unread).toBe(2);
+    expect(store.listConversations("u1").find((x) => x.id === "c1")?.unread).toBe(1);
+
+    // u2 已读只清 u2，不影响 u1
+    store.markRead("c1", "u2");
+    expect(store.listConversations("u2").find((x) => x.id === "c1")?.unread).toBe(0);
+    expect(store.listConversations("u1").find((x) => x.id === "c1")?.unread).toBe(1);
+  });
+
   it("looks up conversation by run id", () => {
     const { store } = setup();
     store.createConversation(conv("c1", "run-xyz"));
