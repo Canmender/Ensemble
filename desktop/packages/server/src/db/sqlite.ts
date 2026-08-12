@@ -108,6 +108,7 @@ CREATE TABLE IF NOT EXISTS conversations (
   last_message    TEXT,
   last_message_ts TEXT,
   unread          INTEGER NOT NULL DEFAULT 0,
+  archived        INTEGER NOT NULL DEFAULT 0,
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
 );
@@ -139,6 +140,11 @@ export function openDb(dbPath: string): DatabaseSync {
 /** 旧库迁移：CREATE TABLE IF NOT EXISTS 不添加列，业务表缺失 user_id 时补齐 */
 function migrateUserColumns(db: DatabaseSync): void {
   const tables = ["tasks", "runs", "jobs", "run_events", "chat_messages"];
+  // conversations.archived（P3 归档）
+  const convCols = db.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>;
+  if (!convCols.some((c) => c.name === "archived")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+  }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
     if (!cols.some((c) => c.name === "user_id")) {
