@@ -23,8 +23,8 @@ RUN pnpm --filter @ensemble/shared build \
   && pnpm --filter @ensemble/server build \
   && pnpm --filter @ensemble/web build
 
-# 提取 server 运行时（含 workspace 依赖解析，仅生产依赖）
-RUN pnpm --filter @ensemble/server deploy --prod /app/deploy
+# 提取 server 运行时（含 workspace 依赖解析，仅生产依赖；pnpm v10 需 --legacy）
+RUN pnpm --filter @ensemble/server deploy --prod --legacy /app/deploy
 
 # ── 运行阶段 ──
 FROM node:20-slim
