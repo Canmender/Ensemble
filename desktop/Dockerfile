@@ -29,8 +29,8 @@ FROM node:20-slim
 ENV NODE_ENV=production
 WORKDIR /app
 
-# server 运行时（完整 dist + workspace 根 node_modules）
-COPY --from=build /app/packages/server/dist ./dist
+# server 源码（tsx 运行时：Node ESM 不解析无扩展名相对导入，tsx 处理）
+COPY --from=build /app/packages/server/src ./src
 COPY --from=build /app/packages/server/package.json ./package.json
 
 # pnpm workspace 依赖（根 node_modules，含 .pnpm store 与包 link）
@@ -45,5 +45,8 @@ RUN mkdir -p node_modules/@ensemble \
 # 前端静态资源（headless 托管）
 COPY --from=build /app/packages/web/dist ./web-dist
 
+# tsx 运行时（处理 ESM 无扩展名导入；走中文镜像）
+RUN npm config set registry https://registry.npmmirror.com && npm install -g tsx
+
 EXPOSE 8787
-CMD ["node", "dist/index.js"]
+CMD ["tsx", "src/index.ts"]
