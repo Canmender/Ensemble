@@ -368,8 +368,8 @@ export class Store {
     const archived = opts?.archived ?? false;
     const rows = userId
       ? (this.db
-          .prepare("SELECT * FROM conversations WHERE (user_id = ? OR user_id = '') AND archived = ? ORDER BY updated_at DESC")
-          .all(userId, archived ? 1 : 0) as any[])
+          .prepare("SELECT * FROM conversations WHERE archived = ? AND (user_id = ? OR user_id = '' OR participant_ids LIKE ?) ORDER BY updated_at DESC")
+          .all(archived ? 1 : 0, userId, `%"${userId}"%`) as any[])
       : (this.db.prepare("SELECT * FROM conversations WHERE archived = ? ORDER BY updated_at DESC").all(archived ? 1 : 0) as any[]);
     return rows.map(rowToConversation);
   }
