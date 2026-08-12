@@ -1,4 +1,5 @@
 import React, { useEffect } from "react";
+import { View, ActivityIndicator } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
@@ -6,6 +7,8 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { connectionService } from "./services/connection";
+import { api } from "./services/api";
+import { useAuthGate } from "./store/authGateStore";
 
 // Pages
 import DashboardPage from "./pages/DashboardPage";
@@ -15,6 +18,7 @@ import ContactsPage from "./pages/ContactsPage";
 import AgentsPage from "./pages/AgentsPage";
 import SettingsPage from "./pages/SettingsPage";
 import RunPage from "./pages/RunPage";
+import LoginPage from "./pages/LoginPage";
 
 // Error boundary
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -70,50 +74,83 @@ function MainTabs() {
   );
 }
 
+/** 已登录主界面 */
+function MainApp() {
+  return (
+    <NavigationContainer
+      theme={{
+        dark: false,
+        colors: {
+          primary: colors.primary,
+          background: colors.bg,
+          card: colors.surface,
+          text: colors.text,
+          border: colors.border,
+          notification: colors.primary,
+        },
+        fonts: {
+          regular: { fontFamily: "System", fontWeight: "400" },
+          medium: { fontFamily: "System", fontWeight: "500" },
+          bold: { fontFamily: "System", fontWeight: "700" },
+          heavy: { fontFamily: "System", fontWeight: "900" },
+        },
+      }}
+    >
+      <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Main" component={MainTabs} />
+        <Stack.Screen
+          name="Run"
+          component={RunPage}
+          options={{
+            headerShown: true,
+            title: "运行详情",
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerBackTitle: "返回",
+          }}
+        />
+      </Stack.Navigator>
+      <StatusBar style="dark" />
+    </NavigationContainer>
+  );
+}
+
+/** 启动加载屏 */
+function LoadingScreen() {
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}>
+      <View style={{ width: 64, height: 64, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", marginBottom: 16 }}>
+        <Ionicons name="flash" size={30} color="#fff" />
+      </View>
+      <ActivityIndicator color={colors.primary} />
+    </View>
+  );
+}
+
 export default function App() {
-  // 启动即连接自用云端服务器（账号/会话/IM 全走云端；无需手动选择连接模式）
+  const gate = useAuthGate((s) => s.gate);
+  const setGate = useAuthGate((s) => s.setGate);
+
+  // 启动：连接云端 → 读取登录态 → 进登录页或主界面
   useEffect(() => {
-    void connectionService.init().then(() => connectionService.connectToCloud());
-  }, []);
+    (async () => {
+      try {
+        await connectionService.init();
+        await connectionService.connectToCloud();
+        const me = await api.getMe();
+        setGate(me.data ? "in" : "out");
+      } catch {
+        setGate("out");
+      }
+    })();
+  }, [setGate]);
 
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
-        <NavigationContainer
-          theme={{
-            dark: false,
-            colors: {
-              primary: colors.primary,
-              background: colors.bg,
-              card: colors.surface,
-              text: colors.text,
-              border: colors.border,
-              notification: colors.primary,
-            },
-            fonts: {
-              regular: { fontFamily: "System", fontWeight: "400" },
-              medium: { fontFamily: "System", fontWeight: "500" },
-              bold: { fontFamily: "System", fontWeight: "700" },
-              heavy: { fontFamily: "System", fontWeight: "900" },
-            },
-          }}
-        >
-          <Stack.Navigator screenOptions={{ headerShown: false }}>
-            <Stack.Screen name="Main" component={MainTabs} />
-            <Stack.Screen
-              name="Run"
-              component={RunPage}
-              options={{
-                headerShown: true,
-                title: "运行详情",
-                headerStyle: { backgroundColor: colors.bg },
-                headerTintColor: colors.text,
-                headerBackTitle: "返回",
-              }}
-            />
-          </Stack.Navigator>
-          <StatusBar style="dark" />
-        </NavigationContainer>
+        {gate === "loading" && <LoadingScreen />}
+        {gate === "out" && <LoginPage />}
+        {gate === "in" && <MainApp />}
       </SafeAreaProvider>
     </ErrorBoundary>
   );

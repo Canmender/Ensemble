@@ -231,7 +231,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
           <Text style={styles.emptyIcon}>{"\u{1F4CB}"}</Text>
           <Text style={styles.emptyText}>暂无任务</Text>
           <Text style={styles.emptySubtext}>
-            {isConnected ? "点击右上角 + 创建新任务" : "请先连接到桌面端"}
+            {isConnected ? "点击右上角 + 创建新任务" : "请先连接服务器"}
           </Text>
         </View>
       ) : (
