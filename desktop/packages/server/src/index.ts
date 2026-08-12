@@ -12,7 +12,7 @@ async function main(): Promise<void> {
   const app = createApp(ctx, env.staticDir ? { staticDir: env.staticDir } : {});
   const server: Server = createServer(app);
 
-  ctx.hub.attach(server, "/ws");
+  ctx.hub.attach(server, "/ws", (token) => ctx.userStore.getUserBySessionToken(token));
   ctx.hub.onClientMessage = (msg) => {
     if (msg.type === "cancel") {
       logger.info(`cancel requested for run ${msg.runId}`);

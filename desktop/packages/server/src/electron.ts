@@ -50,7 +50,7 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
 
   const app = createApp(ctx, { staticDir });
   const server = createServer(app);
-  ctx.hub.attach(server, "/ws");
+  ctx.hub.attach(server, "/ws", (token) => ctx.userStore.getUserBySessionToken(token));
   ctx.hub.onClientMessage = (msg) => {
     if (msg.type === "cancel") ctx.engine.cancelRun(msg.runId);
     if (msg.type === "steer" && msg.content) ctx.engine.addSteering(msg.runId, msg.content);
