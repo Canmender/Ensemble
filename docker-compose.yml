@@ -23,7 +23,7 @@ services:
       # 公网部署必须设置 ENSEMBLE_API_KEY（机器级凭证 + 禁用 /api/ws-token 防绕过）；
       # 用户通过 Web 登录页注册/登录账号
       - ENSEMBLE_API_KEY=${ENSEMBLE_API_KEY:-}
-      - ENSEMBLE_LAN_HOST=127.0.0.1
+      - ENSEMBLE_LAN_HOST=0.0.0.0
       - ENSEMBLE_AUTO_SYNC_LOCAL=false
     volumes:
       - ensemble-data:/data
