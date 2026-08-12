@@ -17,7 +17,8 @@ export function conversationsRouter(ctx: AppContext): Router {
 
   /** 会话列表（当前用户，含 lastMessage / 未读） */
   r.get("/", (req, res) => {
-    ok(res, ctx.store.listConversations(req.user?.id));
+    const archived = req.query.archived === "1" || req.query.archived === "true";
+    ok(res, ctx.store.listConversations(req.user?.id, { archived }));
   });
 
   /** 创建会话（direct：单 agent；group：多 agent 群聊） */
@@ -111,6 +112,18 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       ctx.store.markRead(conv.id);
       ok(res, { read: true });
+    }),
+  );
+
+  /** 归档 / 恢复会话 */
+  r.post(
+    "/:id/archive",
+    asyncH(async (req, res) => {
+      const conv = ctx.store.getConversation(String(req.params.id));
+      if (!conv) return fail(res, new Error("conversation not found"), 404);
+      const archived = (req.body as { archived?: boolean })?.archived !== false;
+      ctx.store.setConversationArchived(conv.id, archived);
+      ok(res, { archived });
     }),
   );
 

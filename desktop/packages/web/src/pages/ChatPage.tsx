@@ -9,7 +9,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain
+  Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive
 } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
@@ -129,7 +129,17 @@ function CreateGroupDialog({ onClose, onCreated }: { onClose: () => void; onCrea
 }
 
 /** 联系人列表项 */
-function ContactItem({ contact, active, onClick }: { contact: Contact; active: boolean; onClick: () => void }) {
+function ContactItem({
+  contact,
+  active,
+  onClick,
+  onArchive,
+}: {
+  contact: Contact;
+  active: boolean;
+  onClick: () => void;
+  onArchive?: (contact: Contact) => void;
+}) {
   const icon = contact.type === "agent" ? Bot : contact.type === "device" ? Smartphone : Users;
   const Icon = icon;
   const statusColor = contact.status === "online" ? "bg-success" : contact.status === "busy" ? "bg-warning" : "bg-muted";
@@ -167,6 +177,19 @@ function ContactItem({ contact, active, onClick }: { contact: Contact; active: b
         <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] text-primary-fg">
           {contact.unread}
         </span>
+      )}
+      {contact.convId && onArchive && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive(contact);
+          }}
+          className="ml-1 rounded p-1 text-muted transition-colors hover:text-fg"
+          title="归档会话"
+          aria-label="归档会话"
+        >
+          <Archive className="h-3.5 w-3.5" />
+        </button>
       )}
     </button>
   );
@@ -267,6 +290,17 @@ export default function ChatPage() {
     ];
 
     setContacts([...deviceContacts, ...groupContacts, ...agentContacts]);
+  }
+
+  /** 归档会话（企业级会话，非本地 group） */
+  async function archiveContact(contact: Contact) {
+    if (!contact.convId) return;
+    try {
+      await api.post(`/conversations/${contact.convId}/archive`, { archived: true });
+      void loadContacts();
+    } catch (e) {
+      showToast("归档失败: " + (e as Error).message, "error");
+    }
   }
 
   // 发送消息
@@ -375,6 +409,7 @@ export default function ChatPage() {
               </div>
               {deviceContacts.map((c) => (
                 <ContactItem
+                onArchive={archiveContact}
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
@@ -392,6 +427,7 @@ export default function ChatPage() {
               </div>
               {agentContacts.map((c) => (
                 <ContactItem
+                onArchive={archiveContact}
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
@@ -409,6 +445,7 @@ export default function ChatPage() {
               </div>
               {groupContacts.map((c) => (
                 <ContactItem
+                onArchive={archiveContact}
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}

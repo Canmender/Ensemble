@@ -126,6 +126,7 @@ export interface Conversation {
   lastMessage?: string;
   lastMessageTs?: string;
   unread: number;
+  archived?: boolean;
   createdAt: string;
   updatedAt: string;
 }

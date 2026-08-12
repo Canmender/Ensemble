@@ -59,6 +59,7 @@ export class Store {
     updateConvMeta: ReturnType<DatabaseSync["prepare"]>;
     incrementUnread: ReturnType<DatabaseSync["prepare"]>;
     markRead: ReturnType<DatabaseSync["prepare"]>;
+    setConversationArchived: ReturnType<DatabaseSync["prepare"]>;
   };
 
   constructor(private db: DatabaseSync) {
@@ -91,7 +92,8 @@ export class Store {
       getWorkflow: db.prepare("SELECT * FROM workflows WHERE id = ?"),
       deleteWorkflow: db.prepare("DELETE FROM workflows WHERE id = ?"),
       // Conversations
-      createConversation: db.prepare("INSERT INTO conversations (id, user_id, type, title, participant_ids, run_id, last_message, last_message_ts, unread, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)"),
+      createConversation: db.prepare("INSERT INTO conversations (id, user_id, type, title, participant_ids, run_id, last_message, last_message_ts, unread, archived, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"),
+      setConversationArchived: db.prepare("UPDATE conversations SET archived = ?, updated_at = ? WHERE id = ?"),
       getConversation: db.prepare("SELECT * FROM conversations WHERE id = ?"),
       listConversations: db.prepare("SELECT * FROM conversations ORDER BY updated_at DESC"),
       deleteConversation: db.prepare("DELETE FROM conversations WHERE id = ?"),
@@ -347,7 +349,7 @@ export class Store {
       c.id, c.userId ?? '', c.type, c.title ?? null,
       JSON.stringify(c.participantIds), c.runId,
       c.lastMessage ?? null, c.lastMessageTs ?? null,
-      c.unread, c.createdAt, c.updatedAt,
+      c.unread, c.archived ? 1 : 0, c.createdAt, c.updatedAt,
     );
   }
 
@@ -362,11 +364,19 @@ export class Store {
     return r ? rowToConversation(r) : undefined;
   }
 
-  listConversations(userId?: string): Conversation[] {
+  listConversations(userId?: string, opts?: { archived?: boolean }): Conversation[] {
+    const archived = opts?.archived ?? false;
     const rows = userId
-      ? (this.db.prepare("SELECT * FROM conversations WHERE user_id = ? OR user_id = '' ORDER BY updated_at DESC").all(userId) as any[])
-      : (this.stmts.listConversations.all() as any[]);
+      ? (this.db
+          .prepare("SELECT * FROM conversations WHERE (user_id = ? OR user_id = '') AND archived = ? ORDER BY updated_at DESC")
+          .all(userId, archived ? 1 : 0) as any[])
+      : (this.db.prepare("SELECT * FROM conversations WHERE archived = ? ORDER BY updated_at DESC").all(archived ? 1 : 0) as any[]);
     return rows.map(rowToConversation);
+  }
+
+  /** 归档 / 恢复会话 */
+  setConversationArchived(id: string, archived: boolean): void {
+    this.stmts.setConversationArchived.run(archived ? 1 : 0, new Date().toISOString(), id);
   }
 
   updateConversationMeta(id: string, lastMessage: string, lastMessageTs: string): void {
@@ -434,6 +444,7 @@ function rowToConversation(r: any): Conversation {
     lastMessage: r.last_message ?? undefined,
     lastMessageTs: r.last_message_ts ?? undefined,
     unread: Number(r.unread ?? 0),
+    archived: Boolean(r.archived),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
