@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS run_events (
 
 CREATE TABLE IF NOT EXISTS chat_messages (
   id       TEXT PRIMARY KEY,
-  run_id   TEXT NOT NULL REFERENCES runs(id),
+  run_id   TEXT NOT NULL,
   job_id   TEXT,
   agent_id TEXT NOT NULL,
   role     TEXT NOT NULL,
@@ -144,6 +144,26 @@ function migrateUserColumns(db: DatabaseSync): void {
   const convCols = db.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>;
   if (!convCols.some((c) => c.name === "archived")) {
     db.exec("ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+  }
+  // chat_messages 移除 run_id 外键（用户-用户会话消息 run_id 无对应 run，需重建表）
+  const cmFk = db.prepare("PRAGMA foreign_key_list(chat_messages)").all() as Array<{ table: string; from: string }>;
+  if (cmFk.some((f) => f.table === "runs" && f.from === "run_id")) {
+    db.exec(`BEGIN;
+      ALTER TABLE chat_messages RENAME TO chat_messages_old;
+      CREATE TABLE chat_messages (
+        id       TEXT PRIMARY KEY,
+        run_id   TEXT NOT NULL,
+        job_id   TEXT,
+        agent_id TEXT NOT NULL,
+        role     TEXT NOT NULL,
+        user_id  TEXT NOT NULL DEFAULT '',
+        content  TEXT NOT NULL,
+        ts       TEXT NOT NULL
+      );
+      INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, ts)
+        SELECT id, run_id, job_id, agent_id, role, user_id, content, ts FROM chat_messages_old;
+      DROP TABLE chat_messages_old;
+      COMMIT;`);
   }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;

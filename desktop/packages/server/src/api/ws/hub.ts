@@ -4,6 +4,7 @@ import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 import { parseClientMsg, type RunEvent, type WsEnvelope } from "./protocol";
 import { logger } from "../../util/logger";
+import type { AuthUser } from "../../db/users";
 
 /**
  * WebSocket Hub：管理客户端订阅（按 runId），广播 run 事件帧。
@@ -65,6 +66,11 @@ export class WsHub {
   /** 事件等待者（waitForRun 的注册表） */
   private eventWaiters: EventWaiter[] = [];
 
+  // 用户级连接（多用户 IM：session token → user → 定向推送）
+  private resolveUser?: (token: string) => AuthUser | undefined;
+  private wsUsers = new Map<WebSocket, AuthUser>();
+  private userSockets = new Map<string, Set<WebSocket>>();
+
   /** 获取当前 session token（前端用于建立 WebSocket 连接） */
   get sessionToken(): string {
     return this._sessionToken;
@@ -78,8 +84,9 @@ export class WsHub {
   /** 客户端消息回调（cancel/steer/tool_confirm 等需要引擎配合的操作） */
   onClientMessage?: (msg: { type: string; runId: string; content?: string; confirmId?: string; approved?: boolean }) => void;
 
-  attach(server: Server, path = "/ws"): void {
+  attach(server: Server, path = "/ws", resolveUser?: (token: string) => AuthUser | undefined): void {
     this.serverPath = path;
+    this.resolveUser = resolveUser;
 
     // noServer 模式：手动处理 upgrade 以实现 token 验证
     this.wss = new WebSocketServer({
@@ -96,6 +103,18 @@ export class WsHub {
       const ip = extractIp(req);
       logger.info(`ws client connected: ${ip}`);
       this.wsSubs.set(ws, new Set());
+
+      // 关联用户（用户-用户 IM：session token → user）
+      if (this.resolveUser) {
+        const token = new URL(req.url ?? "/", "http://x").searchParams.get("token");
+        const user = token ? this.resolveUser(token) : undefined;
+        if (user) {
+          this.wsUsers.set(ws, user);
+          let set = this.userSockets.get(user.id);
+          if (!set) { set = new Set(); this.userSockets.set(user.id, set); }
+          set.add(ws);
+        }
+      }
 
       ws.on("message", (data) => {
         const raw = data.toString();
@@ -123,6 +142,11 @@ export class WsHub {
       ws.on("close", () => {
         this.wsSubs.delete(ws);
         this.globalSubs.delete(ws);
+        const u = this.wsUsers.get(ws);
+        if (u) {
+          this.wsUsers.delete(ws);
+          this.userSockets.get(u.id)?.delete(ws);
+        }
         for (const [runId, set] of this.runSubs) {
           set.delete(ws);
           if (set.size === 0) this.runSubs.delete(runId);
@@ -166,16 +190,24 @@ export class WsHub {
     this.heartbeatTimer.unref?.();
   }
 
-  /** 使用 timing-safe 比较验证 token，防止时序攻击 */
+  /** 验证 token：设备 token（本地）或用户 session token（多用户 IM） */
   private verifyToken(token: string): boolean {
     try {
       const expected = Buffer.from(this._sessionToken, "utf8");
       const actual = Buffer.from(token, "utf8");
-      if (expected.length !== actual.length) return false;
-      return timingSafeEqual(expected, actual);
+      if (expected.length === actual.length && timingSafeEqual(expected, actual)) return true;
     } catch {
-      return false;
+      /* ignore */
     }
+    // 用户 session token（Web 登录 / 移动端经中继）
+    if (this.resolveUser && token) {
+      try {
+        return !!this.resolveUser(token);
+      } catch {
+        return false;
+      }
+    }
+    return false;
   }
 
   subscribe(ws: WebSocket, runId: string): void {
@@ -252,6 +284,16 @@ export class WsHub {
     for (const w of matched) {
       if (w.timer) clearTimeout(w.timer);
       w.resolve(event);
+    }
+  }
+
+  /** 推送给指定用户的全部在线连接（用户-用户 IM） */
+  sendToUser(userId: string, event: RunEvent, runId = ""): void {
+    const sockets = this.userSockets.get(userId);
+    if (!sockets || sockets.size === 0) return;
+    const envelope = JSON.stringify({ v: 1, ts: Date.now(), runId, seq: 0, event });
+    for (const ws of sockets) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(envelope);
     }
   }
 

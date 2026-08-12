@@ -34,18 +34,45 @@ export function conversationsRouter(ctx: AppContext): Router {
       const type = body.type === "group" ? "group" : body.type === "direct" ? "direct" : null;
       const participantIds = Array.isArray(body.participantIds) ? body.participantIds.filter((x) => typeof x === "string") : [];
       if (!type) return fail(res, new Error('type 需为 "direct" 或 "group"'), 400);
-      if (participantIds.length === 0) return fail(res, new Error("participantIds 至少一个 agent"), 400);
+      if (participantIds.length === 0) return fail(res, new Error("participantIds 至少一个参与者"), 400);
+
+      // 区分用户与 agent 参与者（user id 以 user_ 开头或存在于用户表）
+      const isUser = (id: string) => id.startsWith("user_") || !!ctx.userStore.getById(id);
+      const userParticipants = participantIds.filter(isUser);
+      const agentParticipants = participantIds.filter((id) => !isUser(id));
+      if (userParticipants.length > 0 && agentParticipants.length > 0) {
+        return fail(res, new Error("暂不支持用户与 Agent 混合会话"), 400);
+      }
       if (type === "direct" && participantIds.length !== 1) {
-        return fail(res, new Error("direct 会话需要一个 agent"), 400);
+        return fail(res, new Error("direct 会话需要一个参与者"), 400);
       }
 
       const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : type === "direct" ? participantIds[0] : "群聊";
-      const prompt = body.prompt ?? `会话「${title}」已创建，请开始。`;
 
-      // 创建 chat 模式 run（direct = 1 个 participant，长期持续；group = 多 agent 轮转）
+      // 用户-用户会话（无 Agent 参与）：不创建 run，消息直接落库 + 定向推送
+      if (userParticipants.length > 0) {
+        const id = newId("conv");
+        const conv: Conversation = {
+          id,
+          userId: req.user?.id,
+          type,
+          title,
+          participantIds: userParticipants,
+          runId: id,
+          unread: 0,
+          createdAt: now(),
+          updatedAt: now(),
+        };
+        ctx.store.createConversation(conv);
+        ok(res, conv, 201);
+        return;
+      }
+
+      // Agent 会话：创建 chat 模式 run
+      const prompt = body.prompt ?? `会话「${title}」已创建，请开始。`;
       const run = await ctx.engine.createAndExecuteTask(
         title,
-        { mode: "chat", prompt, participantIds, maxRounds: 50 },
+        { mode: "chat", prompt, participantIds: agentParticipants, maxRounds: 50 },
         req.user?.id,
       );
 
@@ -54,7 +81,7 @@ export function conversationsRouter(ctx: AppContext): Router {
         userId: req.user?.id,
         type,
         title,
-        participantIds,
+        participantIds: agentParticipants,
         runId: run.id,
         unread: 0,
         createdAt: now(),
@@ -92,7 +119,36 @@ export function conversationsRouter(ctx: AppContext): Router {
         return fail(res, new Error("content required"), 400);
       }
 
-      // 会话关联 run 已结束 → 拒绝"只进不出"
+      // 用户-用户会话（无 run）：消息落库 + 实时推送参与者用户 + 未读
+      if (conv.runId.startsWith("conv_")) {
+        const senderId = req.user?.id ?? "user";
+        ctx.store.createChatMessage({
+          id: newId("msg"),
+          runId: conv.runId,
+          jobId: undefined,
+          agentId: senderId,
+          role: "user",
+          content,
+          userId: req.user?.id,
+          ts: now(),
+        });
+        ctx.store.updateConversationMeta(conv.id, content, now());
+        // 推送参与者（除发送者）+ 未读
+        for (const pid of conv.participantIds) {
+          if (pid === senderId) continue;
+          ctx.hub.sendToUser(pid, {
+            type: "chat.message",
+            jobId: "",
+            agentId: senderId,
+            content,
+          });
+          ctx.store.incrementUnread(conv.id);
+        }
+        ok(res, { sent: true });
+        return;
+      }
+
+      // Agent 会话：steering + 广播
       const run = ctx.store.getRun(conv.runId);
       if (run && run.status !== "queued" && run.status !== "running") {
         return fail(res, new Error(`会话已结束（${run.status}），请新建会话`), 409);
