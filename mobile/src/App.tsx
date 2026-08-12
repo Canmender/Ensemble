@@ -11,6 +11,7 @@ import { connectionService } from "./services/connection";
 import DashboardPage from "./pages/DashboardPage";
 import TasksPage from "./pages/TasksPage";
 import ChatPage from "./pages/ChatPage";
+import ContactsPage from "./pages/ContactsPage";
 import AgentsPage from "./pages/AgentsPage";
 import SettingsPage from "./pages/SettingsPage";
 import RunPage from "./pages/RunPage";
@@ -37,6 +38,7 @@ const TAB_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Dashboard: { active: "grid", inactive: "grid-outline" },
   Tasks: { active: "document-text", inactive: "document-text-outline" },
   Chat: { active: "chatbubble-ellipses", inactive: "chatbubble-ellipses-outline" },
+  Contacts: { active: "people", inactive: "people-outline" },
   Agents: { active: "hardware-chip", inactive: "hardware-chip-outline" },
   Settings: { active: "settings", inactive: "settings-outline" },
 };
@@ -61,6 +63,7 @@ function MainTabs() {
       <Tab.Screen name="Dashboard" component={DashboardPage} options={{ title: "看板" }} />
       <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务" }} />
       <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天" }} />
+      <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人" }} />
       <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent" }} />
       <Tab.Screen name="Settings" component={SettingsPage} options={{ title: "设置" }} />
     </Tab.Navigator>

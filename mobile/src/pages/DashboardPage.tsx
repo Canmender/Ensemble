@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { useDeviceStore } from "../store/deviceStore";
 import { useTaskStore } from "../store/taskStore";
-import { discoveryService } from "../services/discovery";
 import { connectionService } from "../services/connection";
 import { api } from "../services/api";
 import { colors } from "../theme";
@@ -22,7 +21,7 @@ import { colors } from "../theme";
 type ConnectionQuality = "excellent" | "good" | "poor" | "unknown";
 
 export default function DashboardPage({ navigation }: { navigation: any }) {
-  const { connectedDevice, connectionState, discoveredDevices } =
+  const { connectedDevice, connectionState } =
     useDeviceStore();
   const { tasks, runs, loading, lastSyncTs, setTasks, setRuns, setAgents } =
     useTaskStore();
@@ -40,13 +39,7 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
     errorRuns: runs.filter((r) => r.status === "error").length,
   };
 
-  // Start device discovery on mount
-  useEffect(() => {
-    discoveryService.startScan();
-    return () => {
-      discoveryService.stopScan();
-    };
-  }, []);
+  // 应用启动时已自动连接云端服务器（connectionService.connectToCloud，见 App.tsx）
 
   /** Fetch data via REST API */
   const fetchData = useCallback(async () => {
@@ -292,24 +285,6 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
         {syncError && (
           <View style={styles.syncErrorRow}>
             <Text style={styles.syncErrorText}>{syncError}</Text>
-          </View>
-        )}
-
-        {connectionState === "disconnected" && discoveredDevices.length > 0 && (
-          <View style={styles.deviceList}>
-            <Text style={styles.deviceListTitle}>发现的设备:</Text>
-            {discoveredDevices.map((device) => (
-              <TouchableOpacity
-                key={device.id}
-                style={styles.deviceItem}
-                onPress={() => {
-                  connectionService.connect(device.ip, device.wsPort);
-                }}
-              >
-                <Text style={styles.deviceName}>{device.name}</Text>
-                <Text style={styles.deviceIp}>{device.ip}</Text>
-              </TouchableOpacity>
-            ))}
           </View>
         )}
       </View>
