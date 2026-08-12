@@ -48,6 +48,8 @@ export interface ServerEnv {
   lanHost?: string;
   /** 启动时自动接入本机已安装的 agent harness（默认开；设为 false 关闭） */
   autoSyncLocal?: boolean;
+  /** 托管前端静态资源目录（headless/Docker 部署时提供 web 界面） */
+  staticDir?: string;
 }
 
 export function getEnv(): ServerEnv {
@@ -62,5 +64,6 @@ export function getEnv(): ServerEnv {
     apiKey: process.env.ENSEMBLE_API_KEY || undefined,
     lanHost: process.env.ENSEMBLE_LAN_HOST || undefined,
     autoSyncLocal: process.env.ENSEMBLE_AUTO_SYNC_LOCAL !== "false",
+    staticDir: process.env.ENSEMBLE_STATIC_DIR || undefined,
   };
 }

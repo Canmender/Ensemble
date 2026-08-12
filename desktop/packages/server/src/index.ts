@@ -9,7 +9,7 @@ async function main(): Promise<void> {
   const env = getEnv();
   const db = openDb(env.dbPath);
   const ctx = createAppContext(env, db);
-  const app = createApp(ctx);
+  const app = createApp(ctx, env.staticDir ? { staticDir: env.staticDir } : {});
   const server: Server = createServer(app);
 
   ctx.hub.attach(server, "/ws");
