@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-126%20passed-brightgreen)](#测试)
+[![Tests](https://img.shields.io/badge/tests-145%20passed-brightgreen)](#测试)
 
 ---
 
@@ -36,7 +36,7 @@
 - **工具系统** — 文件操作 / 命令执行 / 网络搜索 / MCP 动态发现
 - **双记忆池** — 显式记忆（长期持久化）+ 隐式记忆（项目/Run 作用域）
 - **实时监控** — WebSocket 推送，日志/时间线/画布三视图
-- **IM 聊天** — 与 Agent 直接对话，消息持久化
+- **IM 聊天** — 与 Agent 直接对话（消息持久化）+ **用户-用户 IM**（团队 1:1 实时会话，per-user 未读）
 
 ---
 
@@ -156,12 +156,12 @@ ENSEMBLE_API_KEY=your-secret-key
 
 ```bash
 cd desktop
-pnpm --filter @ensemble/server test    # 126 个单元测试
+pnpm --filter @ensemble/server test    # 145 个单元测试
 pnpm --filter @ensemble/relay-server test  # 9 个集成测试（relay-server 目录）
 pnpm -r typecheck                      # 全量类型检查
 ```
 
-覆盖模块：API 认证（18 个用例）、安全检查（26 个用例）、LLM 重试（13 个用例）、RAG 向量检索（18 个用例）、Store 持久层（13 个用例）、编排引擎（3 个用例）、ConfigManager 异步写（10 个用例）、WebSocket 事件驱动（6 个用例）。
+覆盖模块：API 认证（18 个用例）、安全检查（26 个用例）、LLM 重试（13 个用例）、RAG 向量检索（18 个用例）、Store 持久层（20 个用例）、编排引擎（3 个用例）、ConfigManager 异步写（10 个用例）、WebSocket 事件驱动（6 个用例）。
 
 ---
 
