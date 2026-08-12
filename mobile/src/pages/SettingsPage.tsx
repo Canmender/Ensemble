@@ -11,7 +11,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Switch,
   Alert,
   ActivityIndicator,
@@ -19,20 +18,16 @@ import {
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService, CLOUD_SERVER } from "../services/connection";
 import { api, type UserInfo } from "../services/api";
+import { useAuthGate } from "../store/authGateStore";
 import { colors } from "../theme";
 
-const APP_VERSION = "0.7.0";
+const APP_VERSION = "0.7.1";
 
 export default function SettingsPage() {
   const { currentDevice, connectedDevice, connectionState, lastError } = useDeviceStore();
+  const setGate = useAuthGate((s) => s.setGate);
 
-  // 账号状态
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [submitting, setSubmitting] = useState(false);
-  const [authError, setAuthError] = useState<string | null>(null);
+  // 登录态（登录页门禁保证已登录；此处展示 + 退出）
   const [me, setMe] = useState<UserInfo | null>(null);
   const [loadingMe, setLoadingMe] = useState(true);
 
@@ -61,41 +56,12 @@ export default function SettingsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connectionState]);
 
-  /** 登录 / 注册 */
-  const handleSubmit = async () => {
-    if (!username.trim() || password.length < 6) {
-      Alert.alert("提示", "请输入用户名，密码至少 6 位");
-      return;
-    }
-    setSubmitting(true);
-    setAuthError(null);
-    try {
-      const res =
-        mode === "login"
-          ? await api.login(username.trim(), password)
-          : await api.register(username.trim(), password, displayName.trim() || undefined);
-      if (res.data?.token) {
-        setMe(res.data.user);
-        setPassword("");
-        Alert.alert("成功", mode === "login" ? "已登录" : "注册成功，已自动登录");
-        // 重新建立带用户 token 的 WS 连接（云服务器实时推送）
-        void connectionService.connectToCloud();
-      } else {
-        setAuthError(res.error ?? "操作失败");
-      }
-    } catch (err) {
-      setAuthError(err instanceof Error ? err.message : "操作失败");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  /** 登出 */
+  /** 登出：清 token + 回到登录页 */
   const handleLogout = async () => {
     await api.logout();
     setMe(null);
-    setUsername("");
     Alert.alert("已退出", "已退出登录");
+    setGate("out");
   };
 
   const statusColor =
@@ -137,7 +103,11 @@ export default function SettingsPage() {
       {/* 账号 */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>账号</Text>
-        {me ? (
+        {loadingMe ? (
+          <View style={styles.card}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : me ? (
           <View style={styles.card}>
             <View style={styles.userRow}>
               <View style={styles.avatar}>
@@ -152,71 +122,12 @@ export default function SettingsPage() {
               <Text style={styles.logoutButtonText}>退出登录</Text>
             </TouchableOpacity>
           </View>
-        ) : loadingMe ? (
-          <View style={styles.card}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
         ) : (
           <View style={styles.card}>
-            <View style={styles.modeRow}>
-              {(["login", "register"] as const).map((m) => (
-                <TouchableOpacity
-                  key={m}
-                  style={[styles.modeBtn, mode === m && styles.modeBtnActive]}
-                  onPress={() => setMode(m)}
-                >
-                  <Text style={[styles.modeBtnText, mode === m && styles.modeBtnTextActive]}>
-                    {m === "login" ? "登录" : "注册"}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TextInput
-              style={styles.input}
-              placeholder="用户名"
-              placeholderTextColor={colors.textFaint}
-              value={username}
-              onChangeText={setUsername}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            {mode === "register" && (
-              <TextInput
-                style={styles.input}
-                placeholder="昵称（可选）"
-                placeholderTextColor={colors.textFaint}
-                value={displayName}
-                onChangeText={setDisplayName}
-              />
-            )}
-            <TextInput
-              style={styles.input}
-              placeholder="密码（至少 6 位）"
-              placeholderTextColor={colors.textFaint}
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
-
-            {authError && <Text style={styles.errorText}>{authError}</Text>}
-
-            <TouchableOpacity
-              style={[styles.primaryButton, submitting && styles.buttonDisabled]}
-              onPress={handleSubmit}
-              disabled={submitting}
-            >
-              {submitting ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.primaryButtonText}>
-                  {mode === "login" ? "登录" : "注册并登录"}
-                </Text>
-              )}
+            <Text style={styles.mutedText}>未登录，请返回登录页</Text>
+            <TouchableOpacity style={styles.logoutButton} onPress={() => setGate("out")}>
+              <Text style={styles.logoutButtonText}>去登录</Text>
             </TouchableOpacity>
-            <Text style={styles.hintText}>
-              登录后可进行用户-用户实时聊天（与桌面端/其他用户互通）
-            </Text>
           </View>
         )}
       </View>
