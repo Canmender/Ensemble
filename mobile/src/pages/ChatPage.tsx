@@ -19,6 +19,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
+import { useChatTarget } from "../store/chatTargetStore";
 import { api, type Conversation } from "../services/api";
 import { wsLink } from "../services/wslink";
 import { Button, EmptyState, Badge } from "../components/ui";
@@ -182,6 +183,23 @@ export default function ChatPage() {
     setSelectedConvId(null);
   };
 
+  // 消费联系人标签页选中的目标（点击联系人 → 跳到聊天并选中，一次性）
+  const target = useChatTarget((s) => s.target);
+  const clearTarget = useChatTarget((s) => s.setTarget);
+  useEffect(() => {
+    if (!target) return;
+    if (target.kind === "user") {
+      setSelectedUserId(target.id);
+      setSelectedAgentId(null);
+    } else {
+      setSelectedAgentId(target.id);
+      setSelectedUserId(null);
+    }
+    setSelectedConvId(null);
+    setShowAgentSelector(false);
+    clearTarget(null);
+  }, [target, clearTarget]);
+
   const renderMessage = ({ item }: { item: MessageItem }) => {
     const isUser = item.role === "user";
     return (
@@ -203,11 +221,30 @@ export default function ChatPage() {
   const selectedUser = users.find((u) => u.id === selectedUserId);
   const canSend = inputText.trim() && isConnected && !isSending && (!!selectedConvId || !!selectedAgentId || !!selectedUserId);
 
+  // 连接状态指示（是否连上云端服务器/桌面端）
+  const connMap: Record<string, { text: string; color: string }> = {
+    connected: { text: "已连接云端", color: "#10b981" },
+    connecting: { text: "连接中…", color: "#f59e0b" },
+    reconnecting: { text: "重连中…", color: "#f59e0b" },
+    disconnected: { text: "未连接", color: "#9ca3af" },
+    error: { text: "连接错误", color: "#ef4444" },
+  };
+  const conn = connMap[connectionState] ?? connMap.disconnected;
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
+      {/* 连接状态条 */}
+      <View style={styles.connBar}>
+        <View style={[styles.connDot, { backgroundColor: conn.color }]} />
+        <Text style={styles.connText}>{conn.text}</Text>
+        {isConnected && (
+          <Text style={styles.connHint}>会话与消息实时同步</Text>
+        )}
+      </View>
+
       {/* 会话选择器 */}
       <View style={styles.topBar}>
         <FlatList
@@ -416,6 +453,19 @@ export default function ChatPage() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
+  connBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 6,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: 6,
+  },
+  connDot: { width: 8, height: 8, borderRadius: 4 },
+  connText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: "600" },
+  connHint: { color: colors.textFaint, fontSize: fontSize.xs, marginLeft: "auto" },
   topBar: { borderBottomWidth: 1, borderBottomColor: colors.border },
   convList: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   convChip: {
