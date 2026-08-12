@@ -291,15 +291,15 @@ class ConnectionService {
       // 1. REST 探活
       const res = await fetch(`http://${ip}:${port}/api/health`, { signal: AbortSignal.timeout(5000) });
       if (!res.ok) {
-        this.connectFailed(`桌面端返回错误 (HTTP ${res.status})`);
+        this.connectFailed(`服务器返回错误 (HTTP ${res.status})`);
         return false;
       }
       const health = (await res.json()) as Record<string, unknown>;
 
-      // 2. 记录连接的桌面端（api.ts 据此构造 baseUrl）
+      // 2. 记录连接的服务器（api.ts 据此构造 baseUrl）
       const device: DeviceInfo = {
-        id: typeof health.deviceId === "string" ? health.deviceId : `desktop-${ip}`,
-        name: typeof health.deviceName === "string" ? health.deviceName : `桌面端 (${ip})`,
+        id: typeof health.deviceId === "string" ? health.deviceId : `server-${ip}`,
+        name: typeof health.deviceName === "string" && health.deviceName ? health.deviceName : (ip === CLOUD_SERVER.host ? "云端服务器" : `${ip}`),
         type: "desktop",
         os: typeof health.os === "string" ? health.os : "unknown",
         appVersion: typeof health.appVersion === "string" ? health.appVersion : "0.0.0",
