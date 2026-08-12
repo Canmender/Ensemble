@@ -103,6 +103,20 @@ export interface CreateChatInput {
   prompt?: string;
 }
 
+/** 会话（企业级 IM） */
+export interface Conversation {
+  id: string;
+  type: "direct" | "group";
+  title?: string;
+  participantIds: string[];
+  runId: string;
+  lastMessage?: string;
+  lastMessageTs?: string;
+  unread: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** 运行事件响应 */
 export interface RunEventsResponse {
   runId: string;
@@ -447,6 +461,42 @@ class ApiService {
   /** 发送群聊消息（fire-and-forget，回复通过 WS 实时推送） */
   async sendChatMessage(runId: string, content: string): Promise<ApiResponse<{ sent: boolean }>> {
     return this.request<{ sent: boolean }>("POST", `/api/chat/${runId}/messages`, { content });
+  }
+
+  // ========== Conversation API（企业级会话） ==========
+
+  /** 会话列表 */
+  async getConversations(): Promise<ApiResponse<Conversation[]>> {
+    return this.request<Conversation[]>("GET", "/api/conversations");
+  }
+
+  /** 创建会话（direct：单个 agent；group：多 agent） */
+  async createConversation(input: {
+    type: "direct" | "group";
+    title?: string;
+    participantIds: string[];
+  }): Promise<ApiResponse<Conversation>> {
+    return this.request<Conversation>("POST", "/api/conversations", input);
+  }
+
+  /** 会话消息分页（before 时间戳游标） */
+  async getConversationMessages(
+    convId: string,
+    before?: string,
+    limit = 50,
+  ): Promise<ApiResponse<{ messages: ChatMessage[]; total: number }>> {
+    const qs = before ? `?before=${encodeURIComponent(before)}&limit=${limit}` : `?limit=${limit}`;
+    return this.request<{ messages: ChatMessage[]; total: number }>("GET", `/api/conversations/${convId}/messages${qs}`);
+  }
+
+  /** 发送会话消息（fire-and-forget，回复经 WS 推送） */
+  async sendConversationMessage(convId: string, content: string): Promise<ApiResponse<{ sent: boolean }>> {
+    return this.request<{ sent: boolean }>("POST", `/api/conversations/${convId}/messages`, { content });
+  }
+
+  /** 标记会话已读 */
+  async markConversationRead(convId: string): Promise<ApiResponse<{ read: boolean }>> {
+    return this.request<{ read: boolean }>("POST", `/api/conversations/${convId}/read`);
   }
 
   // ========== Memory API ==========
