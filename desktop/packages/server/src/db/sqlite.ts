@@ -156,8 +156,12 @@ function migrateUserColumns(db: DatabaseSync): void {
     db.exec("ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
   }
   // chat_messages 移除 run_id 外键（用户-用户会话消息 run_id 无对应 run，需重建表）
+  // 兼容旧库：账号系统之前的 chat_messages 没有 user_id 列，重建时用 '' 兜底
   const cmFk = db.prepare("PRAGMA foreign_key_list(chat_messages)").all() as Array<{ table: string; from: string }>;
   if (cmFk.some((f) => f.table === "runs" && f.from === "run_id")) {
+    const oldCmCols = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+    const hasUserId = oldCmCols.some((c) => c.name === "user_id");
+    const userSelect = hasUserId ? "user_id, " : "'' AS user_id, ";
     db.exec(`BEGIN;
       ALTER TABLE chat_messages RENAME TO chat_messages_old;
       CREATE TABLE chat_messages (
@@ -171,7 +175,7 @@ function migrateUserColumns(db: DatabaseSync): void {
         ts       TEXT NOT NULL
       );
       INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, ts)
-        SELECT id, run_id, job_id, agent_id, role, user_id, content, ts FROM chat_messages_old;
+        SELECT id, run_id, job_id, agent_id, role, ${userSelect} content, ts FROM chat_messages_old;
       DROP TABLE chat_messages_old;
       COMMIT;`);
   }
