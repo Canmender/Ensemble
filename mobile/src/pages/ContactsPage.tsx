@@ -1,11 +1,11 @@
 /**
  * 联系人页（通讯录）
- * 参考主流 IM（微信/Telegram）设计：顶部搜索 + 分组列表 + 点击开聊。
- * - 用户（好友）：云端注册用户，点击进入用户-用户会话
- * - Agent：启用的智能体，点击进入与 Agent 的会话
+ * - 分组可折叠：设备（系统固定：手机端 + 电脑端）、用户（全部用户）、用户自定义分组
+ * - 自定义分组：组名 + 成员（本地 AsyncStorage 持久化），可新建 / 编辑 / 删除
+ * - 点击用户 → 个人资料页；点击 Agent → 直接开聊
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -14,26 +14,47 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTaskStore } from "../store/taskStore";
+import { useDeviceStore } from "../store/deviceStore";
 import { api, type UserInfo } from "../services/api";
 import { useChatTarget } from "../store/chatTargetStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { AgentConfig } from "@ensemble/shared-protocol";
 
-type ContactRow =
-  | { type: "contact"; key: string; kind: "user"; id: string; name: string; subtitle: string; user: UserInfo }
-  | { type: "contact"; key: string; kind: "agent"; id: string; name: string; subtitle: string; agent: AgentConfig };
+const GROUPS_KEY = "@ensemble/contact-groups";
+
+/** 用户自定义分组 */
+interface ContactGroup {
+  id: string;
+  name: string;
+  memberIds: string[];
+}
+
+type Row =
+  | { type: "header"; key: string; title: string; count: number; system: boolean; collapsed: boolean }
+  | { type: "item"; key: string; kind: "user" | "agent" | "device"; id: string; name: string; subtitle: string; user?: UserInfo; agent?: AgentConfig; deviceIcon?: keyof typeof Ionicons.glyphMap };
 
 export default function ContactsPage({ navigation }: { navigation: any }) {
   const { agents } = useTaskStore();
+  const { currentDevice, connectedDevice } = useDeviceStore();
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [groups, setGroups] = useState<ContactGroup[]>([]);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [manageOpen, setManageOpen] = useState(false);
+  // 编辑态：null=列表视图；{mode:'new'}=新建；{mode:'edit',group}=编辑
+  const [editState, setEditState] = useState<{ mode: "new" } | { mode: "edit"; group: ContactGroup } | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editIds, setEditIds] = useState<Set<string>>(new Set());
   const setTarget = useChatTarget((s) => s.setTarget);
 
-  const load = useCallback(async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.getUsers();
@@ -45,90 +66,181 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  // 搜索过滤
-  const q = query.trim().toLowerCase();
-  const userRows: ContactRow[] = users
-    .filter((u) => {
-      if (!q) return true;
-      return (u.displayName || u.username).toLowerCase().includes(q) || u.username.toLowerCase().includes(q);
-    })
-    .map((u) => ({
-      type: "contact" as const,
-      key: `user-${u.id}`,
-      kind: "user" as const,
-      id: u.id,
-      name: u.displayName || u.username,
-      subtitle: "用户",
-      user: u,
-    }));
-  const agentRows: ContactRow[] = agents
-    .filter((a) => a.enabled)
-    .filter((a) => {
-      if (!q) return true;
-      return a.name.toLowerCase().includes(q);
-    })
-    .map((a) => ({
-      type: "contact" as const,
-      key: `agent-${a.id}`,
-      kind: "agent" as const,
-      id: a.id,
-      name: a.name,
-      subtitle: a.model || "Agent",
-      agent: a,
-    }));
-
-  const sections: Array<{ title: string; icon: keyof typeof Ionicons.glyphMap; data: ContactRow[] }> = [
-    { title: "用户", icon: "people", data: userRows },
-    { title: "Agent", icon: "hardware-chip", data: agentRows },
-  ];
-  const flatData: Array<{ type: "header"; title: string; icon: keyof typeof Ionicons.glyphMap } | ContactRow> = [];
-  for (const s of sections) {
-    if (s.data.length > 0) {
-      flatData.push({ type: "header", title: s.title, icon: s.icon });
-      flatData.push(...s.data);
+  const loadGroups = useCallback(async () => {
+    try {
+      const raw = await AsyncStorage.getItem(GROUPS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ContactGroup[];
+        if (Array.isArray(parsed)) setGroups(parsed);
+      }
+    } catch {
+      /* 忽略 */
     }
-  }
+  }, []);
 
-  const openContact = (row: ContactRow) => {
-    if (row.kind === "user") {
-      // 用户 → 个人资料页（下方「发信息」进入聊天）
+  const saveGroups = useCallback((next: ContactGroup[]) => {
+    setGroups(next);
+    void AsyncStorage.setItem(GROUPS_KEY, JSON.stringify(next)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    void loadUsers();
+    void loadGroups();
+  }, [loadUsers, loadGroups]);
+
+  const q = query.trim().toLowerCase();
+  const matchUser = (u: UserInfo) =>
+    !q || (u.displayName || u.username).toLowerCase().includes(q) || u.username.toLowerCase().includes(q);
+  const matchAgent = (a: AgentConfig) => !q || a.name.toLowerCase().includes(q);
+
+  // 全部用户（过滤搜索）
+  const allUsers = users.filter(matchUser);
+  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
+
+  const toggle = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+
+  // 打开组管理
+  const openManage = () => {
+    setManageOpen(true);
+    setEditState(null);
+  };
+  const startNew = () => {
+    setEditState({ mode: "new" });
+    setEditName("");
+    setEditIds(new Set());
+  };
+  const startEdit = (g: ContactGroup) => {
+    setEditState({ mode: "edit", group: g });
+    setEditName(g.name);
+    setEditIds(new Set(g.memberIds));
+  };
+  const toggleMember = (id: string) => {
+    setEditIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const saveEdit = () => {
+    const name = editName.trim();
+    if (!name) return;
+    const memberIds = Array.from(editIds);
+    if (editState?.mode === "new") {
+      saveGroups([...groups, { id: `g${Date.now()}`, name, memberIds }]);
+    } else if (editState?.mode === "edit") {
+      saveGroups(
+        groups.map((g) => (g.id === editState.group.id ? { ...g, name, memberIds } : g)),
+      );
+    }
+    setEditState(null);
+  };
+  const deleteGroup = (id: string) => {
+    saveGroups(groups.filter((g) => g.id !== id));
+    setEditState(null);
+  };
+
+  const openContact = (row: Row) => {
+    if (row.type !== "item") return;
+    if (row.kind === "user" && row.user) {
       navigation.navigate("UserProfile", {
         userId: row.id,
         name: row.name,
         username: row.user.username,
         displayName: row.user.displayName,
       });
-    } else {
-      // Agent → 直接开聊
+    } else if (row.kind === "agent") {
       setTarget({ kind: "agent", id: row.id, name: row.name });
       navigation.navigate("Chat");
     }
   };
 
-  const renderItem = ({ item }: { item: (typeof flatData)[number] }) => {
-    if (item.type === "header") {
+  // 构建分组列表（系统组 + 自定义组）
+  const sections: Array<{ key: string; title: string; system: boolean; rows: Row[] }> = [
+    {
+      key: "devices",
+      title: "设备",
+      system: true,
+      rows: [
+        { type: "item" as const, key: "dev-phone", kind: "device" as const, id: "phone", name: "手机端", subtitle: currentDevice?.name || "本机", deviceIcon: "phone-portrait-outline" as const },
+        { type: "item" as const, key: "dev-pc", kind: "device" as const, id: "pc", name: "电脑端", subtitle: connectedDevice?.name || "云端服务器", deviceIcon: "desktop-outline" as const },
+      ],
+    },
+    {
+      key: "users",
+      title: "用户",
+      system: true,
+      rows: allUsers.map((u) => ({
+        type: "item" as const,
+        key: `user-${u.id}`,
+        kind: "user" as const,
+        id: u.id,
+        name: u.displayName || u.username,
+        subtitle: "用户",
+        user: u,
+      })),
+    },
+    ...groups.map((g) => ({
+      key: g.id,
+      title: g.name,
+      system: false,
+      rows: g.memberIds
+        .map((id) => usersById.get(id))
+        .filter((u): u is UserInfo => !!u && matchUser(u))
+        .map((u) => ({
+          type: "item" as const,
+          key: `${g.id}-${u.id}`,
+          kind: "user" as const,
+          id: u.id,
+          name: u.displayName || u.username,
+          subtitle: g.name,
+          user: u,
+        })),
+    })),
+  ].filter((s) => s.rows.length > 0);
+
+  const flatData: Row[] = [];
+  for (const s of sections) {
+    const isCollapsed = !!collapsed[s.key];
+    flatData.push({ type: "header", key: `h-${s.key}`, title: s.title, count: s.rows.length, system: s.system, collapsed: isCollapsed });
+    if (!isCollapsed) flatData.push(...s.rows);
+  }
+
+  const renderHeader = (h: Extract<Row, { type: "header" }>) => (
+    <TouchableOpacity style={styles.sectionHeader} onPress={() => toggle(h.key.slice(2))} activeOpacity={0.7}>
+      <Ionicons name={h.collapsed ? "chevron-forward" : "chevron-down"} size={14} color={colors.textMuted} />
+      <Text style={styles.sectionTitle}>{h.title}</Text>
+      <Text style={styles.sectionCount}>{h.count}</Text>
+      {h.system && <Text style={styles.sectionSys}>系统</Text>}
+    </TouchableOpacity>
+  );
+
+  const renderItem = ({ item }: { item: Row }) => {
+    if (item.type === "header") return renderHeader(item);
+    const row = item;
+    if (row.kind === "device") {
       return (
-        <View style={styles.sectionHeader}>
-          <Ionicons name={item.icon} size={13} color={colors.textMuted} />
-          <Text style={styles.sectionTitle}>{item.title}</Text>
+        <View style={styles.row}>
+          <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name={row.deviceIcon} size={20} color={colors.textMuted} />
+          </View>
+          <View style={styles.rowInfo}>
+            <Text style={styles.rowName}>{row.name}</Text>
+            <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
+          </View>
         </View>
       );
     }
-    const row = item as ContactRow;
     const isUser = row.kind === "user";
     return (
       <TouchableOpacity style={styles.row} onPress={() => openContact(row)} activeOpacity={0.7}>
         <View style={[styles.avatar, { backgroundColor: isUser ? colors.primarySoft : colors.accent + "1A" }]}>
           {isUser ? (
             <Text style={[styles.avatarText, { color: colors.primary }]}>
-              {row.user.displayName?.[0] || row.user.username[0]?.toUpperCase() || "?"}
+              {row.user?.displayName?.[0] || row.user?.username?.[0]?.toUpperCase() || "?"}
             </Text>
           ) : (
-            <Ionicons name={row.agent.kind === "builtin" ? "flash" : "terminal"} size={20} color={colors.accent} />
+            <Ionicons name={row.agent?.kind === "builtin" ? "flash" : "terminal"} size={20} color={colors.accent} />
           )}
         </View>
         <View style={styles.rowInfo}>
@@ -140,16 +252,14 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     );
   };
 
-  const total = userRows.length + agentRows.length;
-
   return (
     <View style={styles.container}>
-      {/* 搜索框 */}
+      {/* 搜索框 + 分组管理入口 */}
       <View style={styles.searchBar}>
         <Ionicons name="search" size={16} color={colors.textFaint} />
         <TextInput
           style={styles.searchInput}
-          placeholder="搜索用户或 Agent"
+          placeholder="搜索联系人"
           placeholderTextColor={colors.textFaint}
           value={query}
           onChangeText={setQuery}
@@ -160,25 +270,131 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
             <Ionicons name="close-circle" size={16} color={colors.textFaint} />
           </TouchableOpacity>
         )}
+        <TouchableOpacity onPress={openManage} hitSlop={8}>
+          <Ionicons name="options-outline" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {loading && users.length === 0 ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
         </View>
-      ) : total === 0 ? (
+      ) : flatData.length === 0 ? (
         <View style={styles.center}>
           <Ionicons name="people-outline" size={40} color={colors.textFaint} />
-          <Text style={styles.emptyText}>暂无联系人{agents.length === 0 ? "（登录后可见团队用户，启动时自动连接云端）" : ""}</Text>
+          <Text style={styles.emptyText}>暂无联系人</Text>
         </View>
       ) : (
         <FlatList
           data={flatData}
-          keyExtractor={(item) => (item.type === "header" ? `h-${item.title}` : item.key)}
+          keyExtractor={(item) => item.key}
           renderItem={renderItem}
           keyboardShouldPersistTaps="handled"
         />
       )}
+
+      {/* 分组管理 */}
+      <Modal transparent visible={manageOpen} animationType="slide" onRequestClose={() => setManageOpen(false)}>
+        <View style={styles.manageOverlay}>
+          <View style={styles.manageSheet}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>{editState ? (editState.mode === "new" ? "新建分组" : "编辑分组") : "分组管理"}</Text>
+              <TouchableOpacity onPress={() => (editState ? setEditState(null) : setManageOpen(false))} hitSlop={8}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {editState ? (
+              <>
+                <Text style={styles.fieldLabel}>组名</Text>
+                <TextInput
+                  style={styles.input}
+                  value={editName}
+                  onChangeText={setEditName}
+                  placeholder="输入组名，如：同事 / 家人"
+                  placeholderTextColor={colors.textFaint}
+                  maxLength={20}
+                />
+                <Text style={styles.fieldLabel}>
+                  选择成员（{editIds.size}）
+                </Text>
+                <ScrollView style={{ maxHeight: 300 }}>
+                  {users.map((u) => (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={styles.memberRow}
+                      onPress={() => toggleMember(u.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.memberAvatar, { backgroundColor: colors.primarySoft }]}>
+                        <Text style={[styles.memberAvatarText, { color: colors.primary }]}>
+                          {(u.displayName || u.username)[0]?.toUpperCase() || "?"}
+                        </Text>
+                      </View>
+                      <Text style={styles.memberName}>{u.displayName || u.username}</Text>
+                      <Ionicons
+                        name={editIds.has(u.id) ? "checkmark-circle" : "ellipse-outline"}
+                        size={22}
+                        color={editIds.has(u.id) ? colors.primary : colors.textFaint}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <View style={styles.sheetActions}>
+                  <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => setEditState(null)}>
+                    <Text style={[styles.btnText, { color: colors.textMuted }]}>取消</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.btn, styles.btnPrimary, !editName.trim() && { opacity: 0.5 }]}
+                    onPress={saveEdit}
+                    disabled={!editName.trim()}
+                  >
+                    <Text style={[styles.btnText, { color: "#fff" }]}>保存</Text>
+                  </TouchableOpacity>
+                </View>
+                {editState.mode === "edit" && (
+                  <TouchableOpacity
+                    style={styles.deleteGroup}
+                    onPress={() => {
+                      if (editState.mode === "edit") deleteGroup(editState.group.id);
+                    }}
+                  >
+                    <Text style={styles.deleteGroupText}>删除分组</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            ) : (
+              <>
+                <TouchableOpacity style={styles.newGroupBtn} onPress={startNew} activeOpacity={0.7}>
+                  <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
+                  <Text style={styles.newGroupText}>新建分组</Text>
+                </TouchableOpacity>
+                {groups.length === 0 ? (
+                  <Text style={styles.noGroup}>还没有自定义分组，点上方「新建分组」把用户分组管理</Text>
+                ) : (
+                  groups.map((g) => (
+                    <View key={g.id} style={styles.groupRow}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.groupName}>{g.name}</Text>
+                        <Text style={styles.groupMeta}>{g.memberIds.length} 位成员</Text>
+                      </View>
+                      <TouchableOpacity style={styles.groupAction} onPress={() => startEdit(g)} hitSlop={6}>
+                        <Ionicons name="create-outline" size={18} color={colors.textMuted} />
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.groupAction} onPress={() => deleteGroup(g.id)} hitSlop={6}>
+                        <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
+                <Text style={styles.manageHint}>
+                  「设备」与「用户」为系统分组，不可编辑。自定义分组保存在本机。
+                </Text>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -206,7 +422,9 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: 6,
   },
-  sectionTitle: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: "600" },
+  sectionTitle: { color: colors.text, fontSize: fontSize.sm, fontWeight: "600" },
+  sectionCount: { color: colors.textFaint, fontSize: fontSize.xs, marginLeft: 4 },
+  sectionSys: { color: colors.textFaint, fontSize: 10, marginLeft: "auto" },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -227,4 +445,80 @@ const styles = StyleSheet.create({
   rowSubtitle: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingBottom: 60 },
   emptyText: { color: colors.textMuted, fontSize: fontSize.sm, textAlign: "center", paddingHorizontal: 40 },
+  manageOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  manageSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    maxHeight: "85%",
+    padding: spacing.lg,
+    paddingBottom: spacing.xl,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: spacing.md,
+  },
+  sheetTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: "600" },
+  newGroupBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+  },
+  newGroupText: { color: colors.primary, fontSize: fontSize.md, fontWeight: "600" },
+  groupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
+  },
+  groupName: { color: colors.text, fontSize: fontSize.md, fontWeight: "600" },
+  groupMeta: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 },
+  groupAction: { padding: 6 },
+  noGroup: { color: colors.textFaint, fontSize: fontSize.sm, paddingVertical: spacing.md },
+  manageHint: { color: colors.textFaint, fontSize: fontSize.xs, marginTop: spacing.md, lineHeight: 18 },
+  fieldLabel: { color: colors.text, fontSize: fontSize.sm, fontWeight: "600", marginTop: spacing.sm, marginBottom: 6 },
+  input: {
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: fontSize.md,
+    marginBottom: spacing.sm,
+  },
+  memberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: 8,
+  },
+  memberAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  memberAvatarText: { fontSize: 14, fontWeight: "700" },
+  memberName: { flex: 1, color: colors.text, fontSize: fontSize.sm },
+  sheetActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
+  btn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: radius.md,
+    alignItems: "center",
+  },
+  btnGhost: { backgroundColor: colors.surfaceAlt },
+  btnPrimary: { backgroundColor: colors.primary },
+  btnText: { fontSize: fontSize.md, fontWeight: "600" },
+  deleteGroup: { alignItems: "center", marginTop: spacing.md },
+  deleteGroupText: { color: colors.danger, fontSize: fontSize.sm, fontWeight: "600" },
 });
