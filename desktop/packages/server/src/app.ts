@@ -16,6 +16,7 @@ import { discoveryRouter } from "./api/routes/discovery";
 import { relayRouter } from "./api/routes/relay";
 import { chatRouter } from "./api/routes/chat";
 import { conversationsRouter } from "./api/routes/conversations";
+import { uploadRouter } from "./api/routes/upload";
 import { initRelayClient } from "./api/routes/relay";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
@@ -71,7 +72,11 @@ function createWriteRateLimiter(windowMs: number = 60_000, max: number = 60) {
 
 export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express.Express {
   const app = express();
-  app.use(express.json({ limit: "2mb" }));
+  // 25MB：支持聊天图片/文件的 base64 上传（膨胀 ~33%，20MB 文件上限）
+  app.use(express.json({ limit: "25mb" }));
+
+  // 聊天附件静态服务（图片/文件；URL 直接内嵌在消息里，由消息 API 权限控制内容，静态文件本身公开）
+  app.use("/uploads", express.static(ctx.uploadsDir));
 
   // 用户认证路由（注册/登录/会话）—— 挂在 apiAuth 之前，登录无需已有 token
   app.use("/api/auth", authRouter(ctx));
@@ -110,6 +115,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/relay", relayRouter(ctx));
   app.use("/api/chat", chatRouter(ctx));
   app.use("/api/conversations", conversationsRouter(ctx));
+  app.use("/api/upload", uploadRouter(ctx));
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）
   initRelayClient(ctx);

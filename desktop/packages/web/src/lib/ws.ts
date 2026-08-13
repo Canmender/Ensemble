@@ -18,6 +18,13 @@ interface WsEnvelope {
     confirmId?: string;
     tool?: string;
     args?: unknown;
+    attachment?: {
+      type: "image" | "file";
+      name: string;
+      size: number;
+      mime?: string;
+      url: string;
+    };
     event?: {
       type: string;
       tool?: string;
@@ -52,6 +59,13 @@ class WsClient {
   private reconnectTimer?: number;
   private localSeq = new Map<string, number>();
   private wsToken?: string;
+  /** 重连成功回调（连接建立时触发；用于补拉 chat.message 等不走 run_events/seq 的数据） */
+  private onOpenCbs: Array<() => void> = [];
+
+  /** 注册连接建立/重连成功回调 */
+  onOpen(cb: () => void): void {
+    this.onOpenCbs.push(cb);
+  }
 
   /** Fetch the session token from the server, then connect the WebSocket. */
   async connect(): Promise<void> {
@@ -73,6 +87,13 @@ class WsClient {
     ws.onopen = () => {
       this.reconnectDelay = 1000;
       for (const runId of this.subs) ws.send(JSON.stringify({ type: "subscribe", runId }));
+      for (const cb of this.onOpenCbs) {
+        try {
+          cb();
+        } catch {
+          /* 重连回调异常不影响 WS 连接 */
+        }
+      }
     };
 
     ws.onmessage = (e) => {
@@ -165,6 +186,7 @@ class WsClient {
           jobId: env.jobId,
           agentId: ev.agentId ?? "agent",
           content: ev.content ?? "",
+          attachment: ev.attachment,
         });
         break;
       case "run.result":

@@ -128,6 +128,15 @@ export interface WorkflowEdge {
   when: EdgeCondition;
 }
 
+/** 聊天附件（图片/文件） */
+export interface MessageAttachment {
+  type: "image" | "file";
+  name: string;
+  size: number;
+  mime?: string;
+  url: string;
+}
+
 /** 群聊消息 */
 export interface ChatMessage {
   id: string;
@@ -136,6 +145,8 @@ export interface ChatMessage {
   agentId: string;
   role: "user" | "assistant";
   content: string;
+  /** 附件（图片/文件）；无则为纯文本消息 */
+  attachment?: MessageAttachment;
   ts: string;
 }
 

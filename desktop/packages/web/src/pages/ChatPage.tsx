@@ -9,7 +9,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive, User as UserIcon
+  Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive, User as UserIcon,
+  Image as ImageIcon, Paperclip, File as FileIcon, X
 } from "lucide-react";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
@@ -30,7 +31,17 @@ interface ChatMessage {
   sender: "user" | "assistant";
   agentId?: string; // 群聊/用户会话中标识发送者
   senderName?: string; // 用户会话显示发送者昵称
+  attachment?: MessageAttachment;
   timestamp: number;
+}
+
+/** 消息附件（图片/文件） */
+interface MessageAttachment {
+  type: "image" | "file";
+  name: string;
+  size: number;
+  mime?: string;
+  url: string;
 }
 
 /** 注册用户（/api/auth/users） */
@@ -227,6 +238,38 @@ function renderContent(text: string): React.ReactNode {
   );
 }
 
+/** 文件大小格式化 */
+function fmtSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** 消息附件渲染（图片缩略图 / 文件卡片） */
+function AttachmentView({ att }: { att: MessageAttachment }) {
+  if (att.type === "image") {
+    return (
+      <div className="mb-2">
+        <img src={att.url} alt={att.name} className="max-h-56 w-auto rounded-lg object-contain" />
+        <div className="mt-1 text-[10px] opacity-70">{att.name} · {fmtSize(att.size)}</div>
+      </div>
+    );
+  }
+  return (
+    <a
+      href={att.url}
+      download={att.name}
+      target="_blank"
+      rel="noreferrer"
+      className="mb-2 flex items-center gap-2 rounded-lg bg-black/5 px-3 py-2 text-xs transition-colors hover:bg-black/10"
+    >
+      <FileIcon className="h-4 w-4 shrink-0" />
+      <span className="truncate">{att.name}</span>
+      <span className="shrink-0 text-muted">{fmtSize(att.size)}</span>
+    </a>
+  );
+}
+
 export default function ChatPage() {
   const { state: authState } = useAuth();
   // 当前登录用户（用户-用户 IM 的方向判定；本地桌面模式无用户）
@@ -236,11 +279,15 @@ export default function ChatPage() {
   // 单聊消息（本地管理）
   const [singleMessages, setSingleMessages] = useState<Record<string, ChatMessage[]>>({});
   // 企业级会话历史（conversations API，原始数据；方向/昵称在渲染时解析）
-  const [convHistory, setConvHistory] = useState<Record<string, Array<{ id: string; content: string; agentId?: string; role: string; ts: string }>>>({});
+  const [convHistory, setConvHistory] = useState<Record<string, Array<{ id: string; content: string; agentId?: string; role: string; ts: string; attachment?: MessageAttachment }>>>({});
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [draftAttachment, setDraftAttachment] = useState<MessageAttachment | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastContactsReload = useRef(0);
 
@@ -354,6 +401,7 @@ export default function ChatPage() {
           : (m.role === "user" ? "user" as const : "assistant" as const),
         agentId: m.agentId,
         senderName: isUserConv ? userName(usersById, m.agentId) : undefined,
+        attachment: m.attachment,
         timestamp: new Date(m.ts).getTime(),
       }));
       // 相邻去重：WS 回显 + 乐观追加会产生相同消息（如群聊里自己的发言）
@@ -369,6 +417,7 @@ export default function ChatPage() {
         sender: m.agentId === me?.id || m.agentId === "user" ? "user" as const : "assistant" as const,
         agentId: m.agentId,
         senderName: isUserConv && m.agentId ? userName(usersById, m.agentId) : undefined,
+        attachment: m.attachment,
         timestamp: groupBaseTs.current - (deduped.length - 1 - i) * 60000,
       }));
       // 历史 + 实时（打开会话时已清空旧 live，历史为准）
@@ -382,6 +431,7 @@ export default function ChatPage() {
         sender: m.agentId === "user" ? "user" as const : "assistant" as const,
         agentId: m.agentId,
         senderName: undefined,
+        attachment: m.attachment,
         timestamp: groupBaseTs.current - (groupMessages.length - 1 - i) * 60000,
       }));
     }
@@ -398,41 +448,66 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages.length]);
 
+  // 加载企业级会话历史 + 清零未读（打开会话 / 断线重连补拉共用）
+  const loadConvHistory = useCallback(async (contact: Contact) => {
+    if (!contact.convId || !contact.runId) return;
+    const d = await api.get<any>(`/conversations/${contact.convId}/messages`);
+    if (d?.messages) {
+      setConvHistory((prev) => ({
+        ...prev,
+        [contact.convId!]: d.messages.map((m: any) => ({
+          id: m.id,
+          content: m.content,
+          agentId: m.agentId,
+          role: m.role,
+          ts: m.ts,
+          attachment: m.attachment,
+        })),
+      }));
+      // 历史为准：清空打开前残留的 live，只保留打开后到达的新消息
+      useRunStore.getState().clearMessages(contact.runId);
+    }
+    // 未读清零（此前 web 端从不调用 /read，未读数只增不清）
+    void api.post(`/conversations/${contact.convId}/read`).then(() => {
+      setContacts((prev) =>
+        prev.map((c) => (c.convId === contact.convId ? { ...c, unread: 0 } : c)),
+      );
+    });
+  }, []);
+
+  // 当前联系人 ref（断线重连回调取最新值，避免闭包陈旧）
+  const activeContactRef = useRef(activeContact);
+  activeContactRef.current = activeContact;
+
+  // 断线重连后补拉活跃会话（chat.message 不走 run_events/seq，catchUp 补不回，重拉历史兜底）
+  useEffect(() => {
+    wsClient.onOpen(() => {
+      const c = activeContactRef.current;
+      if (!c) return;
+      if (c.convId) {
+        void loadConvHistory(c);
+      } else if (c.runId) {
+        void loadRunDetail(c.runId, { loadEvents: false, loadChatMessages: true });
+      }
+    });
+  }, [loadConvHistory]);
+
   // 切换联系人：订阅 WebSocket + 加载历史消息
   useEffect(() => {
     if (!activeContact?.runId) return;
     const runId = activeContact.runId;
-
     // 订阅 WebSocket
     wsClient.subscribe(runId);
-
     if (activeContact.convId) {
-      // 企业级会话（含用户-用户 IM）：历史走 conversations API
-      void api.get<any>(`/conversations/${activeContact.convId}/messages`).then((d) => {
-        if (d?.messages) {
-          setConvHistory((prev) => ({
-            ...prev,
-            [activeContact.convId!]: d.messages.map((m: any) => ({
-              id: m.id,
-              content: m.content,
-              agentId: m.agentId,
-              role: m.role,
-              ts: m.ts,
-            })),
-          }));
-          // 历史为准：清空打开前残留的 live，只保留打开后到达的新消息
-          useRunStore.getState().clearMessages(runId);
-        }
-      });
+      void loadConvHistory(activeContact);
     } else {
       // 旧式群聊：加载历史消息（如果 store 中还没有）
       void loadRunDetail(runId, { loadEvents: false, loadChatMessages: true });
     }
-
     return () => {
       wsClient.unsubscribe(runId);
     };
-  }, [activeContact?.runId, activeContact?.convId]);
+  }, [activeContact?.runId, activeContact?.convId, loadConvHistory]);
 
   // 新消息到达 → 刷新会话列表（未读 / 最后消息），节流避免高频重载
   useEffect(() => {
@@ -462,11 +537,58 @@ export default function ChatPage() {
     }
   }
 
+  /** 上传附件到服务器（base64 JSON），返回可直接引用的附件对象 */
+  async function uploadFile(file: File, asImage: boolean): Promise<MessageAttachment | null> {
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("读取文件失败"));
+      reader.readAsDataURL(file);
+    });
+    const base64 = dataUrl.split(",")[1] ?? "";
+    setUploading(true);
+    try {
+      const up = await api.post<any>("/upload", {
+        name: file.name,
+        mime: file.type || (asImage ? "image/jpeg" : "application/octet-stream"),
+        data: base64,
+      });
+      return {
+        type: up.type === "image" ? "image" : "file",
+        name: up.name,
+        size: up.size,
+        mime: up.mime,
+        url: up.url,
+      };
+    } catch (e) {
+      showToast("上传失败: " + (e as Error).message, "error");
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  /** 选择附件文件 → 上传 → 设为待发送 */
+  async function handlePickFile(file: File | undefined, asImage: boolean) {
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) {
+      showToast("文件过大（上限 20MB）", "error");
+      return;
+    }
+    const att = await uploadFile(file, asImage);
+    if (att) setDraftAttachment(att);
+  }
+
   // 发送消息
   async function sendMessage() {
-    if (!inputText.trim() || !activeContact || sending) return;
+    if ((!inputText.trim() && !draftAttachment) || !activeContact || sending || uploading) return;
+    if (draftAttachment && activeContact.type !== "user") {
+      showToast("附件仅支持用户-用户会话（Agent 暂不支持）", "error");
+      return;
+    }
     const text = inputText;
     setInputText("");
+    setDraftAttachment(null);
     setSending(true);
 
     const userMsg: ChatMessage = {
@@ -485,8 +607,12 @@ export default function ChatPage() {
           // 用户会话服务端不向发送者回显（agentId 用自己 user id）；agent/群聊用 "user" 标识，与回显一致以便去重
           agentId: activeContact.type === "user" ? (me?.id ?? "user") : "user",
           content: text,
+          attachment: draftAttachment ?? undefined,
         });
-        void api.post(`/conversations/${activeContact.convId}/messages`, { content: text }).catch((e) => {
+        void api.post(`/conversations/${activeContact.convId}/messages`, {
+          content: text,
+          ...(draftAttachment ? { attachment: draftAttachment } : {}),
+        }).catch((e) => {
           showToast("发送失败: " + (e as Error).message, "error");
         });
       } else if (activeContact.type === "user") {
@@ -495,7 +621,10 @@ export default function ChatPage() {
           type: "direct",
           participantIds: activeContact.participantIds,
         });
-        await api.post(`/conversations/${conv.id}/messages`, { content: text });
+        await api.post(`/conversations/${conv.id}/messages`, {
+          content: text,
+          ...(draftAttachment ? { attachment: draftAttachment } : {}),
+        });
         const patch = { convId: conv.id, runId: conv.runId } as const;
         setContacts((prev) => prev.map((c) => (c.id === activeContact.id ? { ...c, ...patch } : c)));
         setActiveContact((prev) => (prev && prev.id === activeContact.id ? { ...prev, ...patch } : prev));
@@ -711,7 +840,8 @@ export default function ChatPage() {
                           {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
                         </div>
                       )}
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed">{renderContent(msg.content)}</div>
+                      {msg.attachment && <AttachmentView att={msg.attachment} />}
+                      {msg.content && <div className="whitespace-pre-wrap text-sm leading-relaxed">{renderContent(msg.content)}</div>}
                       <div className={cls(
                         "mt-1 text-[10px]",
                         msg.sender === "user" ? "text-primary-fg/70" : "text-muted",
@@ -733,22 +863,73 @@ export default function ChatPage() {
 
             {/* 输入框 */}
             <div className="border-t border-border px-6 py-4">
-              <div className="flex items-center gap-3">
+              {/* 待发送附件预览 */}
+              {draftAttachment && (
+                <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted/20 px-3 py-2">
+                  {draftAttachment.type === "image" ? <ImageIcon className="h-4 w-4 text-muted" /> : <Paperclip className="h-4 w-4 text-muted" />}
+                  <span className="flex-1 truncate text-xs text-muted">{draftAttachment.name}</span>
+                  <button
+                    onClick={() => setDraftAttachment(null)}
+                    className="rounded p-1 text-muted transition-colors hover:text-fg"
+                    aria-label="取消附件"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    void handlePickFile(e.target.files?.[0], true);
+                    e.target.value = "";
+                  }}
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    void handlePickFile(e.target.files?.[0], false);
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+                  title={activeContact.type === "user" ? "发送图片" : "附件仅支持用户-用户会话"}
+                  aria-label="发送图片"
+                  disabled={uploading || sending || activeContact.type !== "user"}
+                >
+                  <ImageIcon className="h-5 w-5" />
+                </button>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+                  title={activeContact.type === "user" ? "发送文件" : "附件仅支持用户-用户会话"}
+                  aria-label="发送文件"
+                  disabled={uploading || sending || activeContact.type !== "user"}
+                >
+                  <Paperclip className="h-5 w-5" />
+                </button>
                 <Input
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
                   placeholder={`发送给 ${activeContact.name}...`}
                   className="flex-1"
-                  disabled={sending}
+                  disabled={sending || uploading}
                 />
                 <Button
                   onClick={sendMessage}
-                  disabled={!inputText.trim() || sending}
+                  disabled={(!inputText.trim() && !draftAttachment) || sending || uploading}
                   className="px-4"
                   aria-label="发送消息"
                 >
-                  {sending ? <Spinner /> : <Send className="h-4 w-4" />}
+                  {sending || uploading ? <Spinner /> : <Send className="h-4 w-4" />}
                 </Button>
               </div>
             </div>

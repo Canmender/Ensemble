@@ -2,9 +2,30 @@ import { Router } from "express";
 import type { AppContext } from "../../context";
 import { asyncH, fail, ok } from "./helpers";
 import { newId } from "../../util/id";
-import type { Conversation } from "@ensemble/shared";
+import type { Conversation, MessageAttachment } from "@ensemble/shared";
 
 const now = () => new Date().toISOString();
+
+/** 校验并归一化消息附件（来自 upload 端点的 url；结构不合法返回 undefined） */
+function parseAttachment(raw: unknown): MessageAttachment | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const a = raw as Record<string, unknown>;
+  const type = a.type === "image" || a.type === "file" ? a.type : null;
+  if (!type || typeof a.url !== "string" || !a.url) return undefined;
+  return {
+    type,
+    name: typeof a.name === "string" && a.name ? a.name : "附件",
+    size: typeof a.size === "number" ? a.size : 0,
+    mime: typeof a.mime === "string" ? a.mime : undefined,
+    url: a.url,
+  };
+}
+
+/** 会话列表最后一条消息的预览文案（附件消息用占位符，纯文本用原文） */
+function previewText(content: string, attachment?: MessageAttachment): string {
+  if (attachment) return attachment.type === "image" ? "[图片]" : `[文件] ${attachment.name}`;
+  return content;
+}
 
 /** 用户-用户会话（runId = conv id，无 agent run） */
 const isUserConv = (conv: Conversation): boolean => conv.runId.startsWith("conv_");
@@ -134,9 +155,11 @@ export function conversationsRouter(ctx: AppContext): Router {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
-      const content = (req.body as { content?: unknown })?.content;
-      if (typeof content !== "string" || !content.trim()) {
-        return fail(res, new Error("content required"), 400);
+      const body = (req.body ?? {}) as { content?: unknown; attachment?: unknown };
+      const content = typeof body.content === "string" ? body.content.trim() : "";
+      const attachment = parseAttachment(body.attachment);
+      if (!content && !attachment) {
+        return fail(res, new Error("content 或 attachment 必填"), 400);
       }
 
       // 用户-用户会话（无 run）：消息落库 + 实时推送参与者用户 + per-user 未读
@@ -149,10 +172,11 @@ export function conversationsRouter(ctx: AppContext): Router {
           agentId: senderId,
           role: "user",
           content,
+          attachment,
           userId: req.user?.id,
           ts: now(),
         });
-        ctx.store.updateConversationMeta(conv.id, content, now());
+        ctx.store.updateConversationMeta(conv.id, previewText(content, attachment), now());
         // 推送参与者（除发送者）+ 未读。接收者 = 归属用户 + participants（创建者不在 participants 里）
         // runId = conv.runId（conv id），客户端据此把实时消息关联到会话
         const recipients = new Set<string>([conv.userId, ...conv.participantIds].filter((x): x is string => !!x));
@@ -163,6 +187,7 @@ export function conversationsRouter(ctx: AppContext): Router {
             jobId: "",
             agentId: senderId,
             content,
+            attachment,
           }, conv.runId);
           ctx.store.incrementUnread(conv.id, pid);
         }
@@ -170,7 +195,10 @@ export function conversationsRouter(ctx: AppContext): Router {
         return;
       }
 
-      // Agent 会话：steering + 广播
+      // Agent 会话：steering + 广播（agent 链路目前只处理文本）
+      if (attachment) {
+        return fail(res, new Error("暂不支持向 Agent 发送附件"), 400);
+      }
       const run = ctx.store.getRun(conv.runId);
       if (run && run.status !== "queued" && run.status !== "running") {
         return fail(res, new Error(`会话已结束（${run.status}），请新建会话`), 409);

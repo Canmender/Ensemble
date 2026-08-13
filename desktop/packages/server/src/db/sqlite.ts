@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   role     TEXT NOT NULL,
   user_id  TEXT NOT NULL DEFAULT '',
   content  TEXT NOT NULL,
+  attachment TEXT,
   ts       TEXT NOT NULL
 );
 
@@ -161,7 +162,9 @@ function migrateUserColumns(db: DatabaseSync): void {
   if (cmFk.some((f) => f.table === "runs" && f.from === "run_id")) {
     const oldCmCols = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
     const hasUserId = oldCmCols.some((c) => c.name === "user_id");
+    const hasAttachment = oldCmCols.some((c) => c.name === "attachment");
     const userSelect = hasUserId ? "user_id, " : "'' AS user_id, ";
+    const attSelect = hasAttachment ? "attachment, " : "NULL AS attachment, ";
     db.exec(`BEGIN;
       ALTER TABLE chat_messages RENAME TO chat_messages_old;
       CREATE TABLE chat_messages (
@@ -172,12 +175,18 @@ function migrateUserColumns(db: DatabaseSync): void {
         role     TEXT NOT NULL,
         user_id  TEXT NOT NULL DEFAULT '',
         content  TEXT NOT NULL,
+        attachment TEXT,
         ts       TEXT NOT NULL
       );
-      INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, ts)
-        SELECT id, run_id, job_id, agent_id, role, ${userSelect} content, ts FROM chat_messages_old;
+      INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, ts)
+        SELECT id, run_id, job_id, agent_id, role, ${userSelect} ${attSelect} content, ts FROM chat_messages_old;
       DROP TABLE chat_messages_old;
       COMMIT;`);
+  }
+  // chat_messages.attachment（P0-4 图片/文件；重建库已有该列则跳过）
+  const cmAtt = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmAtt.some((c) => c.name === "attachment")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN attachment TEXT");
   }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;

@@ -1,4 +1,4 @@
-import type { AgentEvent, JobStatus, RunStatus } from "@ensemble/shared";
+import type { AgentEvent, JobStatus, RunStatus, MessageAttachment } from "@ensemble/shared";
 
 /** Server → Client 的每一帧（带 run 内单调 seq，用于重连去重/补拉） */
 export interface WsEnvelope {
@@ -14,7 +14,7 @@ export type RunEvent =
   | { type: "run.status"; status: RunStatus }
   | { type: "job.status"; jobId: string; agentId: string; status: JobStatus }
   | { type: "agent.event"; jobId: string; agentId: string; event: AgentEvent }
-  | { type: "chat.message"; jobId: string; agentId: string; content: string }
+  | { type: "chat.message"; jobId: string; agentId: string; content: string; attachment?: MessageAttachment }
   | { type: "run.result"; result: string }
   | { type: "run.error"; message: string }
   | { type: "tool_confirm_request"; confirmId: string; tool: string; args: unknown }

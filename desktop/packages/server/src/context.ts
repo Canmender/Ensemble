@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { resolve, join, dirname } from "node:path";
+import { mkdirSync } from "node:fs";
 import type { ServerEnv } from "./config/env";
 import { ConfigManager } from "./appContext";
 import { Store } from "./orchestration/store";
@@ -68,6 +69,8 @@ export function resolveEmbedFn(config: ConfigManager, providerRegistry: Provider
 export interface AppContext {
   env: ServerEnv;
   db: DatabaseSync;
+  /** 聊天附件（图片/文件）存储目录 */
+  uploadsDir: string;
   config: ConfigManager;
   store: Store;
   userStore: UserStore;
@@ -119,6 +122,9 @@ export function createAppContext(
   registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager, resolveEmbedFn(config, providerRegistry));
 
   const dataDir = dirname(env.dbPath);
+  // 聊天附件存储目录（图片/文件上传）
+  const uploadsDir = join(dataDir, "uploads");
+  mkdirSync(uploadsDir, { recursive: true });
   // 外部记忆后端：默认本地 SQL（SQLite + FTS5，免服务）；配置 Mem0 时切换到 Mem0
   const mem0Cfg = config.getSettings().mem0;
   const externalBackend: MemoryBackend | undefined =
@@ -243,6 +249,7 @@ export function createAppContext(
   return {
     env,
     db,
+    uploadsDir,
     config,
     store,
     userStore,

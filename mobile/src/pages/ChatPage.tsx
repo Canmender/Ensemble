@@ -1,227 +1,62 @@
 /**
- * 聊天页面（企业级会话）
- * 会话列表 / 消息读 chat_messages / WS 实时推送。
- * 使用设计系统（theme + ui 组件 + Ionicons）。
+ * 聊天列表页（微信式会话卡片）
+ * 每个聊天一条卡片（头像/名称/最后消息/时间/未读角标），点击卡片进入 ChatRoom。
+ * 新建对话通过联系人页发起（chatTarget 联动）。
  */
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
-  TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTaskStore } from "../store/taskStore";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { api, type Conversation } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
 import { useChatTarget } from "../store/chatTargetStore";
-import { api, type Conversation } from "../services/api";
 import { wsLink } from "../services/wslink";
-import { Button, EmptyState, Badge } from "../components/ui";
+import { Badge, EmptyState } from "../components/ui";
 import { colors, spacing, radius, fontSize } from "../theme";
-import type { AgentConfig } from "@ensemble/shared-protocol";
+import type { RootStackParamList } from "../App";
 
-type MessageItem = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  agentName?: string;
-  ts: string;
-};
+function convTitle(c: Conversation): string {
+  if (c.title) return c.title;
+  return (c.participantIds ?? []).join(", ") || "会话";
+}
+
+function convIcon(c: Conversation): React.ComponentProps<typeof Ionicons>["name"] {
+  if (c.runId.startsWith("conv_")) return "person";
+  if (c.type === "group") return "people";
+  return "flash";
+}
+
+/** 最后消息时间：当天显示 HH:MM，否则 MM/DD */
+function timeStr(ts?: string): string {
+  if (!ts) return "";
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
 
 export default function ChatPage() {
-  const { agents } = useTaskStore();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { connectionState } = useDeviceStore();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [users, setUsers] = useState<import("../services/api").UserInfo[]>([]);
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<MessageItem[]>([]);
-  const [inputText, setInputText] = useState("");
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [showAgentSelector, setShowAgentSelector] = useState(false);
-  const [isSending, setIsSending] = useState(false);
-  const [sendError, setSendError] = useState<string | null>(null);
-  const flatListRef = useRef<FlatList>(null);
-  const activeRunIdRef = useRef<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const lastReload = useRef(0);
 
   const isConnected = connectionState === "connected";
-  const selectedConv = conversations.find((c) => c.id === selectedConvId);
 
-  // 加载会话列表 + 用户列表（用户-用户 IM）
-  const loadConversations = useCallback(async () => {
-    const res = await api.getConversations();
-    if (res.data) setConversations(res.data);
-  }, []);
-  useEffect(() => {
-    void loadConversations();
-    void api.getUsers().then((r) => {
-      if (r.data) setUsers(r.data);
-    });
-  }, [loadConversations]);
-
-  // 选中会话：记录关联 run（供 WS 匹配）、加载消息、标记已读
-  useEffect(() => {
-    if (!selectedConvId) {
-      setMessages([]);
-      activeRunIdRef.current = null;
-      return;
-    }
-    activeRunIdRef.current = selectedConv?.runId ?? null;
-    void api.getConversationMessages(selectedConvId).then((res) => {
-      if (res.data) {
-        setMessages(
-          res.data.messages.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            agentName: m.agentId,
-            ts: m.ts,
-          })),
-        );
-      }
-    });
-    void api.markConversationRead(selectedConvId);
-  }, [selectedConvId, selectedConv?.runId]);
-
-  // WS 实时：新消息推送到当前会话
-  useEffect(() => {
-    wsLink.on({
-      onChatMessage: (msg) => {
-        if (msg.runId === activeRunIdRef.current) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: `${msg.agentId}-${Date.now()}`,
-              role: "assistant",
-              content: msg.content,
-              agentName: msg.agentId,
-              ts: new Date().toISOString(),
-            },
-          ]);
-        }
-      },
-    });
-  }, []);
-
-  // 发送消息
-  const handleSend = useCallback(async () => {
-    const text = inputText.trim();
-    if (!text || !isConnected || isSending) return;
-
-    if (selectedConvId) {
-      setIsSending(true);
-      setSendError(null);
-      try {
-        await api.sendConversationMessage(selectedConvId, text);
-        setMessages((prev) => [
-          ...prev,
-          { id: `u-${Date.now()}`, role: "user", content: text, ts: new Date().toISOString() },
-        ]);
-        setInputText("");
-      } catch (err) {
-        setSendError(err instanceof Error ? err.message : "发送失败");
-      } finally {
-        setIsSending(false);
-      }
-      return;
-    }
-
-    if (!selectedAgentId && !selectedUserId) return;
-    setIsSending(true);
-    setSendError(null);
-    try {
-      const targetId = selectedUserId ?? selectedAgentId!;
-      const res = await api.createConversation({
-        type: "direct",
-        participantIds: [targetId],
-      });
-      if (res.data) {
-        await api.sendConversationMessage(res.data.id, text);
-        setSelectedConvId(res.data.id);
-        setMessages([
-          { id: `u-${Date.now()}`, role: "user", content: text, ts: new Date().toISOString() },
-        ]);
-        setInputText("");
-        void loadConversations();
-      }
-    } catch (err) {
-      setSendError(err instanceof Error ? err.message : "创建会话失败");
-    } finally {
-      setIsSending(false);
-    }
-  }, [inputText, selectedConvId, selectedAgentId, selectedUserId, isConnected, isSending, loadConversations]);
-
-  useEffect(() => {
-    if (messages.length > 0) {
-      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
-    }
-  }, [messages.length]);
-
-  useEffect(() => {
-    if (!sendError) return;
-    const t = setTimeout(() => setSendError(null), 5000);
-    return () => clearTimeout(t);
-  }, [sendError]);
-
-  const handleSelectAgent = (agent: AgentConfig) => {
-    setSelectedAgentId(agent.id);
-    setSelectedUserId(null);
-    setShowAgentSelector(false);
-    setSelectedConvId(null);
-  };
-
-  const handleSelectUser = (u: { id: string; username: string }) => {
-    setSelectedUserId(u.id);
-    setSelectedAgentId(null);
-    setShowAgentSelector(false);
-    setSelectedConvId(null);
-  };
-
-  // 消费联系人标签页选中的目标（点击联系人 → 跳到聊天并选中，一次性）
-  const target = useChatTarget((s) => s.target);
-  const clearTarget = useChatTarget((s) => s.setTarget);
-  useEffect(() => {
-    if (!target) return;
-    if (target.kind === "user") {
-      setSelectedUserId(target.id);
-      setSelectedAgentId(null);
-    } else {
-      setSelectedAgentId(target.id);
-      setSelectedUserId(null);
-    }
-    setSelectedConvId(null);
-    setShowAgentSelector(false);
-    clearTarget(null);
-  }, [target, clearTarget]);
-
-  const renderMessage = ({ item }: { item: MessageItem }) => {
-    const isUser = item.role === "user";
-    return (
-      <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
-        <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}>
-          {!isUser && item.agentName && (
-            <Text style={styles.bubbleAgentName}>{item.agentName}</Text>
-          )}
-          <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.content}</Text>
-          <Text style={[styles.bubbleTime, isUser && styles.bubbleTimeUser]}>
-            {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </Text>
-        </View>
-      </View>
-    );
-  };
-
-  const selectedAgent = agents.find((a) => a.id === selectedAgentId);
-  const selectedUser = users.find((u) => u.id === selectedUserId);
-  const canSend = inputText.trim() && isConnected && !isSending && (!!selectedConvId || !!selectedAgentId || !!selectedUserId);
-
-  // 连接状态指示（是否连上云端服务器/桌面端）
   const connMap: Record<string, { text: string; color: string }> = {
     connected: { text: "已连接云端", color: "#10b981" },
     connecting: { text: "连接中…", color: "#f59e0b" },
@@ -231,223 +66,129 @@ export default function ChatPage() {
   };
   const conn = connMap[connectionState] ?? connMap.disconnected;
 
+  const loadConversations = useCallback(async () => {
+    const res = await api.getConversations();
+    if (res.data) setConversations(res.data);
+    setLoading(false);
+    if (res.error) setError(res.error);
+  }, []);
+
+  useEffect(() => {
+    void loadConversations();
+  }, [loadConversations]);
+
+  // WS 收到新消息 → 节流刷新列表（未读 / 最后消息实时更新）
+  useFocusEffect(
+    useCallback(() => {
+      wsLink.on({
+        onChatMessage: () => {
+          if (Date.now() - lastReload.current > 2000) {
+            lastReload.current = Date.now();
+            void loadConversations();
+          }
+        },
+      });
+    }, [loadConversations]),
+  );
+
+  // 消费联系人页选中的目标：懒创建 direct 会话后进入聊天
+  const target = useChatTarget((s) => s.target);
+  const clearTarget = useChatTarget((s) => s.setTarget);
+  useEffect(() => {
+    if (!target) return;
+    clearTarget(null);
+    void (async () => {
+      try {
+        const res = await api.createConversation({ type: "direct", participantIds: [target.id] });
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        const conv = res.data!;
+        navigation.navigate("ChatRoom", { convId: conv.id, runId: conv.runId, title: convTitle(conv) });
+        void loadConversations();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "创建会话失败");
+      }
+    })();
+  }, [target, clearTarget, loadConversations, navigation]);
+
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 5000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  const openConv = (c: Conversation) => {
+    navigation.navigate("ChatRoom", { convId: c.id, runId: c.runId, title: convTitle(c) });
+  };
+
+  const renderItem = ({ item }: { item: Conversation }) => (
+    <TouchableOpacity style={styles.convCard} onPress={() => openConv(item)} activeOpacity={0.7}>
+      <View style={styles.avatar}>
+        <Ionicons name={convIcon(item)} size={22} color={colors.primary} />
+      </View>
+      <View style={styles.convBody}>
+        <View style={styles.convRow}>
+          <Text style={styles.convTitle} numberOfLines={1}>
+            {convTitle(item)}
+          </Text>
+          <Text style={styles.convTime}>{timeStr(item.lastMessageTs)}</Text>
+        </View>
+        <View style={styles.convRow}>
+          <Text style={styles.convLast} numberOfLines={1}>
+            {item.lastMessage || "开始聊天吧"}
+          </Text>
+          {item.unread > 0 && <Badge count={item.unread} />}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-    >
-      {/* 连接状态条 */}
+    <View style={styles.container}>
+      {/* 连接状态条 + 新对话入口 */}
       <View style={styles.connBar}>
         <View style={[styles.connDot, { backgroundColor: conn.color }]} />
         <Text style={styles.connText}>{conn.text}</Text>
-        {isConnected && (
-          <Text style={styles.connHint}>会话与消息实时同步</Text>
-        )}
+        <TouchableOpacity
+          style={styles.newBtn}
+          onPress={() => (navigation as any).navigate("Contacts")}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="add" size={18} color={colors.primary} />
+          <Text style={styles.newBtnText}>新对话</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* 会话选择器 */}
-      <View style={styles.topBar}>
-        <FlatList
-          horizontal
-          data={[{ id: "__new__", title: "新对话" }, ...conversations]}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => {
-            const isNew = item.id === "__new__";
-            const isActive = isNew ? !selectedConvId : selectedConvId === item.id;
-            const conv = item as Conversation;
-            const title = isNew
-              ? "新对话"
-              : conv.title || (conv.participantIds ?? []).join(", ");
-            return (
-              <TouchableOpacity
-                style={[styles.convChip, isActive && styles.convChipActive]}
-                onPress={() => setSelectedConvId(isNew ? null : conv.id)}
-                activeOpacity={0.7}
-              >
-                {isNew ? (
-                  <Ionicons name="add" size={14} color={isActive ? "#fff" : colors.textMuted} />
-                ) : null}
-                <Text
-                  style={[styles.convChipText, isActive && styles.convChipTextActive]}
-                  numberOfLines={1}
-                >
-                  {title}
-                </Text>
-                {!isNew && conv.unread > 0 && <Badge count={conv.unread} />}
-              </TouchableOpacity>
-            );
-          }}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.convList}
-        />
+      {error && (
+        <View style={styles.errorBanner}>
+          <Ionicons name="alert-circle" size={14} color={colors.danger} />
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      )}
 
-        {/* 新对话：选择 Agent */}
-        {!selectedConvId && (
-          <View style={styles.agentBar}>
-            <TouchableOpacity style={styles.agentPicker} onPress={() => setShowAgentSelector(true)} activeOpacity={0.7}>
-              <Ionicons
-                name={selectedUserId ? "person" : selectedAgent?.kind === "builtin" ? "flash" : "terminal"}
-                size={16}
-                color={colors.primary}
-              />
-              <Text style={styles.agentPickerText} numberOfLines={1}>
-                {selectedUserId ? (selectedUser?.displayName || selectedUser?.username || "用户") : selectedAgent ? selectedAgent.name : "选择 Agent 或用户"}
-              </Text>
-              <Ionicons name="chevron-down" size={14} color={colors.textFaint} />
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* 消息列表 */}
-      {selectedConvId ? (
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : (
         <FlatList
-          ref={flatListRef}
-          data={messages}
-          renderItem={renderMessage}
+          data={conversations}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.messageList}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          ItemSeparatorComponent={() => <View style={styles.sep} />}
           ListEmptyComponent={
             <EmptyState
-              icon={<Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.textFaint} />}
-              title="暂无消息"
-              subtitle="发送消息开始对话"
+              icon={<Ionicons name="chatbubbles-outline" size={28} color={colors.textFaint} />}
+              title="暂无会话"
+              subtitle="点击右上角「新对话」，或在联系人页选择用户 / Agent 开始聊天"
             />
           }
         />
-      ) : (
-        <View style={styles.newConvWrap}>
-          <EmptyState
-            icon={<Ionicons name="chatbubbles-outline" size={28} color={colors.textFaint} />}
-            title={selectedAgentId ? `与 ${selectedAgent?.name} 对话` : selectedUserId ? `与 ${selectedUser?.displayName || selectedUser?.username} 对话` : "开始新对话"}
-            subtitle={
-              selectedAgentId || selectedUserId
-                ? "输入消息，回车发送"
-                : agents.length > 0 || users.length > 0
-                  ? "选择 Agent 或用户开始对话"
-                  : "暂无对话对象"
-            }
-          />
-        </View>
       )}
-
-      {/* 发送错误提示 */}
-      {sendError && (
-        <View style={styles.errorBanner}>
-          <Ionicons name="alert-circle" size={14} color={colors.danger} />
-          <Text style={styles.errorText}>{sendError}</Text>
-          <TouchableOpacity onPress={() => setSendError(null)} hitSlop={8}>
-            <Ionicons name="close" size={16} color={colors.textMuted} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* 输入栏 */}
-      <View style={styles.inputBar}>
-        <TextInput
-          style={styles.input}
-          placeholder={selectedConvId ? "输入消息…" : (selectedAgentId || selectedUserId) ? "输入消息…" : "请先选择 Agent 或用户"}
-          placeholderTextColor={colors.textFaint}
-          value={inputText}
-          onChangeText={(t) => {
-            setInputText(t);
-            if (sendError) setSendError(null);
-          }}
-          multiline
-          maxLength={2000}
-          editable={isConnected && !isSending}
-        />
-        {isSending ? (
-          <View style={styles.sendBtn}>
-            <ActivityIndicator size="small" color={colors.primary} />
-          </View>
-        ) : (
-          <TouchableOpacity
-            style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
-            onPress={handleSend}
-            disabled={!canSend}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="arrow-up" size={20} color={canSend ? "#fff" : colors.textFaint} />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* 选择对话对象（用户 + Agent） */}
-      {showAgentSelector && (
-        <View style={styles.overlay}>
-          <View style={styles.sheet}>
-            <View style={styles.sheetHeader}>
-              <Text style={styles.sheetTitle}>选择对话对象</Text>
-              <TouchableOpacity onPress={() => setShowAgentSelector(false)} hitSlop={8}>
-                <Ionicons name="close" size={22} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={[
-                ...users.map((u) => ({
-                  key: `user-${u.id}`,
-                  kind: "user" as const,
-                  id: u.id,
-                  name: u.displayName || u.username,
-                  subtitle: "用户",
-                })),
-                ...agents
-                  .filter((a) => a.enabled)
-                  .map((a) => ({
-                    key: `agent-${a.id}`,
-                    kind: "agent" as const,
-                    id: a.id,
-                    name: a.name,
-                    subtitle: a.model || "Agent",
-                    agentKind: a.kind,
-                  })),
-              ]}
-              keyExtractor={(item) => item.key}
-              renderItem={({ item }) => {
-                const selected = item.kind === "user" ? selectedUserId : selectedAgentId;
-                return (
-                  <TouchableOpacity
-                    style={[styles.agentItem, selected === item.id && styles.agentItemActive]}
-                    onPress={() =>
-                      item.kind === "user"
-                        ? handleSelectUser({ id: item.id, username: item.name })
-                        : handleSelectAgent(
-                            agents.find((a) => a.id === item.id) as AgentConfig,
-                          )
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.agentIcon}>
-                      <Ionicons
-                        name={
-                          item.kind === "user"
-                            ? "person"
-                            : item.agentKind === "builtin"
-                              ? "flash"
-                              : "terminal"
-                        }
-                        size={20}
-                        color={colors.primary}
-                      />
-                    </View>
-                    <View style={styles.agentInfo}>
-                      <Text style={styles.agentName}>{item.name}</Text>
-                      <Text style={styles.agentModel} numberOfLines={1}>
-                        {item.subtitle}
-                      </Text>
-                    </View>
-                    {selected === item.id && (
-                      <Ionicons name="checkmark-circle" size={22} color={colors.primary} />
-                    )}
-                  </TouchableOpacity>
-                );
-              }}
-            />
-          </View>
-        </View>
-      )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -465,146 +206,50 @@ const styles = StyleSheet.create({
   },
   connDot: { width: 8, height: 8, borderRadius: 4 },
   connText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: "600" },
-  connHint: { color: colors.textFaint, fontSize: fontSize.xs, marginLeft: "auto" },
-  topBar: { borderBottomWidth: 1, borderBottomColor: colors.border },
-  convList: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  convChip: {
+  newBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
-    backgroundColor: colors.surface,
+    gap: 2,
+    marginLeft: "auto",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
     borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginHorizontal: 3,
+    backgroundColor: colors.primarySoft,
   },
-  convChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  convChipText: { color: colors.textMuted, fontSize: fontSize.sm, maxWidth: 110 },
-  convChipTextActive: { color: "#fff", fontWeight: "600" },
-  agentBar: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
-  agentPicker: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    gap: spacing.sm,
-  },
-  agentPickerText: { color: colors.text, fontSize: fontSize.md, flex: 1 },
-  messageList: { padding: spacing.lg },
-  msgRow: { marginBottom: spacing.md },
-  msgRowUser: { alignItems: "flex-end" },
-  msgRowAgent: { alignItems: "flex-start" },
-  bubble: {
-    maxWidth: "80%",
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-  },
-  bubbleUser: {
-    backgroundColor: colors.primary,
-    borderBottomRightRadius: radius.sm,
-  },
-  bubbleAgent: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderBottomLeftRadius: radius.sm,
-  },
-  bubbleAgentName: { color: colors.primary, fontSize: fontSize.xs, fontWeight: "600", marginBottom: 2 },
-  bubbleText: { color: colors.text, fontSize: fontSize.md, lineHeight: 21 },
-  bubbleTextUser: { color: "#fff" },
-  bubbleTime: { color: colors.textFaint, fontSize: 10, marginTop: 4, alignSelf: "flex-end" },
-  bubbleTimeUser: { color: "rgba(255,255,255,0.7)" },
-  newConvWrap: { flex: 1, justifyContent: "center" },
+  newBtnText: { color: colors.primary, fontSize: fontSize.xs, fontWeight: "600" },
   errorBanner: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
   },
   errorText: { color: colors.danger, fontSize: fontSize.sm, flex: 1 },
-  inputBar: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    padding: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-    gap: spacing.sm,
-  },
-  input: {
-    flex: 1,
-    backgroundColor: colors.inputBg,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 10,
-    color: colors.text,
-    fontSize: fontSize.md,
-    maxHeight: 100,
-  },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.full,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendBtnDisabled: { backgroundColor: colors.surfaceAlt },
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    maxHeight: "60%",
-    paddingBottom: spacing.xl,
-  },
-  sheetHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  sheetTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: "600" },
-  agentItem: {
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  list: { paddingVertical: spacing.sm },
+  convCard: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    gap: spacing.md,
+    backgroundColor: colors.surface,
   },
-  agentItemActive: { backgroundColor: colors.primarySoft },
-  agentIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: radius.md,
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: radius.full,
     backgroundColor: colors.primarySoft,
     alignItems: "center",
     justifyContent: "center",
+    marginRight: spacing.md,
   },
-  agentInfo: { flex: 1 },
-  agentName: { color: colors.text, fontSize: fontSize.md, fontWeight: "600" },
-  agentModel: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 },
+  convBody: { flex: 1, minWidth: 0 },
+  convRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  convTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: "600", flex: 1 },
+  convTime: { color: colors.textFaint, fontSize: 10 },
+  convLast: { color: colors.textMuted, fontSize: fontSize.xs, flex: 1, marginTop: 2 },
+  sep: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 48 + spacing.lg + spacing.md },
 });

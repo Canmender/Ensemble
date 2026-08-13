@@ -11,6 +11,7 @@ import type {
   Run,
   Job,
   ChatMessage,
+  MessageAttachment,
   AgentEvent,
   WorkflowDef,
 } from "@ensemble/shared-protocol";
@@ -574,8 +575,30 @@ class ApiService {
   }
 
   /** 发送会话消息（fire-and-forget，回复经 WS 推送） */
-  async sendConversationMessage(convId: string, content: string): Promise<ApiResponse<{ sent: boolean }>> {
-    return this.request<{ sent: boolean }>("POST", `/api/conversations/${convId}/messages`, { content });
+  /** 上传附件（base64 JSON）→ 返回可直接引用的附件元数据 */
+  async uploadAttachment(input: {
+    name: string;
+    mime: string;
+    data: string;
+  }): Promise<ApiResponse<{ url: string; name: string; size: number; mime: string; type: string }>> {
+    return this.request<{ url: string; name: string; size: number; mime: string; type: string }>(
+      "POST",
+      "/api/upload",
+      input,
+      UPLOAD_TIMEOUT_MS,
+    );
+  }
+
+  async sendConversationMessage(
+    convId: string,
+    content: string,
+    attachment?: MessageAttachment,
+  ): Promise<ApiResponse<{ sent: boolean }>> {
+    return this.request<{ sent: boolean }>(
+      "POST",
+      `/api/conversations/${convId}/messages`,
+      attachment ? { content, attachment } : { content },
+    );
   }
 
   /** 标记会话已读 */

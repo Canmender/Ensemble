@@ -14,6 +14,7 @@ import { useAuthGate } from "./store/authGateStore";
 import DashboardPage from "./pages/DashboardPage";
 import TasksPage from "./pages/TasksPage";
 import ChatPage from "./pages/ChatPage";
+import ChatRoomPage from "./pages/ChatRoomPage";
 import ContactsPage from "./pages/ContactsPage";
 import AgentsPage from "./pages/AgentsPage";
 import SettingsPage from "./pages/SettingsPage";
@@ -30,6 +31,7 @@ import { colors } from "./theme";
 export type RootStackParamList = {
   Main: undefined;
   Run: { runId: string };
+  ChatRoom: { convId: string; runId?: string; title?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -104,6 +106,17 @@ function MainApp() {
           options={{
             headerShown: true,
             title: "运行详情",
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerBackTitle: "返回",
+          }}
+        />
+        <Stack.Screen
+          name="ChatRoom"
+          component={ChatRoomPage}
+          options={{
+            headerShown: true,
+            title: "聊天",
             headerStyle: { backgroundColor: colors.bg },
             headerTintColor: colors.text,
             headerBackTitle: "返回",

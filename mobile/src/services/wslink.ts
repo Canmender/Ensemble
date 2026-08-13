@@ -7,9 +7,10 @@
  */
 
 import { useTaskStore } from "../store/taskStore";
+import type { MessageAttachment } from "@ensemble/shared-protocol";
 
 export interface WsLinkCallbacks {
-  onChatMessage?: (msg: { runId: string; jobId?: string; agentId: string; content: string }) => void;
+  onChatMessage?: (msg: { runId: string; jobId?: string; agentId: string; content: string; attachment?: MessageAttachment }) => void;
   onConnectionState?: (state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error") => void;
   onRunStatus?: (runId: string, status: string) => void;
 }
@@ -29,6 +30,7 @@ interface WsEnvelope {
     content?: string;
     result?: string;
     message?: string;
+    attachment?: MessageAttachment;
     event?: { type: string; tool?: string; input?: unknown; ts?: number };
   };
 }
@@ -195,6 +197,7 @@ export class WsLink {
           jobId: env.jobId,
           agentId: ev.agentId ?? "agent",
           content: ev.content ?? "",
+          attachment: ev.attachment,
         });
         break;
       case "run.result":

@@ -38,11 +38,24 @@ export interface ToolConfirmRequest {
   args: unknown;
 }
 
+export interface LiveMessage {
+  jobId?: string;
+  agentId: string;
+  content: string;
+  attachment?: {
+    type: "image" | "file";
+    name: string;
+    size: number;
+    mime?: string;
+    url: string;
+  };
+}
+
 export interface LiveRun {
   status: string;
   jobs: Record<string, LiveJob>;
   events: AgentEventItem[];
-  messages: Array<{ jobId?: string; agentId: string; content: string }>;
+  messages: LiveMessage[];
   finalResult?: string;
   error?: string;
   /** 待确认的工具调用（HITL） */
@@ -92,7 +105,7 @@ interface RunStore {
   setStatus: (runId: string, status: string) => void;
   upsertJob: (runId: string, jobId: string, patch: Partial<LiveJob>) => void;
   appendEvent: (runId: string, item: AgentEventItem) => void;
-  appendMessage: (runId: string, m: LiveRun["messages"][number]) => void;
+  appendMessage: (runId: string, m: LiveMessage) => void;
   /** 清空某 run 的实时消息（打开会话时以历史为准，避免与实时重复） */
   clearMessages: (runId: string) => void;
   setFinal: (runId: string, finalResult?: string, error?: string) => void;

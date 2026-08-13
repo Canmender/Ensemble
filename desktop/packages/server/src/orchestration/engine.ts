@@ -3,6 +3,7 @@ import type {
   AgentEvent,
   AgentTaskInput,
   Job,
+  MessageAttachment,
   Run,
   Task,
   TaskInput,
@@ -369,6 +370,7 @@ export class OrchestrationEngine {
     agentId: string,
     role: "user" | "assistant",
     content: string,
+    attachment?: MessageAttachment,
   ): void {
     const run = this.store.getRun(runId);
     this.store.createChatMessage({
@@ -378,6 +380,7 @@ export class OrchestrationEngine {
       agentId,
       role,
       content,
+      attachment,
       userId: run?.userId,
       ts: new Date().toISOString(),
     });
@@ -392,6 +395,7 @@ export class OrchestrationEngine {
       jobId: jobId ?? "",
       agentId,
       content,
+      attachment,
     });
   }
 
