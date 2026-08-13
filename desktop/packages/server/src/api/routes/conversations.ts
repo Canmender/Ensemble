@@ -10,7 +10,7 @@ const now = () => new Date().toISOString();
 function parseAttachment(raw: unknown): MessageAttachment | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const a = raw as Record<string, unknown>;
-  const type = a.type === "image" || a.type === "file" ? a.type : null;
+  const type = a.type === "image" || a.type === "video" || a.type === "file" ? a.type : null;
   if (!type || typeof a.url !== "string" || !a.url) return undefined;
   return {
     type,

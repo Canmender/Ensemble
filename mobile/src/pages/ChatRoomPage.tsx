@@ -84,6 +84,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [forwardConversations, setForwardConversations] = useState<Conversation[]>([]);
   // 附件下载中（防重复点击）
   const [downloading, setDownloading] = useState(false);
+  // 「+」扩展栏（相册/视频/文件）与全屏查看附件
+  const [showExtend, setShowExtend] = useState(false);
+  const [viewerAttachment, setViewerAttachment] = useState<MessageAttachment | null>(null);
   // 已读回执：当前用户 id + 对方最后已读时间（自己消息 ts ≤ 该时间 → 显示「已读」）
   const [meId, setMeId] = useState<string | undefined>();
   const [peerReadTs, setPeerReadTs] = useState<number | undefined>();
@@ -453,6 +456,26 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     await doUpload(asset.name ?? "file", asset.mimeType ?? "application/octet-stream", base64);
   }, [doUpload]);
 
+  // 选择视频（expo-image-picker 视频不返回 base64，经 FileSystem 读取上传）
+  const pickVideo = useCallback(async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      setSendError("需要相册权限才能发送视频");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["videos"] });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    if ((asset.fileSize ?? 0) > 20 * 1024 * 1024) {
+      setSendError("视频过大（上限 20MB）");
+      return;
+    }
+    const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    await doUpload(asset.fileName ?? "video.mp4", asset.mimeType ?? "video/mp4", base64);
+  }, [doUpload]);
+
   // 下载附件到本地 downloads/ 目录，并调起系统分享/保存面板
   const downloadAttachment = useCallback(
     async (att: MessageAttachment) => {
@@ -486,26 +509,25 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   const renderAttachment = (att: MessageAttachment, isUser: boolean) => {
     if (att.type === "image") {
+      // 图片完整显示，点击全屏查看（全屏界面可下载）
       return (
-        <View style={{ alignItems: "flex-start" }}>
-          <Image source={{ uri: attachUrl(att.url) }} style={styles.msgImage} resizeMode="cover" />
-          <TouchableOpacity
-            style={styles.dlBtn}
-            onPress={() => void downloadAttachment(att)}
-            disabled={downloading}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="download-outline" size={13} color={isUser ? "#fff" : colors.primary} />
-            <Text style={[styles.dlBtnText, isUser && { color: "#fff" }]}>
-              {downloading ? "下载中…" : "下载"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={() => setViewerAttachment(att)} activeOpacity={0.85} disabled={!!downloading}>
+          <Image source={{ uri: attachUrl(att.url) }} style={styles.msgImage} resizeMode="contain" />
+        </TouchableOpacity>
       );
     }
     return (
-      <View style={styles.fileCard}>
-        <Ionicons name="document-text" size={20} color={isUser ? "#fff" : colors.primary} />
+      <TouchableOpacity
+        style={styles.fileCard}
+        onPress={() => setViewerAttachment(att)}
+        activeOpacity={0.85}
+        disabled={!!downloading}
+      >
+        <Ionicons
+          name={att.type === "video" ? "videocam" : "document-text"}
+          size={20}
+          color={isUser ? "#fff" : colors.primary}
+        />
         <View style={{ flex: 1, marginLeft: spacing.sm }}>
           <Text style={[styles.fileName, isUser && { color: "#fff" }]} numberOfLines={1}>
             {att.name}
@@ -515,7 +537,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           </Text>
         </View>
         <TouchableOpacity
-          onPress={() => void downloadAttachment(att)}
+          onPress={(e) => {
+            e.stopPropagation();
+            void downloadAttachment(att);
+          }}
           disabled={downloading}
           hitSlop={8}
         >
@@ -525,7 +550,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             color={isUser ? "#fff" : colors.primary}
           />
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -635,32 +660,32 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         </View>
       )}
 
+      {/* 「+」扩展栏：相册 / 视频 / 文件 */}
+      {showExtend && (
+        <View style={styles.extendBar}>
+          <TouchableOpacity style={styles.extendItem} onPress={pickImage} disabled={!canSendAttachment || uploading || isSending} activeOpacity={0.7}>
+            <View style={styles.extendIcon}>
+              <Ionicons name="image-outline" size={24} color={colors.primary} />
+            </View>
+            <Text style={styles.extendLabel}>相册</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.extendItem} onPress={pickVideo} disabled={!canSendAttachment || uploading || isSending} activeOpacity={0.7}>
+            <View style={styles.extendIcon}>
+              <Ionicons name="videocam-outline" size={24} color={colors.primary} />
+            </View>
+            <Text style={styles.extendLabel}>视频</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.extendItem} onPress={pickFile} disabled={!canSendAttachment || uploading || isSending} activeOpacity={0.7}>
+            <View style={styles.extendIcon}>
+              <Ionicons name="document-outline" size={24} color={colors.primary} />
+            </View>
+            <Text style={styles.extendLabel}>文件</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* 输入栏（键盘弹出时 paddingBottom 顶起，避免被输入法遮挡） */}
       <View style={[styles.inputBar, { paddingBottom: keyboardHeight + spacing.md }]}>
-        <TouchableOpacity
-          style={styles.attachBtn}
-          onPress={pickImage}
-          disabled={!canSendAttachment || uploading || isSending}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="image-outline"
-            size={22}
-            color={canSendAttachment && !uploading ? colors.textMuted : colors.textFaint}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.attachBtn}
-          onPress={pickFile}
-          disabled={!canSendAttachment || uploading || isSending}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="attach-outline"
-            size={22}
-            color={canSendAttachment && !uploading ? colors.textMuted : colors.textFaint}
-          />
-        </TouchableOpacity>
         <TextInput
           ref={inputRef}
           style={styles.input}
@@ -690,6 +715,18 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             <Ionicons name="arrow-up" size={20} color={canSend ? "#fff" : colors.textFaint} />
           </TouchableOpacity>
         )}
+        <TouchableOpacity
+          style={styles.expandBtn}
+          onPress={() => setShowExtend((v) => !v)}
+          disabled={!canSendAttachment || uploading || isSending}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name={showExtend ? "close" : "add"}
+            size={26}
+            color={showExtend ? colors.primary : colors.text}
+          />
+        </TouchableOpacity>
       </View>
 
       {/* 长按消息操作菜单：引用 / 转发 / 撤回（仅自己的消息） */}
@@ -796,6 +833,45 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           </View>
         </View>
       </Modal>
+
+      {/* 全屏查看附件（图片/视频/文件），可下载 */}
+      <Modal transparent visible={!!viewerAttachment} animationType="fade" onRequestClose={() => setViewerAttachment(null)}>
+        <View style={styles.viewerOverlay}>
+          <TouchableOpacity style={styles.viewerClose} onPress={() => setViewerAttachment(null)} hitSlop={10}>
+            <Ionicons name="close" size={30} color="#fff" />
+          </TouchableOpacity>
+          {viewerAttachment?.type === "image" ? (
+            <Image
+              source={{ uri: viewerAttachment ? attachUrl(viewerAttachment.url) : "" }}
+              style={styles.viewerImage}
+              resizeMode="contain"
+            />
+          ) : (
+            <View style={styles.viewerInfo}>
+              <Ionicons
+                name={viewerAttachment?.type === "video" ? "videocam" : "document-text"}
+                size={56}
+                color="#fff"
+              />
+              <Text style={styles.viewerName} numberOfLines={2}>
+                {viewerAttachment?.name}
+              </Text>
+              <Text style={styles.viewerMeta}>{viewerAttachment ? fmtSize(viewerAttachment.size) : ""}</Text>
+            </View>
+          )}
+          {viewerAttachment && (
+            <TouchableOpacity
+              style={styles.viewerDownload}
+              onPress={() => void downloadAttachment(viewerAttachment)}
+              disabled={downloading}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={downloading ? "hourglass-outline" : "download-outline"} size={20} color="#fff" />
+              <Text style={styles.viewerDownloadText}>{downloading ? "下载中…" : "下载"}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -830,11 +906,10 @@ const styles = StyleSheet.create({
   bubbleRead: { color: "#fff", fontSize: 10, fontWeight: "600" },
   bubbleUnread: { color: "rgba(255,255,255,0.5)", fontSize: 10 },
   msgImage: {
-    width: 180,
-    height: 180,
+    width: 260,
+    height: 320,
     borderRadius: radius.md,
     backgroundColor: colors.surfaceAlt,
-    marginBottom: 4,
   },
   fileCard: {
     flexDirection: "row",
@@ -895,6 +970,54 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendBtnDisabled: { backgroundColor: colors.surfaceAlt },
+  expandBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  extendBar: {
+    flexDirection: "row",
+    gap: spacing.lg,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  extendItem: { alignItems: "center", gap: 4 },
+  extendIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  extendLabel: { color: colors.textMuted, fontSize: fontSize.xs },
+  viewerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  viewerClose: { position: "absolute", top: 50, right: 20, zIndex: 10 },
+  viewerImage: { width: "100%", height: "70%" },
+  viewerInfo: { alignItems: "center", paddingHorizontal: spacing.xl },
+  viewerName: { color: "#fff", fontSize: fontSize.md, marginTop: spacing.md, textAlign: "center" },
+  viewerMeta: { color: "rgba(255,255,255,0.6)", fontSize: fontSize.sm, marginTop: 4 },
+  viewerDownload: {
+    position: "absolute",
+    bottom: 40,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: 10,
+  },
+  viewerDownloadText: { color: "#fff", fontSize: fontSize.md, fontWeight: "600" },
   dlBtn: {
     flexDirection: "row",
     alignItems: "center",

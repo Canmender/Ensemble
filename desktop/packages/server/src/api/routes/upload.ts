@@ -51,7 +51,7 @@ export function uploadRouter(ctx: AppContext): Router {
           name,
           size: buf.length,
           mime,
-          type: mime.startsWith("image/") ? "image" : "file",
+          type: mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : "file",
         },
         201,
       );

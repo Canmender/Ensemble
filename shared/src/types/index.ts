@@ -128,9 +128,9 @@ export interface WorkflowEdge {
   when: EdgeCondition;
 }
 
-/** 聊天附件（图片/文件） */
+/** 聊天附件（图片/视频/文件） */
 export interface MessageAttachment {
-  type: "image" | "file";
+  type: "image" | "video" | "file";
   name: string;
   size: number;
   mime?: string;
