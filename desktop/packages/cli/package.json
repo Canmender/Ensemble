@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/cli",
-  "version": "0.7.12",
+  "version": "0.7.13",
   "private": true,
   "type": "module",
   "bin": {

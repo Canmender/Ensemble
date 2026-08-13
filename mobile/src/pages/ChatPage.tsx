@@ -104,7 +104,7 @@ export default function ChatPage() {
     }, [loadConversations]),
   );
 
-  // 消费联系人页选中的目标：懒创建 direct 会话后进入聊天
+  // 消费联系人页选中的目标：已有 direct 会话则直接进入，无则懒创建
   const target = useChatTarget((s) => s.target);
   const clearTarget = useChatTarget((s) => s.setTarget);
   useEffect(() => {
@@ -112,6 +112,19 @@ export default function ChatPage() {
     clearTarget(null);
     void (async () => {
       try {
+        // 查已有会话：与目标用户/agent 的 direct 会话（列表未加载完时拉一次兜底）
+        const list = conversations.length > 0 ? conversations : (await api.getConversations()).data ?? [];
+        const existing = list.find(
+          (c) => c.type === "direct" && (c.participantIds ?? []).includes(target.id),
+        );
+        if (existing) {
+          navigation.navigate("ChatRoom", {
+            convId: existing.id,
+            runId: existing.runId,
+            title: convTitle(existing, usersById),
+          });
+          return;
+        }
         const res = await api.createConversation({ type: "direct", participantIds: [target.id] });
         if (res.error) {
           setError(res.error);
@@ -124,7 +137,7 @@ export default function ChatPage() {
         setError(err instanceof Error ? err.message : "创建会话失败");
       }
     })();
-  }, [target, clearTarget, loadConversations, navigation]);
+  }, [target, clearTarget, loadConversations, navigation, conversations, usersById]);
 
   useEffect(() => {
     if (!error) return;
