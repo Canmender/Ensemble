@@ -4,6 +4,15 @@
 
 ---
 
+## v0.7.3 (2026-08-13) — 版本号规则更新（0.7 系列 = IM 聊天优化 + 每次提交 patch +1）
+
+**规则**（写入 [desktop/docs/WIKI.md](desktop/docs/WIKI.md#版本号规则)）
+- **0.7 系列整体定位为「IM 聊天优化」**：0.7.x 内所有版本均在 IM 聊天范围内迭代（用户-用户 IM、会话加固、移动端 IM 修复等）；非 IM 新功能/重构升 0.8.0
+- **每次代码提交 → 修订号 +1**：每个提交都是一个可追踪的迭代版本，便于按提交数核对代码迭代
+- **提交时同步全部版本号位置**：desktop 根 + cli/desktop/server/shared/web 共 6 处 package.json、mobile package.json、mobile app.json（version + versionCode）、移动端 SettingsPage `APP_VERSION`、connection.ts `appVersion`
+
+**版本**：0.7.2 → 0.7.3，APK versionCode 12
+
 ## v0.7.2 (2026-08-12) — 移动端登录门禁 + 服务器标签 + 数据层修复
 
 **登录门禁**

@@ -578,17 +578,21 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 
 采用语义化版本 `x.y.z`（主版本.次版本.修订）：
 
-- **修订号（z）**：小提交或 Bug 修复 → 第三位 +1，并**必须**在 [CHANGELOG.md](../../CHANGELOG.md) 记录
+- **修订号（z）**：**每次代码提交 → 第三位 +1**（每个提交都是一个可追踪的迭代版本，便于按提交数核对代码迭代），并在 [CHANGELOG.md](../../CHANGELOG.md) 为该提交追加一条记录
 - **次版本号（y）**：中型修改（新功能、重构、非破坏性变更、依赖升级）→ 第二位 +1
 - **主版本号（x）**：破坏性变更或重大里程碑 → 第一位 +1
 
-发布流程：每次 bump 版本号时，同步更新各 package.json 与 [CHANGELOG.md](../../CHANGELOG.md)，再打包发布。
+**提交时同步**：每次 bump 修订号，同步更新全部版本号位置：desktop 根 + cli/desktop/server/shared/web 共 6 处 package.json、mobile package.json、mobile app.json（version + versionCode）、移动端 SettingsPage `APP_VERSION`、connection.ts `appVersion`。
+
+**版本主题**：**0.7 系列（0.7.0+）整体定位为「IM 聊天优化」**。0.7.x 内所有版本均在 IM 聊天范围内迭代（用户-用户 IM、会话加固、移动端 IM 修复等）；涉及非 IM 的新功能/重构应升 **0.8.0**，不放进 0.7.x。
+
+发布流程：bump 后同步更新 [CHANGELOG.md](../../CHANGELOG.md)，再打包发布。
 
 ---
 
 ## 变更日志
 
-完整版本历史见 **[CHANGELOG.md](../../CHANGELOG.md)**（v0.1.0 → v0.7.2，含历次发布说明）。
+完整版本历史见 **[CHANGELOG.md](../../CHANGELOG.md)**（v0.1.0 → v0.7.3，含历次发布说明）。
 
 ## 移动端
 

@@ -21,7 +21,7 @@ import { api, type UserInfo } from "../services/api";
 import { useAuthGate } from "../store/authGateStore";
 import { colors } from "../theme";
 
-const APP_VERSION = "0.7.2";
+const APP_VERSION = "0.7.3";
 
 export default function SettingsPage() {
   const { currentDevice, connectedDevice, connectionState, lastError } = useDeviceStore();
