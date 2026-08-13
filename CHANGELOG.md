@@ -4,6 +4,14 @@
 
 ---
 
+## v0.7.9 (2026-08-13) — 修复：输入法遮挡输入框（手动键盘处理）
+
+**根因**：Android 15+ / RN 0.86 强制 edge-to-edge，`windowSoftInputMode=adjustResize` 在该模式下失效——系统不再随键盘 resize 窗口，键盘直接覆盖输入栏（此前依赖系统 resize 的 KeyboardAvoidingView 因此无效）
+
+**修复**：改为手动监听 `keyboardDidShow`/`keyboardDidHide` 获取键盘高度，给输入栏动态加 `paddingBottom` 顶起；键盘弹出时消息列表自动滚动到底
+
+**版本**：0.7.8 → 0.7.9，APK versionCode 18
+
 ## v0.7.8 (2026-08-13) — 修复：用户-用户消息方向 + 输入法遮挡
 
 **消息方向**：用户-用户会话服务端双方 `role` 都是 "user"，此前按 role 判定导致双方消息挤在一边。改为按发送者是否当前用户判定——自己的消息右侧（绿色）、对方左侧（白色），双方屏幕各自正确

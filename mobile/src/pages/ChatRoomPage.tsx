@@ -11,8 +11,7 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
+  Keyboard,
   ActivityIndicator,
   Image,
   Alert,
@@ -72,6 +71,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [uploading, setUploading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [draftAttachment, setDraftAttachment] = useState<MessageAttachment | null>(null);
+  // 键盘高度（Android 15+/edge-to-edge 下 adjustResize 失效，需手动顶起输入栏）
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   // 已读回执：当前用户 id + 对方最后已读时间（自己消息 ts ≤ 该时间 → 显示「已读」）
   const [meId, setMeId] = useState<string | undefined>();
   const [peerReadTs, setPeerReadTs] = useState<number | undefined>();
@@ -190,7 +191,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     if (messages.length > 0) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
-  }, [messages.length]);
+  }, [messages.length, keyboardHeight]);
 
   useEffect(() => {
     if (!sendError) return;
@@ -261,6 +262,18 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, deleted: true } : m)));
       },
     });
+  }, []);
+
+  // 键盘弹出/收起监听（Android 15+/edge-to-edge 下 windowSoftInputMode 不生效，手动顶起输入栏）
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", (e) =>
+      setKeyboardHeight(e.endCoordinates.height),
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboardHeight(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
   }, []);
 
   // 上传附件（图片 base64 直取；文件经 expo-file-system 读 base64）
@@ -387,12 +400,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const canSend = (inputText.trim() || !!draftAttachment) && isConnected && !isSending && !uploading;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      // Android：manifest 已配 windowSoftInputMode=adjustResize，系统自动把输入框顶起，behavior 置 undefined 避免与系统 resize 冲突；
-      // iOS：用 padding 避开键盘
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={styles.container}>
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -435,8 +443,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         </View>
       )}
 
-      {/* 输入栏 */}
-      <View style={styles.inputBar}>
+      {/* 输入栏（键盘弹出时 paddingBottom 顶起，避免被输入法遮挡） */}
+      <View style={[styles.inputBar, { paddingBottom: keyboardHeight + spacing.md }]}>
         <TouchableOpacity
           style={styles.attachBtn}
           onPress={pickImage}
@@ -489,7 +497,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
