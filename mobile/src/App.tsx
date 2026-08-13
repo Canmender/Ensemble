@@ -20,6 +20,10 @@ import ChatRoomPage from "./pages/ChatRoomPage";
 import ContactsPage from "./pages/ContactsPage";
 import AgentsPage from "./pages/AgentsPage";
 import SettingsPage from "./pages/SettingsPage";
+import ProfilePage from "./pages/ProfilePage";
+import NotificationSettingsPage from "./pages/NotificationSettingsPage";
+import AboutPage from "./pages/AboutPage";
+import UserProfilePage from "./pages/UserProfilePage";
 import RunPage from "./pages/RunPage";
 import LoginPage from "./pages/LoginPage";
 
@@ -34,6 +38,10 @@ export type RootStackParamList = {
   Main: undefined;
   Run: { runId: string };
   ChatRoom: { convId: string; runId?: string; title?: string };
+  Profile: undefined;
+  NotificationSettings: undefined;
+  About: undefined;
+  UserProfile: { userId: string; name: string; username: string; displayName?: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -48,7 +56,7 @@ const TAB_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Chat: { active: "chatbubble-ellipses", inactive: "chatbubble-ellipses-outline" },
   Contacts: { active: "people", inactive: "people-outline" },
   Agents: { active: "hardware-chip", inactive: "hardware-chip-outline" },
-  Settings: { active: "settings", inactive: "settings-outline" },
+  Me: { active: "person", inactive: "person-outline" },
 };
 
 /** 底部「聊天」Tab 未读红点角标 */
@@ -104,7 +112,7 @@ function MainTabs() {
       <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天" }} />
       <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人" }} />
       <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent" }} />
-      <Tab.Screen name="Settings" component={SettingsPage} options={{ title: "设置" }} />
+      <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我" }} />
     </Tab.Navigator>
   );
 }
@@ -150,6 +158,50 @@ function MainApp() {
           options={{
             headerShown: true,
             title: "聊天",
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerBackTitle: "返回",
+          }}
+        />
+        <Stack.Screen
+          name="Profile"
+          component={ProfilePage}
+          options={{
+            headerShown: true,
+            title: "个人信息",
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerBackTitle: "返回",
+          }}
+        />
+        <Stack.Screen
+          name="NotificationSettings"
+          component={NotificationSettingsPage}
+          options={{
+            headerShown: true,
+            title: "通知设置",
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerBackTitle: "返回",
+          }}
+        />
+        <Stack.Screen
+          name="About"
+          component={AboutPage}
+          options={{
+            headerShown: true,
+            title: "关于",
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerBackTitle: "返回",
+          }}
+        />
+        <Stack.Screen
+          name="UserProfile"
+          component={UserProfilePage}
+          options={{
+            headerShown: true,
+            title: "个人资料",
             headerStyle: { backgroundColor: colors.bg },
             headerTintColor: colors.text,
             headerBackTitle: "返回",

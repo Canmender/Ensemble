@@ -537,6 +537,11 @@ class ApiService {
     return this.request<UserInfo>("GET", "/api/auth/me");
   }
 
+  /** 更新当前用户昵称 */
+  async updateProfile(displayName: string): Promise<ApiResponse<UserInfo>> {
+    return this.request<UserInfo>("PATCH", "/api/auth/me", { displayName });
+  }
+
   /** 登出：服务端删除会话 + 清除本地用户 token */
   async logout(): Promise<ApiResponse<{ loggedOut: boolean }>> {
     const res = await this.request<{ loggedOut: boolean }>("POST", "/api/auth/logout");

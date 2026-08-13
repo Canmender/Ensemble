@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/mobile",
-  "version": "0.7.17",
+  "version": "0.7.18",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",

@@ -93,9 +93,20 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     }
   }
 
-  const openChat = (row: ContactRow) => {
-    setTarget({ kind: row.kind, id: row.id, name: row.name });
-    navigation.navigate("Chat");
+  const openContact = (row: ContactRow) => {
+    if (row.kind === "user") {
+      // 用户 → 个人资料页（下方「发信息」进入聊天）
+      navigation.navigate("UserProfile", {
+        userId: row.id,
+        name: row.name,
+        username: row.user.username,
+        displayName: row.user.displayName,
+      });
+    } else {
+      // Agent → 直接开聊
+      setTarget({ kind: "agent", id: row.id, name: row.name });
+      navigation.navigate("Chat");
+    }
   };
 
   const renderItem = ({ item }: { item: (typeof flatData)[number] }) => {
@@ -110,7 +121,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     const row = item as ContactRow;
     const isUser = row.kind === "user";
     return (
-      <TouchableOpacity style={styles.row} onPress={() => openChat(row)} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.row} onPress={() => openContact(row)} activeOpacity={0.7}>
         <View style={[styles.avatar, { backgroundColor: isUser ? colors.primarySoft : colors.accent + "1A" }]}>
           {isUser ? (
             <Text style={[styles.avatarText, { color: colors.primary }]}>

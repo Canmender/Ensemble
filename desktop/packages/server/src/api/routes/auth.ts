@@ -61,6 +61,20 @@ export function authRouter(ctx: AppContext): Router {
     ok(res, user);
   });
 
+  /** 更新当前用户昵称 */
+  r.patch("/me", (req, res) => {
+    const token = bearerToken(req.headers.authorization);
+    const user = token ? ctx.userStore.getUserBySessionToken(token) : undefined;
+    if (!user) return fail(res, new Error("未认证"), 401);
+    const displayName = (req.body as { displayName?: unknown })?.displayName;
+    if (typeof displayName !== "string" || !displayName.trim()) {
+      return fail(res, new Error("displayName required"), 400);
+    }
+    const name = displayName.trim().slice(0, 30);
+    ctx.userStore.updateDisplayName(user.id, name);
+    ok(res, { id: user.id, username: user.username, displayName: name, role: user.role });
+  });
+
   /** 用户列表（创建用户-用户会话选人；不含敏感信息） */
   r.get("/users", (req, res) => {
     const rows = ctx.db

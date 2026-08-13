@@ -90,6 +90,13 @@ export class UserStore {
     };
   }
 
+  /** 更新昵称 */
+  updateDisplayName(id: string, displayName: string): void {
+    this.db
+      .prepare("UPDATE users SET display_name = ?, updated_at = ? WHERE id = ?")
+      .run(displayName, new Date().toISOString(), id);
+  }
+
   deleteSession(token: string): void {
     this.db.prepare("DELETE FROM sessions WHERE token = ?").run(token);
   }
