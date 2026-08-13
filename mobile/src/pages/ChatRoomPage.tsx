@@ -3,7 +3,7 @@
  * 消息历史 / WS 实时 / 断线重连补拉 / 未读清零 / 图片与文件附件。
  */
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -22,12 +22,12 @@ import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { api, type Conversation } from "../services/api";
+import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
 import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { colors, spacing, radius, fontSize } from "../theme";
-import type { MessageAttachment } from "@ensemble/shared-protocol";
+import type { AgentConfig, MessageAttachment } from "@ensemble/shared-protocol";
 import type { RootStackParamList } from "../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ChatRoom">;
@@ -75,6 +75,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 已读回执：当前用户 id + 对方最后已读时间（自己消息 ts ≤ 该时间 → 显示「已读」）
   const [meId, setMeId] = useState<string | undefined>();
   const [peerReadTs, setPeerReadTs] = useState<number | undefined>();
+  // 用户/Agent 列表（消息发送者昵称解析）
+  const [users, setUsers] = useState<UserInfo[]>([]);
+  const [agents, setAgents] = useState<AgentConfig[]>([]);
   const flatListRef = useRef<FlatList>(null);
   const activeRunIdRef = useRef<string | null>(null);
 
@@ -91,10 +94,37 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       if (c) {
         setConv(c);
         activeRunIdRef.current = c.runId;
-        navigation.setOptions({ title: c.title || "聊天" });
+        // 标题优先用进入时传入的（ChatPage 已解析为昵称）；缺省回退会话 title
+        if (!title) navigation.setOptions({ title: c.title || "聊天" });
       }
     });
   }, [convId, runId, title, navigation]);
+
+  // 用户/Agent 列表（解析消息发送者昵称，不直接显示 user id / agent id）
+  useEffect(() => {
+    void api.getUsers().then((r) => {
+      if (r.data) setUsers(r.data);
+    });
+    void api.getAgents().then((r) => {
+      if (r.data) setAgents(r.data);
+    });
+  }, []);
+
+  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
+  const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
+
+  /** 发送者显示名：用户-用户会话显示对方昵称，agent 会话显示 agent 名 */
+  const resolveSenderName = useCallback(
+    (agentId: string): string => {
+      if (conv?.runId.startsWith("conv_")) {
+        const u = usersById.get(agentId);
+        return u ? u.displayName || u.username || agentId : agentId;
+      }
+      const a = agentsById.get(agentId);
+      return a ? a.name : agentId;
+    },
+    [conv, usersById, agentsById],
+  );
 
   // 加载消息历史 + 已读回执（readers）+ 已读清零；发送成功后也调用以刷新真实 msgId（撤回可用）
   const loadMessages = useCallback(async () => {
@@ -330,7 +360,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           ) : (
             <>
               {!isUser && item.agentName && (
-                <Text style={styles.bubbleAgentName}>{item.agentName}</Text>
+                <Text style={styles.bubbleAgentName}>{resolveSenderName(item.agentName)}</Text>
               )}
               {item.attachment && renderAttachment(item.attachment, isUser)}
               {!!item.content && (

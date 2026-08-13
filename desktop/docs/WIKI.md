@@ -592,7 +592,7 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 
 ## 变更日志
 
-完整版本历史见 **[CHANGELOG.md](../../CHANGELOG.md)**（v0.1.0 → v0.7.6，含历次发布说明）。
+完整版本历史见 **[CHANGELOG.md](../../CHANGELOG.md)**（v0.1.0 → v0.7.7，含历次发布说明）。
 
 ## 移动端
 

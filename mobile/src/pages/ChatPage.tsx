@@ -4,7 +4,7 @@
  * 新建对话通过联系人页发起（chatTarget 联动）。
  */
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { api, type Conversation } from "../services/api";
+import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
 import { useChatTarget } from "../store/chatTargetStore";
 import { wsLink } from "../services/wslink";
@@ -24,9 +24,16 @@ import { Badge, EmptyState } from "../components/ui";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
-function convTitle(c: Conversation): string {
-  if (c.title) return c.title;
-  return (c.participantIds ?? []).join(", ") || "会话";
+function convTitle(c: Conversation, usersById: Map<string, UserInfo>): string {
+  // 用户-用户会话（runId 以 conv_ 开头）：title 存的是对方 user id，改用参与者昵称
+  if (c.runId.startsWith("conv_")) {
+    const names = (c.participantIds ?? []).map((pid) => {
+      const u = usersById.get(pid);
+      return u ? u.displayName || u.username || pid : pid;
+    });
+    return names.join(", ") || "会话";
+  }
+  return c.title || (c.participantIds ?? []).join(", ") || "会话";
 }
 
 function convIcon(c: Conversation): React.ComponentProps<typeof Ionicons>["name"] {
@@ -53,7 +60,10 @@ export default function ChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<UserInfo[]>([]);
   const lastReload = useRef(0);
+
+  const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
 
   const isConnected = connectionState === "connected";
 
@@ -75,6 +85,9 @@ export default function ChatPage() {
 
   useEffect(() => {
     void loadConversations();
+    void api.getUsers().then((r) => {
+      if (r.data) setUsers(r.data);
+    });
   }, [loadConversations]);
 
   // WS 收到新消息 → 节流刷新列表（未读 / 最后消息实时更新）
@@ -105,7 +118,7 @@ export default function ChatPage() {
           return;
         }
         const conv = res.data!;
-        navigation.navigate("ChatRoom", { convId: conv.id, runId: conv.runId, title: convTitle(conv) });
+        navigation.navigate("ChatRoom", { convId: conv.id, runId: conv.runId, title: convTitle(conv, usersById) });
         void loadConversations();
       } catch (err) {
         setError(err instanceof Error ? err.message : "创建会话失败");
@@ -120,7 +133,7 @@ export default function ChatPage() {
   }, [error]);
 
   const openConv = (c: Conversation) => {
-    navigation.navigate("ChatRoom", { convId: c.id, runId: c.runId, title: convTitle(c) });
+    navigation.navigate("ChatRoom", { convId: c.id, runId: c.runId, title: convTitle(c, usersById) });
   };
 
   const renderItem = ({ item }: { item: Conversation }) => (
@@ -131,7 +144,7 @@ export default function ChatPage() {
       <View style={styles.convBody}>
         <View style={styles.convRow}>
           <Text style={styles.convTitle} numberOfLines={1}>
-            {convTitle(item)}
+            {convTitle(item, usersById)}
           </Text>
           <Text style={styles.convTime}>{timeStr(item.lastMessageTs)}</Text>
         </View>

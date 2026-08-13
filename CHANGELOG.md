@@ -4,6 +4,16 @@
 
 ---
 
+## v0.7.7 (2026-08-13) — 修复：聊天页显示用户昵称（不再显示 user id）
+
+**问题**：移动端聊天页消息发送者名直接显示 user id（`agentId`），会话列表卡片标题也显示对方 user id
+
+**修复**
+- 聊天室加载用户与 Agent 列表，消息发送者按 id 解析为昵称（用户-用户会话显示对方 `displayName`/`username`；Agent 会话显示 agent 名）
+- 会话列表卡片标题与进入聊天后的标题改为参与者昵称
+
+**版本**：0.7.6 → 0.7.7，APK versionCode 16
+
 ## v0.7.6 (2026-08-13) — 修复：移动端明文连接被 Android 拦截（网络安全配置固化）
 
 **背景**：v0.7.4 起移动端新增 expo-image-picker 等原生依赖，打包需 `expo prebuild --clean` 重新生成 android 工程，把此前手动加到构建目录的 `network_security_config.xml` 清掉了 → Android 9+ 默认禁明文，手机端连不上 `http://SERVER_IP_REDACTED:8787`
