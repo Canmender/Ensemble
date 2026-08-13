@@ -22,6 +22,7 @@ export interface ChatWsMessage {
 export interface WsLinkCallbacks {
   onChatMessage?: (msg: ChatWsMessage) => void;
   onChatDeleted?: (msg: { runId: string; msgId: string }) => void;
+  onChatRead?: (msg: { runId: string; userId: string; readTs: string }) => void;
   onConnectionState?: (state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error") => void;
   onRunStatus?: (runId: string, status: string) => void;
 }
@@ -44,6 +45,8 @@ interface WsEnvelope {
     attachment?: MessageAttachment;
     replyTo?: MessageReply;
     msgId?: string;
+    userId?: string;
+    readTs?: string;
     event?: { type: string; tool?: string; input?: unknown; ts?: number };
   };
 }
@@ -234,6 +237,11 @@ export class WsLink {
       case "chat.deleted":
         if (ev.msgId) {
           this.callbacks.onChatDeleted?.({ runId: env.runId, msgId: ev.msgId });
+        }
+        break;
+      case "chat.read":
+        if (ev.userId && ev.readTs) {
+          this.callbacks.onChatRead?.({ runId: env.runId, userId: ev.userId, readTs: ev.readTs });
         }
         break;
       case "run.result":

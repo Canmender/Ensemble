@@ -266,6 +266,15 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       ctx.store.markRead(conv.id, isUserConv(conv) ? req.user?.id : undefined);
+      // 已读回执：广播给其他参与者（对方实时看到我读了；readTs 即本次 markRead 时刻）
+      if (isUserConv(conv) && req.user?.id) {
+        const readTs = new Date().toISOString();
+        const recipients = new Set<string>([conv.userId, ...conv.participantIds].filter((x): x is string => !!x));
+        for (const pid of recipients) {
+          if (pid === req.user.id) continue;
+          ctx.hub.sendToUser(pid, { type: "chat.read", userId: req.user.id, readTs }, conv.runId);
+        }
+      }
       ok(res, { read: true });
     }),
   );

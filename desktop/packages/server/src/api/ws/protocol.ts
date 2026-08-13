@@ -16,6 +16,7 @@ export type RunEvent =
   | { type: "agent.event"; jobId: string; agentId: string; event: AgentEvent }
   | { type: "chat.message"; jobId: string; agentId: string; content: string; attachment?: MessageAttachment; replyTo?: MessageReply }
   | { type: "chat.deleted"; msgId: string }
+  | { type: "chat.read"; userId: string; readTs: string }
   | { type: "run.result"; result: string }
   | { type: "run.error"; message: string }
   | { type: "tool_confirm_request"; confirmId: string; tool: string; args: unknown }

@@ -208,10 +208,26 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               ts: new Date().toISOString(),
             }),
           );
+          // 正在看当前会话：收到消息即时重新标记已读（对方实时看到「已读」）
+          void api.markConversationRead(convId);
         }
       },
     });
-  }, []);
+  }, [convId]);
+
+  // 已读回执实时更新：对方读了会话 → 更新 peerReadTs，我的消息从未读变已读
+  useEffect(() => {
+    wsLink.on({
+      onChatRead: ({ runId, userId, readTs }) => {
+        if (runId === activeRunIdRef.current && userId !== meId) {
+          const ts = new Date(readTs).getTime();
+          if (!Number.isNaN(ts)) {
+            setPeerReadTs((prev) => (prev === undefined || ts > prev ? ts : prev));
+          }
+        }
+      },
+    });
+  }, [meId]);
 
   // 断线重连后补拉当前会话历史（chat.message 不走 run_events/seq，catchUp 补不回，重拉服务端历史兜底）
   const prevConnRef = useRef(connectionState);
@@ -548,7 +564,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             <Text style={[styles.bubbleTime, isUser && styles.bubbleTimeUser]}>
               {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
             </Text>
-            {isUser && !item.deleted && isRead && <Text style={styles.bubbleRead}>已读</Text>}
+            {isUser && !item.deleted && peerReadTs !== undefined && (
+              <Text style={isRead ? styles.bubbleRead : styles.bubbleUnread}>
+                {isRead ? "已读" : "未读"}
+              </Text>
+            )}
           </View>
         </TouchableOpacity>
       </View>
@@ -807,6 +827,7 @@ const styles = StyleSheet.create({
   bubbleTime: { color: colors.textFaint, fontSize: 10 },
   bubbleTimeUser: { color: "rgba(255,255,255,0.7)" },
   bubbleRead: { color: "#fff", fontSize: 10, fontWeight: "600" },
+  bubbleUnread: { color: "rgba(255,255,255,0.5)", fontSize: 10 },
   msgImage: {
     width: 180,
     height: 180,
