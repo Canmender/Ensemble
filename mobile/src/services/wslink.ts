@@ -11,6 +11,7 @@ import type { MessageAttachment } from "@ensemble/shared-protocol";
 
 export interface WsLinkCallbacks {
   onChatMessage?: (msg: { runId: string; jobId?: string; agentId: string; content: string; attachment?: MessageAttachment }) => void;
+  onChatDeleted?: (msg: { runId: string; msgId: string }) => void;
   onConnectionState?: (state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error") => void;
   onRunStatus?: (runId: string, status: string) => void;
 }
@@ -31,6 +32,7 @@ interface WsEnvelope {
     result?: string;
     message?: string;
     attachment?: MessageAttachment;
+    msgId?: string;
     event?: { type: string; tool?: string; input?: unknown; ts?: number };
   };
 }
@@ -199,6 +201,11 @@ export class WsLink {
           content: ev.content ?? "",
           attachment: ev.attachment,
         });
+        break;
+      case "chat.deleted":
+        if (ev.msgId) {
+          this.callbacks.onChatDeleted?.({ runId: env.runId, msgId: ev.msgId });
+        }
         break;
       case "run.result":
         if (typeof ev.result === "string") {

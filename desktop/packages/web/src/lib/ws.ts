@@ -18,6 +18,7 @@ interface WsEnvelope {
     confirmId?: string;
     tool?: string;
     args?: unknown;
+    msgId?: string;
     attachment?: {
       type: "image" | "file";
       name: string;
@@ -61,10 +62,17 @@ class WsClient {
   private wsToken?: string;
   /** 重连成功回调（连接建立时触发；用于补拉 chat.message 等不走 run_events/seq 的数据） */
   private onOpenCbs: Array<() => void> = [];
+  /** 消息撤回回调（chat.deleted） */
+  private onChatDeletedCbs: Array<(msg: { runId: string; msgId: string }) => void> = [];
 
   /** 注册连接建立/重连成功回调 */
   onOpen(cb: () => void): void {
     this.onOpenCbs.push(cb);
+  }
+
+  /** 注册消息撤回回调 */
+  onChatDeleted(cb: (msg: { runId: string; msgId: string }) => void): void {
+    this.onChatDeletedCbs.push(cb);
   }
 
   /** Fetch the session token from the server, then connect the WebSocket. */
@@ -188,6 +196,17 @@ class WsClient {
           content: ev.content ?? "",
           attachment: ev.attachment,
         });
+        break;
+      case "chat.deleted":
+        if (ev.msgId) {
+          for (const cb of this.onChatDeletedCbs) {
+            try {
+              cb({ runId: env.runId, msgId: ev.msgId });
+            } catch {
+              /* 回调异常不影响 WS 连接 */
+            }
+          }
+        }
         break;
       case "run.result":
         store.setFinal(env.runId, ev.result);

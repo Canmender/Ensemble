@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   user_id  TEXT NOT NULL DEFAULT '',
   content  TEXT NOT NULL,
   attachment TEXT,
+  deleted  INTEGER NOT NULL DEFAULT 0,
   ts       TEXT NOT NULL
 );
 
@@ -119,6 +120,7 @@ CREATE TABLE IF NOT EXISTS conversation_reads (
   conv_id TEXT NOT NULL,
   user_id TEXT NOT NULL,
   unread  INTEGER NOT NULL DEFAULT 0,
+  read_ts TEXT,
   PRIMARY KEY (conv_id, user_id)
 );
 
@@ -163,8 +165,10 @@ function migrateUserColumns(db: DatabaseSync): void {
     const oldCmCols = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
     const hasUserId = oldCmCols.some((c) => c.name === "user_id");
     const hasAttachment = oldCmCols.some((c) => c.name === "attachment");
+    const hasDeleted = oldCmCols.some((c) => c.name === "deleted");
     const userSelect = hasUserId ? "user_id, " : "'' AS user_id, ";
     const attSelect = hasAttachment ? "attachment, " : "NULL AS attachment, ";
+    const delSelect = hasDeleted ? "deleted, " : "0 AS deleted, ";
     db.exec(`BEGIN;
       ALTER TABLE chat_messages RENAME TO chat_messages_old;
       CREATE TABLE chat_messages (
@@ -176,10 +180,11 @@ function migrateUserColumns(db: DatabaseSync): void {
         user_id  TEXT NOT NULL DEFAULT '',
         content  TEXT NOT NULL,
         attachment TEXT,
+        deleted  INTEGER NOT NULL DEFAULT 0,
         ts       TEXT NOT NULL
       );
-      INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, ts)
-        SELECT id, run_id, job_id, agent_id, role, ${userSelect} ${attSelect} content, ts FROM chat_messages_old;
+      INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, deleted, ts)
+        SELECT id, run_id, job_id, agent_id, role, ${userSelect} ${attSelect} ${delSelect} content, ts FROM chat_messages_old;
       DROP TABLE chat_messages_old;
       COMMIT;`);
   }
@@ -188,10 +193,20 @@ function migrateUserColumns(db: DatabaseSync): void {
   if (!cmAtt.some((c) => c.name === "attachment")) {
     db.exec("ALTER TABLE chat_messages ADD COLUMN attachment TEXT");
   }
+  // chat_messages.deleted（P1 消息撤回）
+  const cmDel = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmDel.some((c) => c.name === "deleted")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0");
+  }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
     if (!cols.some((c) => c.name === "user_id")) {
       db.exec(`ALTER TABLE ${table} ADD COLUMN user_id TEXT NOT NULL DEFAULT ''`);
     }
+  }
+  // conversation_reads.read_ts（P1 已读回执：记录用户最后一次已读时间）
+  const crCols = db.prepare("PRAGMA table_info(conversation_reads)").all() as Array<{ name: string }>;
+  if (!crCols.some((c) => c.name === "read_ts")) {
+    db.exec("ALTER TABLE conversation_reads ADD COLUMN read_ts TEXT");
   }
 }

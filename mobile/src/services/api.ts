@@ -569,9 +569,17 @@ class ApiService {
     convId: string,
     before?: string,
     limit = 50,
-  ): Promise<ApiResponse<{ messages: ChatMessage[]; total: number }>> {
+  ): Promise<ApiResponse<{ messages: ChatMessage[]; total: number; readers?: Array<{ userId: string; readTs?: string }> }>> {
     const qs = before ? `?before=${encodeURIComponent(before)}&limit=${limit}` : `?limit=${limit}`;
-    return this.request<{ messages: ChatMessage[]; total: number }>("GET", `/api/conversations/${convId}/messages${qs}`);
+    return this.request<{ messages: ChatMessage[]; total: number; readers?: Array<{ userId: string; readTs?: string }> }>(
+      "GET",
+      `/api/conversations/${convId}/messages${qs}`,
+    );
+  }
+
+  /** 撤回消息（发送者可撤） */
+  async recallMessage(convId: string, msgId: string): Promise<ApiResponse<{ recalled: string }>> {
+    return this.request<{ recalled: string }>("DELETE", `/api/conversations/${convId}/messages/${msgId}`);
   }
 
   /** 发送会话消息（fire-and-forget，回复经 WS 推送） */

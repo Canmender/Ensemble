@@ -32,6 +32,7 @@ interface ChatMessage {
   agentId?: string; // 群聊/用户会话中标识发送者
   senderName?: string; // 用户会话显示发送者昵称
   attachment?: MessageAttachment;
+  deleted?: boolean; // 已撤回
   timestamp: number;
 }
 
@@ -279,7 +280,9 @@ export default function ChatPage() {
   // 单聊消息（本地管理）
   const [singleMessages, setSingleMessages] = useState<Record<string, ChatMessage[]>>({});
   // 企业级会话历史（conversations API，原始数据；方向/昵称在渲染时解析）
-  const [convHistory, setConvHistory] = useState<Record<string, Array<{ id: string; content: string; agentId?: string; role: string; ts: string; attachment?: MessageAttachment }>>>({});
+  const [convHistory, setConvHistory] = useState<Record<string, Array<{ id: string; content: string; agentId?: string; role: string; ts: string; attachment?: MessageAttachment; deleted?: boolean }>>>({});
+  // 各参与者最后已读时间（已读回执）
+  const [convReaders, setConvReaders] = useState<Record<string, Array<{ userId: string; readTs?: string }>>>({});
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
@@ -402,6 +405,7 @@ export default function ChatPage() {
         agentId: m.agentId,
         senderName: isUserConv ? userName(usersById, m.agentId) : undefined,
         attachment: m.attachment,
+        deleted: m.deleted,
         timestamp: new Date(m.ts).getTime(),
       }));
       // 相邻去重：WS 回显 + 乐观追加会产生相同消息（如群聊里自己的发言）
@@ -418,6 +422,7 @@ export default function ChatPage() {
         agentId: m.agentId,
         senderName: isUserConv && m.agentId ? userName(usersById, m.agentId) : undefined,
         attachment: m.attachment,
+        deleted: undefined,
         timestamp: groupBaseTs.current - (deduped.length - 1 - i) * 60000,
       }));
       // 历史 + 实时（打开会话时已清空旧 live，历史为准）
@@ -432,6 +437,7 @@ export default function ChatPage() {
         agentId: m.agentId,
         senderName: undefined,
         attachment: m.attachment,
+        deleted: undefined,
         timestamp: groupBaseTs.current - (groupMessages.length - 1 - i) * 60000,
       }));
     }
@@ -462,8 +468,12 @@ export default function ChatPage() {
           role: m.role,
           ts: m.ts,
           attachment: m.attachment,
+          deleted: !!m.deleted,
         })),
       }));
+      if (Array.isArray(d.readers)) {
+        setConvReaders((prev) => ({ ...prev, [contact.convId!]: d.readers }));
+      }
       // 历史为准：清空打开前残留的 live，只保留打开后到达的新消息
       useRunStore.getState().clearMessages(contact.runId);
     }
@@ -536,6 +546,42 @@ export default function ChatPage() {
       showToast("归档失败: " + (e as Error).message, "error");
     }
   }
+
+  /** 撤回消息（发送者可撤） */
+  async function recallMessage(msg: ChatMessage) {
+    if (!activeContact?.convId) return;
+    try {
+      await api.del(`/conversations/${activeContact.convId}/messages/${msg.id}`);
+      setConvHistory((prev) => ({
+        ...prev,
+        [activeContact.convId!]: (prev[activeContact.convId!] ?? []).map((m) =>
+          m.id === msg.id ? { ...m, deleted: true } : m,
+        ),
+      }));
+    } catch (e) {
+      showToast("撤回失败: " + (e as Error).message, "error");
+    }
+  }
+
+  // WS 撤回事件：把对应消息标记为已撤回（对方撤回时实时生效）
+  useEffect(() => {
+    wsClient.onChatDeleted(({ msgId }) => {
+      setConvHistory((prev) => {
+        let changed = false;
+        const next: typeof prev = {};
+        for (const [cid, msgs] of Object.entries(prev)) {
+          next[cid] = msgs.map((m) => {
+            if (m.id === msgId && !m.deleted) {
+              changed = true;
+              return { ...m, deleted: true };
+            }
+            return m;
+          });
+        }
+        return changed ? next : prev;
+      });
+    });
+  }, []);
 
   /** 上传附件到服务器（base64 JSON），返回可直接引用的附件对象 */
   async function uploadFile(file: File, asImage: boolean): Promise<MessageAttachment | null> {
@@ -612,9 +658,15 @@ export default function ChatPage() {
         void api.post(`/conversations/${activeContact.convId}/messages`, {
           content: text,
           ...(draftAttachment ? { attachment: draftAttachment } : {}),
-        }).catch((e) => {
-          showToast("发送失败: " + (e as Error).message, "error");
-        });
+        })
+          .then(() => {
+            setDraftAttachment(null);
+            // 发送成功 → 刷新历史拿到真实 msgId（撤回可用），live 以历史为准去重
+            if (activeContactRef.current?.convId) void loadConvHistory(activeContactRef.current);
+          })
+          .catch((e) => {
+            showToast("发送失败: " + (e as Error).message, "error");
+          });
       } else if (activeContact.type === "user") {
         // 用户-用户：首次发送时创建会话（无 run，消息直接落库 + 定向推送）
         const conv = await api.post<{ id: string; runId: string }>("/conversations", {
@@ -682,6 +734,15 @@ export default function ChatPage() {
       setSending(false);
     }
   }
+
+  // 对方最后已读时间（用户-用户会话的已读回执：自己消息 ts ≤ 该时间 → 显示「已读」）
+  const peerReadTs = useMemo(() => {
+    if (!activeContact?.convId || activeContact.type !== "user") return undefined;
+    const readers = convReaders[activeContact.convId] ?? [];
+    const peer = readers.find((r) => r.userId && r.userId !== me?.id);
+    const ts = peer?.readTs ? new Date(peer.readTs).getTime() : undefined;
+    return ts !== undefined && !Number.isNaN(ts) ? ts : undefined;
+  }, [activeContact?.convId, activeContact?.type, convReaders, me?.id]);
 
   // 联系人分组
   const deviceContacts = contacts.filter((c) => c.type === "device");
@@ -823,30 +884,53 @@ export default function ChatPage() {
                   <div
                     key={msg.id}
                     className={cls(
-                      "flex",
+                      "group relative flex",
                       msg.sender === "user" ? "justify-end" : "justify-start",
                     )}
                   >
                     <div
                       className={cls(
-                        "max-w-[70%] rounded-2xl px-4 py-2.5",
+                        "relative max-w-[70%] rounded-2xl px-4 py-2.5",
                         msg.sender === "user"
                           ? "bg-primary text-primary-fg rounded-br-md"
                           : "bg-muted/20 text-fg rounded-bl-md",
                       )}
                     >
-                      {(activeContact.type === "group" || activeContact.type === "user") && msg.agentId && msg.agentId !== "user" && msg.agentId !== me?.id && (
-                        <div className="mb-1 text-[11px] font-semibold text-violet-600">
-                          {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
-                        </div>
+                      {msg.deleted ? (
+                        <div className="text-sm italic opacity-60">消息已撤回</div>
+                      ) : (
+                        <>
+                          {(activeContact.type === "group" || activeContact.type === "user") && msg.agentId && msg.agentId !== "user" && msg.agentId !== me?.id && (
+                            <div className="mb-1 text-[11px] font-semibold text-violet-600">
+                              {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
+                            </div>
+                          )}
+                          {msg.attachment && <AttachmentView att={msg.attachment} />}
+                          {msg.content && <div className="whitespace-pre-wrap text-sm leading-relaxed">{renderContent(msg.content)}</div>}
+                        </>
                       )}
-                      {msg.attachment && <AttachmentView att={msg.attachment} />}
-                      {msg.content && <div className="whitespace-pre-wrap text-sm leading-relaxed">{renderContent(msg.content)}</div>}
                       <div className={cls(
-                        "mt-1 text-[10px]",
-                        msg.sender === "user" ? "text-primary-fg/70" : "text-muted",
+                        "mt-1 flex items-center gap-2",
+                        msg.sender === "user" ? "justify-end" : "justify-start",
                       )}>
-                        {new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                        <span className={cls(
+                          "text-[10px]",
+                          msg.sender === "user" ? "text-primary-fg/70" : "text-muted",
+                        )}>
+                          {new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                        </span>
+                        {msg.sender === "user" && !msg.deleted && activeContact?.convId && (
+                          <button
+                            onClick={() => void recallMessage(msg)}
+                            className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
+                            title="撤回消息"
+                          >
+                            撤回
+                          </button>
+                        )}
+                        {msg.sender === "user" && peerReadTs !== undefined && msg.timestamp <= peerReadTs && (
+                          <span className="text-[10px] font-semibold text-primary">已读</span>
+                        )}
                       </div>
                     </div>
                   </div>

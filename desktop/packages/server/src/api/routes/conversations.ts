@@ -144,7 +144,9 @@ export function conversationsRouter(ctx: AppContext): Router {
         ? ctx.store.listChatMessages(conv.runId)
         : ctx.store.listChatMessages(conv.runId, req.user?.id);
       const filtered = before ? all.filter((m) => m.ts < before) : all;
-      ok(res, { messages: filtered.slice(-limit), total: all.length });
+      // 已读回执：用户-用户会话返回各参与者最后已读时间（前端按接收者判断自己的消息是否已被读）
+      const readers = isUserConv(conv) ? ctx.store.getConversationReads(conv.id) : [];
+      ok(res, { messages: filtered.slice(-limit), total: all.length, readers });
     }),
   );
 
@@ -207,6 +209,37 @@ export function conversationsRouter(ctx: AppContext): Router {
       ctx.engine.addSteering(conv.runId, content);
       ctx.engine.broadcastChatMessage(conv.runId, undefined, "user", "user", content);
       ok(res, { sent: true });
+    }),
+  );
+
+  /** 撤回消息（发送者可撤；标记 deleted + 实时广播 chat.deleted） */
+  r.delete(
+    "/:id/messages/:msgId",
+    asyncH(async (req, res) => {
+      const conv = ctx.store.getConversation(String(req.params.id));
+      if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      const msgId = String(req.params.msgId);
+      const all = isUserConv(conv)
+        ? ctx.store.listChatMessages(conv.runId)
+        : ctx.store.listChatMessages(conv.runId, req.user?.id);
+      const msg = all.find((m) => m.id === msgId);
+      if (!msg) return fail(res, new Error("消息不存在"), 404);
+      if (msg.deleted) return ok(res, { recalled: msgId });
+      // 仅发送者可撤回自己的消息（用户消息 agentId = 发送者 id 或 "user"）
+      const mine = msg.agentId === req.user?.id || msg.agentId === "user";
+      if (!mine) return fail(res, new Error("只能撤回自己发送的消息"), 403);
+      ctx.store.deleteChatMessage(msgId);
+      // 实时广播撤回事件（用户-用户：推参与者；agent 会话：run 订阅者）
+      const recipients = new Set<string>([conv.userId, ...conv.participantIds].filter((x): x is string => !!x));
+      if (isUserConv(conv)) {
+        for (const pid of recipients) {
+          ctx.hub.sendToUser(pid, { type: "chat.deleted", msgId }, conv.runId);
+        }
+      } else {
+        ctx.hub.broadcast(conv.runId, 0, { type: "chat.deleted", msgId });
+      }
+      ok(res, { recalled: msgId });
     }),
   );
 

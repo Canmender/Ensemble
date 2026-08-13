@@ -47,6 +47,7 @@ export class Store {
     // Chat messages
     createChatMessage: ReturnType<DatabaseSync["prepare"]>;
     listChatMessages: ReturnType<DatabaseSync["prepare"]>;
+    deleteChatMessage: ReturnType<DatabaseSync["prepare"]>;
     // Workflows
     listWorkflows: ReturnType<DatabaseSync["prepare"]>;
     getWorkflow: ReturnType<DatabaseSync["prepare"]>;
@@ -60,7 +61,8 @@ export class Store {
     incrementUnread: ReturnType<DatabaseSync["prepare"]>;
     markRead: ReturnType<DatabaseSync["prepare"]>;
     upsertUnread: ReturnType<DatabaseSync["prepare"]>;
-    markReadUser: ReturnType<DatabaseSync["prepare"]>;
+    touchRead: ReturnType<DatabaseSync["prepare"]>;
+    listConversationReads: ReturnType<DatabaseSync["prepare"]>;
     setConversationArchived: ReturnType<DatabaseSync["prepare"]>;
   };
 
@@ -87,8 +89,9 @@ export class Store {
       insertRunEvent: db.prepare("INSERT INTO run_events (run_id, seq, job_id, user_id, event_json, ts) VALUES (?, ?, ?, ?, ?, ?)"),
       getRunEvents: db.prepare("SELECT seq, job_id, event_json FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq"),
       // Chat messages
-      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
       listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY ts"),
+      deleteChatMessage: db.prepare("UPDATE chat_messages SET deleted = 1 WHERE id = ?"),
       // Workflows
       listWorkflows: db.prepare("SELECT * FROM workflows ORDER BY name"),
       getWorkflow: db.prepare("SELECT * FROM workflows WHERE id = ?"),
@@ -103,7 +106,8 @@ export class Store {
       incrementUnread: db.prepare("UPDATE conversations SET unread = unread + 1, updated_at = ? WHERE id = ?"),
       markRead: db.prepare("UPDATE conversations SET unread = 0 WHERE id = ?"),
       upsertUnread: db.prepare("INSERT INTO conversation_reads (conv_id, user_id, unread) VALUES (?, ?, 1) ON CONFLICT(conv_id, user_id) DO UPDATE SET unread = unread + 1"),
-      markReadUser: db.prepare("UPDATE conversation_reads SET unread = 0 WHERE conv_id = ? AND user_id = ?"),
+      touchRead: db.prepare("INSERT INTO conversation_reads (conv_id, user_id, unread, read_ts) VALUES (?, ?, 0, ?) ON CONFLICT(conv_id, user_id) DO UPDATE SET unread = 0, read_ts = excluded.read_ts"),
+      listConversationReads: db.prepare("SELECT user_id, read_ts FROM conversation_reads WHERE conv_id = ? AND read_ts IS NOT NULL"),
     };
   }
 
@@ -302,7 +306,12 @@ export class Store {
 
   // ---------- Chat messages ----------
   createChatMessage(msg: ChatMessage): void {
-    this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.ts);
+    this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.deleted ? 1 : 0, msg.ts);
+  }
+
+  /** 撤回消息：标记 deleted（保留原始内容，前端显示「已撤回」） */
+  deleteChatMessage(id: string): void {
+    this.stmts.deleteChatMessage.run(id);
   }
 
   listChatMessages(runId: string, userId?: string): ChatMessage[] {
@@ -317,6 +326,7 @@ export class Store {
       role: r.role,
       content: r.content,
       attachment: r.attachment ? (JSON.parse(r.attachment) as ChatMessage["attachment"]) : undefined,
+      deleted: !!r.deleted,
       ts: r.ts,
     }));
   }
@@ -406,13 +416,19 @@ export class Store {
     }
   }
 
-  /** 清零未读。userId 提供时只清该用户（per-user），缺省清共享计数。 */
+  /** 清零未读。userId 提供时只清该用户（per-user），并记录已读时间（已读回执用）；缺省清共享计数。 */
   markRead(id: string, userId?: string): void {
     if (userId) {
-      this.stmts.markReadUser.run(id, userId);
+      this.stmts.touchRead.run(id, userId, new Date().toISOString());
     } else {
       this.stmts.markRead.run(id);
     }
+  }
+
+  /** 会话各参与者的最后已读时间（已读回执：发送者据此判断对方是否已读） */
+  getConversationReads(convId: string): Array<{ userId: string; readTs?: string }> {
+    const rows = this.stmts.listConversationReads.all(convId) as any[];
+    return rows.map((r) => ({ userId: r.user_id, readTs: r.read_ts ?? undefined }));
   }
 
   deleteConversation(id: string): void {

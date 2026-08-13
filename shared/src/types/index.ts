@@ -147,6 +147,8 @@ export interface ChatMessage {
   content: string;
   /** 附件（图片/文件）；无则为纯文本消息 */
   attachment?: MessageAttachment;
+  /** 是否已撤回（撤回后内容隐藏，前端显示占位） */
+  deleted?: boolean;
   ts: string;
 }
 

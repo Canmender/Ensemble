@@ -15,6 +15,7 @@ import {
   Platform,
   ActivityIndicator,
   Image,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -37,6 +38,7 @@ type MessageItem = {
   content: string;
   agentName?: string;
   attachment?: MessageAttachment;
+  deleted?: boolean;
   ts: string;
 };
 
@@ -70,6 +72,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [uploading, setUploading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [draftAttachment, setDraftAttachment] = useState<MessageAttachment | null>(null);
+  // 已读回执：当前用户 id + 对方最后已读时间（自己消息 ts ≤ 该时间 → 显示「已读」）
+  const [meId, setMeId] = useState<string | undefined>();
+  const [peerReadTs, setPeerReadTs] = useState<number | undefined>();
   const flatListRef = useRef<FlatList>(null);
   const activeRunIdRef = useRef<string | null>(null);
 
@@ -91,24 +96,33 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     });
   }, [convId, runId, title, navigation]);
 
-  // 加载消息历史 + 已读清零
-  useEffect(() => {
-    void api.getConversationMessages(convId).then((res) => {
-      if (res.data) {
-        setMessages(
-          res.data.messages.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            agentName: m.agentId,
-            attachment: m.attachment,
-            ts: m.ts,
-          })),
-        );
-      }
-    });
+  // 加载消息历史 + 已读回执（readers）+ 已读清零；发送成功后也调用以刷新真实 msgId（撤回可用）
+  const loadMessages = useCallback(async () => {
+    const [histRes, meRes] = await Promise.all([api.getConversationMessages(convId), api.getMe()]);
+    if (histRes.data) {
+      setMessages(
+        histRes.data.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          agentName: m.agentId,
+          attachment: m.attachment,
+          deleted: m.deleted,
+          ts: m.ts,
+        })),
+      );
+      const me = meRes.data?.id;
+      if (me) setMeId(me);
+      const readers = histRes.data.readers ?? [];
+      const peer = readers.find((r) => r.userId !== me);
+      setPeerReadTs(peer?.readTs ? new Date(peer.readTs).getTime() : undefined);
+    }
     void api.markConversationRead(convId);
   }, [convId]);
+
+  useEffect(() => {
+    void loadMessages();
+  }, [loadMessages]);
 
   // WS 实时：新消息推送到当前会话
   useEffect(() => {
@@ -138,21 +152,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     const prev = prevConnRef.current;
     prevConnRef.current = connectionState;
     if (connectionState === "connected" && prev !== "connected") {
-      void api.getConversationMessages(convId).then((res) => {
-        if (!res.data) return;
-        setMessages(
-          res.data.messages.map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            agentName: m.agentId,
-            attachment: m.attachment,
-            ts: m.ts,
-          })),
-        );
-      });
+      void loadMessages();
     }
-  }, [connectionState, convId]);
+  }, [connectionState, loadMessages]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -173,7 +175,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     setIsSending(true);
     setSendError(null);
     try {
-      await api.sendConversationMessage(convId, text, draftAttachment ?? undefined);
+      const res = await api.sendConversationMessage(convId, text, draftAttachment ?? undefined);
+      if (res.error) {
+        setSendError(res.error);
+        return;
+      }
       setMessages((prev) =>
         appendMessage(prev, {
           id: `u-${Date.now()}`,
@@ -185,12 +191,47 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       );
       setInputText("");
       setDraftAttachment(null);
+      // 刷新历史拿到真实 msgId（撤回可用）
+      void loadMessages();
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "发送失败");
     } finally {
       setIsSending(false);
     }
-  }, [inputText, convId, draftAttachment, isConnected, isSending, uploading]);
+  }, [inputText, convId, draftAttachment, isConnected, isSending, uploading, loadMessages]);
+
+  // 撤回消息（长按自己的消息触发）
+  const recallMessage = useCallback(
+    (msg: MessageItem) => {
+      Alert.alert("撤回消息", "撤回后对方将看不到该消息，确定？", [
+        { text: "取消", style: "cancel" },
+        {
+          text: "撤回",
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              const res = await api.recallMessage(convId, msg.id);
+              if (res.error) {
+                setSendError(res.error);
+                return;
+              }
+              setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, deleted: true } : m)));
+            })();
+          },
+        },
+      ]);
+    },
+    [convId],
+  );
+
+  // WS 撤回事件：对方撤回时实时标记
+  useEffect(() => {
+    wsLink.on({
+      onChatDeleted: ({ msgId }) => {
+        setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, deleted: true } : m)));
+      },
+    });
+  }, []);
 
   // 上传附件（图片 base64 直取；文件经 expo-file-system 读 base64）
   const doUpload = useCallback(async (name: string, mime: string, base64: string) => {
@@ -275,20 +316,35 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   const renderMessage = ({ item }: { item: MessageItem }) => {
     const isUser = item.role === "user";
+    const isRead = isUser && peerReadTs !== undefined && new Date(item.ts).getTime() <= peerReadTs;
     return (
       <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
-        <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}>
-          {!isUser && item.agentName && (
-            <Text style={styles.bubbleAgentName}>{item.agentName}</Text>
+        <TouchableOpacity
+          style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}
+          activeOpacity={isUser && !item.deleted ? 0.6 : 1}
+          delayLongPress={400}
+          onLongPress={isUser && !item.deleted ? () => recallMessage(item) : undefined}
+        >
+          {item.deleted ? (
+            <Text style={[styles.bubbleText, styles.deletedText]}>消息已撤回</Text>
+          ) : (
+            <>
+              {!isUser && item.agentName && (
+                <Text style={styles.bubbleAgentName}>{item.agentName}</Text>
+              )}
+              {item.attachment && renderAttachment(item.attachment, isUser)}
+              {!!item.content && (
+                <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.content}</Text>
+              )}
+            </>
           )}
-          {item.attachment && renderAttachment(item.attachment, isUser)}
-          {!!item.content && (
-            <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.content}</Text>
-          )}
-          <Text style={[styles.bubbleTime, isUser && styles.bubbleTimeUser]}>
-            {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </Text>
-        </View>
+          <View style={[styles.bubbleMeta, isUser && styles.bubbleMetaUser]}>
+            <Text style={[styles.bubbleTime, isUser && styles.bubbleTimeUser]}>
+              {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            </Text>
+            {isUser && !item.deleted && isRead && <Text style={styles.bubbleRead}>已读</Text>}
+          </View>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -422,8 +478,12 @@ const styles = StyleSheet.create({
   bubbleAgentName: { color: colors.primary, fontSize: fontSize.xs, fontWeight: "600", marginBottom: 2 },
   bubbleText: { color: colors.text, fontSize: fontSize.md, lineHeight: 21 },
   bubbleTextUser: { color: "#fff" },
-  bubbleTime: { color: colors.textFaint, fontSize: 10, marginTop: 4, alignSelf: "flex-end" },
+  deletedText: { fontStyle: "italic", opacity: 0.5 },
+  bubbleMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 },
+  bubbleMetaUser: { justifyContent: "flex-end" },
+  bubbleTime: { color: colors.textFaint, fontSize: 10 },
   bubbleTimeUser: { color: "rgba(255,255,255,0.7)" },
+  bubbleRead: { color: "#fff", fontSize: 10, fontWeight: "600" },
   msgImage: {
     width: 180,
     height: 180,
