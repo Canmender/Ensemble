@@ -96,6 +96,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   user_id  TEXT NOT NULL DEFAULT '',
   content  TEXT NOT NULL,
   attachment TEXT,
+  reply_to TEXT,
   deleted  INTEGER NOT NULL DEFAULT 0,
   ts       TEXT NOT NULL
 );
@@ -165,9 +166,11 @@ function migrateUserColumns(db: DatabaseSync): void {
     const oldCmCols = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
     const hasUserId = oldCmCols.some((c) => c.name === "user_id");
     const hasAttachment = oldCmCols.some((c) => c.name === "attachment");
+    const hasReplyTo = oldCmCols.some((c) => c.name === "reply_to");
     const hasDeleted = oldCmCols.some((c) => c.name === "deleted");
     const userSelect = hasUserId ? "user_id, " : "'' AS user_id, ";
     const attSelect = hasAttachment ? "attachment, " : "NULL AS attachment, ";
+    const replySelect = hasReplyTo ? "reply_to, " : "NULL AS reply_to, ";
     const delSelect = hasDeleted ? "deleted, " : "0 AS deleted, ";
     db.exec(`BEGIN;
       ALTER TABLE chat_messages RENAME TO chat_messages_old;
@@ -180,11 +183,12 @@ function migrateUserColumns(db: DatabaseSync): void {
         user_id  TEXT NOT NULL DEFAULT '',
         content  TEXT NOT NULL,
         attachment TEXT,
+        reply_to TEXT,
         deleted  INTEGER NOT NULL DEFAULT 0,
         ts       TEXT NOT NULL
       );
-      INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, deleted, ts)
-        SELECT id, run_id, job_id, agent_id, role, ${userSelect} ${attSelect} ${delSelect} content, ts FROM chat_messages_old;
+      INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, deleted, ts)
+        SELECT id, run_id, job_id, agent_id, role, ${userSelect} ${attSelect} ${replySelect} ${delSelect} content, ts FROM chat_messages_old;
       DROP TABLE chat_messages_old;
       COMMIT;`);
   }
@@ -197,6 +201,11 @@ function migrateUserColumns(db: DatabaseSync): void {
   const cmDel = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
   if (!cmDel.some((c) => c.name === "deleted")) {
     db.exec("ALTER TABLE chat_messages ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0");
+  }
+  // chat_messages.reply_to（P1 引用回复）
+  const cmReply = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmReply.some((c) => c.name === "reply_to")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN reply_to TEXT");
   }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;

@@ -137,6 +137,13 @@ export interface MessageAttachment {
   url: string;
 }
 
+/** 引用的消息摘要（引用回复） */
+export interface MessageReply {
+  id: string;
+  content: string;
+  agentName?: string;
+}
+
 /** 群聊消息 */
 export interface ChatMessage {
   id: string;
@@ -147,6 +154,8 @@ export interface ChatMessage {
   content: string;
   /** 附件（图片/文件）；无则为纯文本消息 */
   attachment?: MessageAttachment;
+  /** 引用的消息摘要（引用回复） */
+  replyTo?: MessageReply;
   /** 是否已撤回（撤回后内容隐藏，前端显示占位） */
   deleted?: boolean;
   ts: string;

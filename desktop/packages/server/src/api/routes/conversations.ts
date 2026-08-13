@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { AppContext } from "../../context";
 import { asyncH, fail, ok } from "./helpers";
 import { newId } from "../../util/id";
-import type { Conversation, MessageAttachment } from "@ensemble/shared";
+import type { Conversation, MessageAttachment, MessageReply } from "@ensemble/shared";
 
 const now = () => new Date().toISOString();
 
@@ -18,6 +18,18 @@ function parseAttachment(raw: unknown): MessageAttachment | undefined {
     size: typeof a.size === "number" ? a.size : 0,
     mime: typeof a.mime === "string" ? a.mime : undefined,
     url: a.url,
+  };
+}
+
+/** 校验并归一化引用摘要（引用回复；id 必填） */
+function parseReply(raw: unknown): MessageReply | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.id !== "string" || !r.id) return undefined;
+  return {
+    id: r.id,
+    content: typeof r.content === "string" ? r.content : "",
+    agentName: typeof r.agentName === "string" ? r.agentName : undefined,
   };
 }
 
@@ -157,9 +169,10 @@ export function conversationsRouter(ctx: AppContext): Router {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
-      const body = (req.body ?? {}) as { content?: unknown; attachment?: unknown };
+      const body = (req.body ?? {}) as { content?: unknown; attachment?: unknown; replyTo?: unknown };
       const content = typeof body.content === "string" ? body.content.trim() : "";
       const attachment = parseAttachment(body.attachment);
+      const replyTo = parseReply(body.replyTo);
       if (!content && !attachment) {
         return fail(res, new Error("content 或 attachment 必填"), 400);
       }
@@ -175,6 +188,7 @@ export function conversationsRouter(ctx: AppContext): Router {
           role: "user",
           content,
           attachment,
+          replyTo,
           userId: req.user?.id,
           ts: now(),
         });
@@ -190,6 +204,7 @@ export function conversationsRouter(ctx: AppContext): Router {
             agentId: senderId,
             content,
             attachment,
+            replyTo,
           }, conv.runId);
           ctx.store.incrementUnread(conv.id, pid);
         }

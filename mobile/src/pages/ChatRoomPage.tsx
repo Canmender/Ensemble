@@ -15,6 +15,7 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -26,7 +27,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { colors, spacing, radius, fontSize } from "../theme";
-import type { AgentConfig, MessageAttachment } from "@ensemble/shared-protocol";
+import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
 import type { RootStackParamList } from "../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ChatRoom">;
@@ -37,6 +38,7 @@ type MessageItem = {
   content: string;
   agentName?: string;
   attachment?: MessageAttachment;
+  replyTo?: MessageReply;
   deleted?: boolean;
   ts: string;
 };
@@ -73,6 +75,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [draftAttachment, setDraftAttachment] = useState<MessageAttachment | null>(null);
   // 键盘高度（Android 15+/edge-to-edge 下 adjustResize 失效，需手动顶起输入栏）
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  // 长按操作菜单：当前长按的消息 / 引用中的消息 / 待转发的消息 / 转发目标会话列表
+  const [menuMsg, setMenuMsg] = useState<MessageItem | null>(null);
+  const [quoting, setQuoting] = useState<MessageReply | null>(null);
+  const [forwardMsg, setForwardMsg] = useState<MessageItem | null>(null);
+  const [forwardConversations, setForwardConversations] = useState<Conversation[]>([]);
   // 已读回执：当前用户 id + 对方最后已读时间（自己消息 ts ≤ 该时间 → 显示「已读」）
   const [meId, setMeId] = useState<string | undefined>();
   const [peerReadTs, setPeerReadTs] = useState<number | undefined>();
@@ -127,6 +134,17 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     [conv, usersById, agentsById],
   );
 
+  /** 是否自己发送的消息（用户-用户会话按发送者 id，agent 会话按 role）——决定能否撤回 */
+  const isMyMessage = useCallback(
+    (item: MessageItem): boolean => {
+      const isUserConv = !!conv && conv.runId.startsWith("conv_");
+      return isUserConv
+        ? item.agentName === meId || item.id.startsWith("u-")
+        : item.role === "user";
+    },
+    [conv, meId],
+  );
+
   // 加载消息历史 + 已读回执（readers）+ 已读清零；发送成功后也调用以刷新真实 msgId（撤回可用）
   const loadMessages = useCallback(async () => {
     const [histRes, meRes] = await Promise.all([api.getConversationMessages(convId), api.getMe()]);
@@ -138,6 +156,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           content: m.content,
           agentName: m.agentId,
           attachment: m.attachment,
+          replyTo: m.replyTo,
           deleted: m.deleted,
           ts: m.ts,
         })),
@@ -169,6 +188,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               content: msg.content,
               agentName: msg.agentId,
               attachment: msg.attachment,
+              replyTo: msg.replyTo,
               ts: new Date().toISOString(),
             }),
           );
@@ -206,7 +226,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     setIsSending(true);
     setSendError(null);
     try {
-      const res = await api.sendConversationMessage(convId, text, draftAttachment ?? undefined);
+      const res = await api.sendConversationMessage(
+        convId,
+        text,
+        draftAttachment ?? undefined,
+        quoting ?? undefined,
+      );
       if (res.error) {
         setSendError(res.error);
         return;
@@ -217,11 +242,13 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           role: "user",
           content: text,
           attachment: draftAttachment ?? undefined,
+          replyTo: quoting ?? undefined,
           ts: new Date().toISOString(),
         }),
       );
       setInputText("");
       setDraftAttachment(null);
+      setQuoting(null);
       // 刷新历史拿到真实 msgId（撤回可用）
       void loadMessages();
     } catch (err) {
@@ -229,7 +256,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     } finally {
       setIsSending(false);
     }
-  }, [inputText, convId, draftAttachment, isConnected, isSending, uploading, loadMessages]);
+  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages]);
 
   // 撤回消息（长按自己的消息触发）
   const recallMessage = useCallback(
@@ -253,6 +280,59 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       ]);
     },
     [convId],
+  );
+
+  /** 长按菜单 → 引用：记录被引用消息，输入栏显示引用条 */
+  const startQuote = useCallback(() => {
+    if (!menuMsg) return;
+    setQuoting({
+      id: menuMsg.id,
+      content: menuMsg.content || "[附件]",
+      agentName: menuMsg.agentName ? resolveSenderName(menuMsg.agentName) : undefined,
+    });
+    setMenuMsg(null);
+  }, [menuMsg, resolveSenderName]);
+
+  /** 长按菜单 → 转发：加载目标会话列表 */
+  const startForward = useCallback(() => {
+    if (!menuMsg) return;
+    setMenuMsg(null);
+    setForwardMsg(menuMsg);
+    void api.getConversations().then((res) => {
+      setForwardConversations((res.data ?? []).filter((c) => c.id !== convId));
+    });
+  }, [menuMsg, convId]);
+
+  /** 转发目标会话显示名（用户会话用参与者昵称，避免显示 user id） */
+  const targetTitle = useCallback(
+    (c: Conversation): string => {
+      if (c.runId.startsWith("conv_")) {
+        const names = (c.participantIds ?? []).map((pid) => {
+          const u = usersById.get(pid);
+          return u ? u.displayName || u.username || pid : pid;
+        });
+        return names.join(", ") || "会话";
+      }
+      return c.title || (c.participantIds ?? []).join(", ") || "会话";
+    },
+    [usersById],
+  );
+
+  /** 转发消息到目标会话（文本 + 附件原样发送） */
+  const doForward = useCallback(
+    async (target: Conversation) => {
+      const fw = forwardMsg;
+      if (!fw) return;
+      const res = await api.sendConversationMessage(target.id, fw.content, fw.attachment);
+      setForwardMsg(null);
+      setForwardConversations([]);
+      if (res.error) {
+        setSendError(res.error);
+      } else {
+        Alert.alert("已转发", `已转发到「${targetTitle(target)}」`);
+      }
+    },
+    [forwardMsg, targetTitle],
   );
 
   // WS 撤回事件：对方撤回时实时标记
@@ -358,25 +438,28 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   };
 
   const renderMessage = ({ item }: { item: MessageItem }) => {
-    // 用户-用户会话（runId 以 conv_ 开头）：服务端双方 role 都是 "user"，方向必须按发送者是否当前用户判定
-    // —— 自己的消息右侧（绿色），对方消息左侧（白色）。agent 会话仍按 role 判定。
-    const isUserConv = !!conv && conv.runId.startsWith("conv_");
-    const isUser = isUserConv
-      ? item.agentName === meId || item.id.startsWith("u-")
-      : item.role === "user";
+    const isUser = isMyMessage(item);
     const isRead = isUser && peerReadTs !== undefined && new Date(item.ts).getTime() <= peerReadTs;
     return (
       <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
         <TouchableOpacity
           style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}
-          activeOpacity={isUser && !item.deleted ? 0.6 : 1}
-          delayLongPress={400}
-          onLongPress={isUser && !item.deleted ? () => recallMessage(item) : undefined}
+          activeOpacity={0.6}
+          delayLongPress={350}
+          onLongPress={() => setMenuMsg(item)}
         >
           {item.deleted ? (
             <Text style={[styles.bubbleText, styles.deletedText]}>消息已撤回</Text>
           ) : (
             <>
+              {item.replyTo && (
+                <View style={[styles.quoteBlock, isUser ? styles.quoteBlockUser : styles.quoteBlockAgent]}>
+                  <Text style={[styles.quoteText, isUser && styles.quoteTextUser]} numberOfLines={2}>
+                    {item.replyTo.agentName ? `${item.replyTo.agentName}: ` : ""}
+                    {item.replyTo.content || "[附件]"}
+                  </Text>
+                </View>
+              )}
               {!isUser && item.agentName && (
                 <Text style={styles.bubbleAgentName}>{resolveSenderName(item.agentName)}</Text>
               )}
@@ -443,6 +526,19 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         </View>
       )}
 
+      {/* 引用回复条 */}
+      {quoting && (
+        <View style={styles.draftBar}>
+          <Ionicons name="return-down-back" size={16} color={colors.textMuted} />
+          <Text style={styles.draftName} numberOfLines={1}>
+            回复{quoting.agentName ? ` ${quoting.agentName}` : ""}: {quoting.content}
+          </Text>
+          <TouchableOpacity onPress={() => setQuoting(null)} hitSlop={8}>
+            <Ionicons name="close" size={16} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* 输入栏（键盘弹出时 paddingBottom 顶起，避免被输入法遮挡） */}
       <View style={[styles.inputBar, { paddingBottom: keyboardHeight + spacing.md }]}>
         <TouchableOpacity
@@ -497,6 +593,110 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* 长按消息操作菜单：引用 / 转发 / 撤回（仅自己的消息） */}
+      <Modal
+        transparent
+        visible={!!menuMsg}
+        animationType="fade"
+        onRequestClose={() => setMenuMsg(null)}
+      >
+        <TouchableOpacity
+          style={styles.menuOverlay}
+          activeOpacity={1}
+          onPress={() => setMenuMsg(null)}
+        >
+          <View style={styles.actionSheet}>
+            <TouchableOpacity style={styles.actionItem} onPress={startQuote} activeOpacity={0.7}>
+              <Ionicons name="chatbox-ellipses-outline" size={20} color={colors.text} />
+              <Text style={styles.actionText}>引用</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionItem} onPress={startForward} activeOpacity={0.7}>
+              <Ionicons name="arrow-redo-outline" size={20} color={colors.text} />
+              <Text style={styles.actionText}>转发</Text>
+            </TouchableOpacity>
+            {menuMsg && isMyMessage(menuMsg) && !menuMsg.deleted && (
+              <TouchableOpacity
+                style={styles.actionItem}
+                onPress={() => {
+                  setMenuMsg(null);
+                  recallMessage(menuMsg);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="trash-outline" size={20} color={colors.danger} />
+                <Text style={[styles.actionText, { color: colors.danger }]}>撤回</Text>
+              </TouchableOpacity>
+            )}
+            <View style={styles.actionDivider} />
+            <TouchableOpacity
+              style={styles.actionItem}
+              onPress={() => setMenuMsg(null)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.actionText, styles.actionCancel]}>取消</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* 转发目标会话选择 */}
+      <Modal
+        transparent
+        visible={!!forwardMsg}
+        animationType="slide"
+        onRequestClose={() => {
+          setForwardMsg(null);
+          setForwardConversations([]);
+        }}
+      >
+        <View style={styles.forwardOverlay}>
+          <View style={styles.forwardSheet}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>转发到…</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setForwardMsg(null);
+                  setForwardConversations([]);
+                }}
+                hitSlop={8}
+              >
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            {forwardConversations.length === 0 ? (
+              <EmptyState
+                icon={<Ionicons name="chatbubbles-outline" size={28} color={colors.textFaint} />}
+                title="暂无其他会话"
+                subtitle="先创建会话再转发"
+              />
+            ) : (
+              <FlatList
+                data={forwardConversations}
+                keyExtractor={(c) => c.id}
+                renderItem={({ item: c }) => (
+                  <TouchableOpacity
+                    style={styles.forwardItem}
+                    onPress={() => void doForward(c)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.forwardAvatar}>
+                      <Ionicons
+                        name={c.runId.startsWith("conv_") ? "person" : c.type === "group" ? "people" : "flash"}
+                        size={20}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <Text style={styles.forwardTitle} numberOfLines={1}>
+                      {targetTitle(c)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -595,4 +795,75 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendBtnDisabled: { backgroundColor: colors.surfaceAlt },
+  // 引用回复块
+  quoteBlock: {
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    marginBottom: 4,
+    borderLeftWidth: 3,
+  },
+  quoteBlockAgent: { backgroundColor: colors.surfaceAlt, borderLeftColor: colors.primary },
+  quoteBlockUser: { backgroundColor: "rgba(255,255,255,0.18)", borderLeftColor: "#fff" },
+  quoteText: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 16 },
+  quoteTextUser: { color: "rgba(255,255,255,0.85)" },
+  // 长按操作菜单
+  menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  actionSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingVertical: spacing.sm,
+    paddingBottom: spacing.xl,
+  },
+  actionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+  },
+  actionText: { color: colors.text, fontSize: fontSize.md },
+  actionCancel: { color: colors.textMuted, textAlign: "center", flex: 1 },
+  actionDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xs,
+  },
+  // 转发目标选择
+  forwardOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  forwardSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    maxHeight: "70%",
+    paddingBottom: spacing.xl,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  sheetTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: "600" },
+  forwardItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  forwardAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  forwardTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: "500", flex: 1 },
 });

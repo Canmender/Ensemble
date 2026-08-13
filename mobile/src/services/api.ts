@@ -12,6 +12,7 @@ import type {
   Job,
   ChatMessage,
   MessageAttachment,
+  MessageReply,
   AgentEvent,
   WorkflowDef,
 } from "@ensemble/shared-protocol";
@@ -601,11 +602,12 @@ class ApiService {
     convId: string,
     content: string,
     attachment?: MessageAttachment,
+    replyTo?: MessageReply,
   ): Promise<ApiResponse<{ sent: boolean }>> {
     return this.request<{ sent: boolean }>(
       "POST",
       `/api/conversations/${convId}/messages`,
-      attachment ? { content, attachment } : { content },
+      attachment || replyTo ? { content, attachment, replyTo } : { content },
     );
   }
 
