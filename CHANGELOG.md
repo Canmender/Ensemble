@@ -4,6 +4,14 @@
 
 ---
 
+## v0.7.6 (2026-08-13) — 修复：移动端明文连接被 Android 拦截（网络安全配置固化）
+
+**背景**：v0.7.4 起移动端新增 expo-image-picker 等原生依赖，打包需 `expo prebuild --clean` 重新生成 android 工程，把此前手动加到构建目录的 `network_security_config.xml` 清掉了 → Android 9+ 默认禁明文，手机端连不上 `http://SERVER_IP_REDACTED:8787`
+
+**修复**：用 config plugin（`mobile/plugins/withNetworkSecurityConfig.js`）固化网络安全配置——prebuild 时自动写 xml + AndroidManifest 引用，后续再 prebuild 也不丢。放行 SERVER_IP_REDACTED / DOMAIN_REDACTED / localhost 明文，其余仍强制 HTTPS
+
+**版本**：0.7.5 → 0.7.6，APK versionCode 15
+
 ## v0.7.5 (2026-08-13) — 消息撤回 + 已读回执
 
 **消息撤回（发送者可撤，对方实时可见「已撤回」）**
