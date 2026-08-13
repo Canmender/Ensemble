@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
@@ -80,6 +81,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [quoting, setQuoting] = useState<MessageReply | null>(null);
   const [forwardMsg, setForwardMsg] = useState<MessageItem | null>(null);
   const [forwardConversations, setForwardConversations] = useState<Conversation[]>([]);
+  // 附件下载中（防重复点击）
+  const [downloading, setDownloading] = useState(false);
   // 已读回执：当前用户 id + 对方最后已读时间（自己消息 ts ≤ 该时间 → 显示「已读」）
   const [meId, setMeId] = useState<string | undefined>();
   const [peerReadTs, setPeerReadTs] = useState<number | undefined>();
@@ -418,9 +421,55 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     await doUpload(asset.name ?? "file", asset.mimeType ?? "application/octet-stream", base64);
   }, [doUpload]);
 
+  // 下载附件到本地 downloads/ 目录，并调起系统分享/保存面板
+  const downloadAttachment = useCallback(
+    async (att: MessageAttachment) => {
+      if (downloading) return;
+      setDownloading(true);
+      setSendError(null);
+      try {
+        const url = attachUrl(att.url);
+        const dir = `${FileSystem.documentDirectory}downloads/`;
+        await FileSystem.makeDirectoryAsync(dir, { intermediates: true }).catch(() => {});
+        const safeName = (att.name || `attachment-${Date.now()}`).replace(/[\\/:*?"<>|]/g, "_");
+        const dest = `${dir}${safeName}`;
+        const result = await FileSystem.downloadAsync(url, dest);
+        if (result.status !== 200) {
+          setSendError("下载失败");
+          return;
+        }
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(dest, { mimeType: att.mime, dialogTitle: att.name });
+        } else {
+          Alert.alert("已下载", `已保存到 ${dest}`);
+        }
+      } catch (err) {
+        setSendError(err instanceof Error ? err.message : "下载失败");
+      } finally {
+        setDownloading(false);
+      }
+    },
+    [downloading],
+  );
+
   const renderAttachment = (att: MessageAttachment, isUser: boolean) => {
     if (att.type === "image") {
-      return <Image source={{ uri: attachUrl(att.url) }} style={styles.msgImage} resizeMode="cover" />;
+      return (
+        <View style={{ alignItems: "flex-start" }}>
+          <Image source={{ uri: attachUrl(att.url) }} style={styles.msgImage} resizeMode="cover" />
+          <TouchableOpacity
+            style={styles.dlBtn}
+            onPress={() => void downloadAttachment(att)}
+            disabled={downloading}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="download-outline" size={13} color={isUser ? "#fff" : colors.primary} />
+            <Text style={[styles.dlBtnText, isUser && { color: "#fff" }]}>
+              {downloading ? "下载中…" : "下载"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      );
     }
     return (
       <View style={styles.fileCard}>
@@ -433,6 +482,17 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             {fmtSize(att.size)}
           </Text>
         </View>
+        <TouchableOpacity
+          onPress={() => void downloadAttachment(att)}
+          disabled={downloading}
+          hitSlop={8}
+        >
+          <Ionicons
+            name={downloading ? "hourglass-outline" : "download-outline"}
+            size={18}
+            color={isUser ? "#fff" : colors.primary}
+          />
+        </TouchableOpacity>
       </View>
     );
   };
@@ -795,6 +855,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   sendBtnDisabled: { backgroundColor: colors.surfaceAlt },
+  dlBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.sm,
+  },
+  dlBtnText: { color: colors.primary, fontSize: 11, fontWeight: "600" },
   // 引用回复块
   quoteBlock: {
     borderRadius: radius.sm,
