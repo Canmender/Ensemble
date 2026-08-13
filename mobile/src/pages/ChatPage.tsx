@@ -190,6 +190,7 @@ export default function ChatPage() {
           data={conversations}
           keyExtractor={(item) => item.id}
           renderItem={renderItem}
+          extraData={usersById}
           contentContainerStyle={styles.list}
           ItemSeparatorComponent={() => <View style={styles.sep} />}
           ListEmptyComponent={

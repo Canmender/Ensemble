@@ -734,6 +734,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               <FlatList
                 data={forwardConversations}
                 keyExtractor={(c) => c.id}
+                extraData={usersById}
                 renderItem={({ item: c }) => (
                   <TouchableOpacity
                     style={styles.forwardItem}
