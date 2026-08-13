@@ -17,13 +17,14 @@
 
 ## 项目概述
 
-合鸣是一个桌面原生的多 Agent 协作平台，支持：
+合鸣是一个多 Agent 协作平台，支持：
 - 自定义创建 Agent（内置 LLM + 工具循环 / 本地 harness 接入）
 - 多 Agent 协作（单发 / 工作流 DAG / 群聊头脑风暴 / 规划-执行-反思 / 对抗迭代）
 - 实时监控（WebSocket 推送 + 日志/时间线/画布三视图）
 - 分层记忆（显式记忆池 + 隐式记忆池 + 全文检索）
-- 跨网络通信（局域网直连 + 云端中继）
-- 手机端联动（远程控制 + 实时同步 + 直接对话）
+- 全部云端（不做局域网直连：移动端 / 电脑端统一连自用云端服务器 + 中继）
+- **企业级 IM**：用户-用户 / Agent 对话 / 三类群聊（全人类·Agent 头脑风暴·人+Agent 混合）、图片/视频/文件、撤回/引用/转发、逐条已读未读、未读红点、手机通知、多设备在线
+- 手机端联动（账号 / 会话 / IM / 多设备）
 
 ---
 
@@ -592,7 +593,7 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 
 ## 变更日志
 
-完整版本历史见 **[CHANGELOG.md](../../CHANGELOG.md)**（v0.1.0 → v0.7.23，含历次发布说明）。
+完整版本历史见 **[CHANGELOG.md](../../CHANGELOG.md)**（v0.1.0 → v0.7.24，含历次发布说明）。
 
 ## 移动端
 
@@ -604,21 +605,31 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 │  ├─ LoginPage: 登录/注册（应用门禁）        │
 │  ├─ DashboardPage: 看板 + 任务统计          │
 │  ├─ TasksPage: 任务管理 + 创建              │
-│  ├─ ChatPage: 会话列表 + 实时消息 + 连接状态 │
-│  ├─ ContactsPage: 联系人（用户 + Agent）    │
-│  ├─ RunPage: 任务执行详情 (实时事件流)       │
+│  ├─ ChatPage: 微信式会话卡片列表（未读/预览）│
+│  ├─ ChatRoomPage: 聊天室（附件/撤回/引用/   │
+│  │   转发/已读未读/图片全屏查看）            │
+│  ├─ ContactsPage: 联系人分组（设备/用户/     │
+│  │   自定义）+ 创建群聊 + 分组管理           │
+│  ├─ UserProfilePage: 用户个人资料（发信息）  │
 │  ├─ AgentsPage: Agent 管理                  │
-│  └─ SettingsPage: 账号/服务器/关于          │
+│  ├─ RunPage: 任务执行详情 (实时事件流)       │
+│  └─ 「我」= SettingsPage + 二级页            │
+│      ├─ ProfilePage: 个人信息（改昵称）      │
+│      ├─ NotificationSettingsPage: 通知设置   │
+│      └─ AboutPage: 关于                      │
 ├─────────────────────────────────────────────┤
 │  Services                                    │
 │  ├─ connection.ts: 自动连云端 + 事件发射器   │
 │  ├─ api.ts: REST API（类型化 + 解包信封）    │
-│  └─ wslink.ts: 原生 WebSocket 事件流        │
+│  ├─ wslink.ts: 原生 WebSocket（消息/设备/    │
+│  │   已读事件流）                            │
+│  └─ notifications.ts: 系统通知（WS 触发）    │
 ├─────────────────────────────────────────────┤
 │  Store (Zustand)                             │
 │  ├─ authGateStore: 登录门禁（in/out/loading）│
 │  ├─ chatTargetStore: 联系人→聊天跳转        │
 │  ├─ deviceStore: 连接状态 + 当前服务器       │
+│  ├─ unreadStore: 全局未读（Tab 红点/通知）   │
 │  └─ taskStore: 任务/运行/Agent + 事件订阅   │
 └─────────────────────────────────────────────┘
 ```
@@ -626,24 +637,41 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 ### 连接模式（仅云端）
 
 - 应用启动自动直连自用云端服务器（`http://SERVER_IP_REDACTED:8787`），无手动连接配置
-- 通信：REST API（Bearer 认证）+ 原生 WebSocket（`/ws`，实时事件流）
+- 通信：REST API（Bearer 认证）+ 原生 WebSocket（`/ws`，实时事件流，连接时上报设备信息）
 - 登录门禁：未登录进登录页，登录后进主界面；登录 token 持久化（AsyncStorage）
-- 网络安全配置：仅放行自用服务器明文 HTTP（Android 9+），其余强制 HTTPS
+- 网络安全配置：config plugin 固化（`mobile/plugins/withNetworkSecurityConfig.js`），仅放行自用服务器明文 HTTP（Android 9+），再跑 prebuild 不丢
 - 注：域名 `DOMAIN_REDACTED` HTTPS 受阿里云备案拦截，待备案合规后切换
 
 ### 实时与 IM
 
-- 用户-用户 1:1 会话、Agent 对话、多 Agent 群聊（conversations API + WS 实时推送）
-- 联系人页：好友（注册用户）+ Agent 分组、搜索、点击开聊
+- **会话类型**：用户-用户 1:1、Agent 对话、**三类群聊**（全人类群 / Agent 头脑风暴群 / 人+Agent 混合群）
+- **消息能力**：文本、图片（完整大图 + 全屏查看 + 下载）、视频、文件；**撤回**（仅自己的消息）、**引用**、**转发**
+- **已读回执**：每条自己消息显示「已读/未读」，对方打开/正在看会话时实时变已读（`chat.read` 事件）
+- **未读红点**：底部「聊天」Tab 未读总数角标 + 会话卡片消息下方小字「未读 N 条」
+- **手机通知**：收到新消息（非当前会话）弹系统通知（Android channel + 13+ 权限请求）；app 前台/后台（未杀）生效，被杀后需远程推送（FCM/Expo push，暂未接）
+- **多设备在线**：联系人「设备」组显示真实设备（手机端 / 电脑端·web），在线绿点 / 离线灰点 / 当前设备标「本机」，实时刷新
+- **联系人分组**：设备 / 用户为系统固定组，用户可自定义分组（组名 + 成员，本机持久化），均可折叠
+- **创建群聊**：联系人页顶部「+」→ 群名 + 成员多选（用户 / Agent 可混合）
+- **聊天输入**：输入框最右「+」弹出扩展栏（相册 / 视频 / 文件）
 - 聊天页顶部连接状态条（已连接云端/未连接/重连中）
 
 ### 构建 APK
 
 ```bash
-cd mobile
-npm install
-cd android && ./gradlew assembleRelease
+# 1) 依赖
+cd mobile && npm install          # 中国网络建议 --registry=https://registry.npmmirror.com
+# 2) 新原生依赖（expo-image-picker/notifications/sharing 等）需重新 prebuild：
+#    先停 gradle daemon 防文件锁（<gradle-dist>/bin/gradle.bat --stop），再：
+npx expo prebuild --platform android
+#    gradle wrapper 需改腾讯镜像（gradle-wrapper.properties → mirrors.cloud.tencent.com/gradle/）
+# 3) 短路径构建（避免 gradle 长路径 260 字符限制）：
+#    robocopy mobile 到 D:\build\ensemble\mobile（注意 /XD android 会误排 node_modules 下同名目录，
+#    用绝对路径精确排除顶层 android）
+cd D:/build/ensemble/mobile/android
+# 版本：app/build.gradle 的 versionCode/versionName 需手动同步（prebuild 从 app.json 生成）
+./gradlew assembleRelease
 # 输出: android/app/build/outputs/apk/release/app-release.apk
+# 解包验证：unzip -l APK + aapt dump badging（版本号/权限/新代码）
 ```
 
 ---
