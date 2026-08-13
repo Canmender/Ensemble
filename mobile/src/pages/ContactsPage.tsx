@@ -16,6 +16,7 @@ import {
   ActivityIndicator,
   Modal,
   ScrollView,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -50,6 +51,10 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
   const [groups, setGroups] = useState<ContactGroup[]>([]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [manageOpen, setManageOpen] = useState(false);
+  // 创建群聊（用户 + Agent 可混合，三类群）
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   // 编辑态：null=列表视图；{mode:'new'}=新建；{mode:'edit',group}=编辑
   const [editState, setEditState] = useState<{ mode: "new" } | { mode: "edit"; group: ContactGroup } | null>(null);
   const [editName, setEditName] = useState("");
@@ -152,6 +157,34 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
   const deleteGroup = (id: string) => {
     saveGroups(groups.filter((g) => g.id !== id));
     setEditState(null);
+  };
+
+  /** 创建群聊成员多选 */
+  const toggleGroupMember = (id: string) => {
+    setSelectedMembers((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  /** 创建群聊（用户 / Agent 可混合 → 三类群） */
+  const createGroup = async () => {
+    const ids = Array.from(selectedMembers);
+    const name = groupName.trim();
+    if (!name || ids.length < 2) return;
+    const res = await api.createConversation({ type: "group", title: name, participantIds: ids });
+    if (res.error) {
+      Alert.alert("创建失败", res.error);
+      return;
+    }
+    if (res.data) {
+      navigation.navigate("ChatRoom", { convId: res.data.id, runId: res.data.runId, title: name });
+    }
+    setShowCreateGroup(false);
+    setGroupName("");
+    setSelectedMembers(new Set());
   };
 
   const openContact = (row: Row) => {
@@ -291,6 +324,9 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
             <Ionicons name="close-circle" size={16} color={colors.textFaint} />
           </TouchableOpacity>
         )}
+        <TouchableOpacity onPress={() => setShowCreateGroup(true)} hitSlop={8}>
+          <Ionicons name="chatbubbles-outline" size={20} color={colors.textMuted} />
+        </TouchableOpacity>
         <TouchableOpacity onPress={openManage} hitSlop={8}>
           <Ionicons name="options-outline" size={20} color={colors.textMuted} />
         </TouchableOpacity>
@@ -416,6 +452,79 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
           </View>
         </View>
       </Modal>
+
+      {/* 创建群聊（用户 + Agent 可混合 → 三类群） */}
+      <Modal transparent visible={showCreateGroup} animationType="slide" onRequestClose={() => setShowCreateGroup(false)}>
+        <View style={styles.manageOverlay}>
+          <View style={styles.manageSheet}>
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>创建群聊</Text>
+              <TouchableOpacity onPress={() => setShowCreateGroup(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.fieldLabel}>群名称</Text>
+            <TextInput
+              style={styles.input}
+              value={groupName}
+              onChangeText={setGroupName}
+              placeholder="输入群名称"
+              placeholderTextColor={colors.textFaint}
+              maxLength={20}
+            />
+            <Text style={styles.fieldLabel}>选择成员（{selectedMembers.size}）——用户 / Agent 可混合</Text>
+            <ScrollView style={{ maxHeight: 300 }}>
+              {users.map((u) => (
+                <TouchableOpacity key={u.id} style={styles.memberRow} onPress={() => toggleGroupMember(u.id)} activeOpacity={0.7}>
+                  <View style={[styles.memberAvatar, { backgroundColor: colors.primarySoft }]}>
+                    <Text style={[styles.memberAvatarText, { color: colors.primary }]}>
+                      {(u.displayName || u.username)[0]?.toUpperCase() || "?"}
+                    </Text>
+                  </View>
+                  <Text style={styles.memberName}>{u.displayName || u.username}</Text>
+                  <Ionicons
+                    name={selectedMembers.has(u.id) ? "checkmark-circle" : "ellipse-outline"}
+                    size={22}
+                    color={selectedMembers.has(u.id) ? colors.primary : colors.textFaint}
+                  />
+                </TouchableOpacity>
+              ))}
+              {agents
+                .filter((a) => a.enabled)
+                .map((a) => (
+                  <TouchableOpacity key={a.id} style={styles.memberRow} onPress={() => toggleGroupMember(a.id)} activeOpacity={0.7}>
+                    <View style={[styles.memberAvatar, { backgroundColor: colors.accent + "1A" }]}>
+                      <Ionicons name={a.kind === "builtin" ? "flash" : "terminal"} size={18} color={colors.accent} />
+                    </View>
+                    <Text style={styles.memberName}>{a.name}</Text>
+                    <Text style={styles.memberType}>Agent</Text>
+                    <Ionicons
+                      name={selectedMembers.has(a.id) ? "checkmark-circle" : "ellipse-outline"}
+                      size={22}
+                      color={selectedMembers.has(a.id) ? colors.primary : colors.textFaint}
+                    />
+                  </TouchableOpacity>
+                ))}
+            </ScrollView>
+            <View style={styles.sheetActions}>
+              <TouchableOpacity style={[styles.btn, styles.btnGhost]} onPress={() => setShowCreateGroup(false)}>
+                <Text style={[styles.btnText, { color: colors.textMuted }]}>取消</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.btn,
+                  styles.btnPrimary,
+                  (!groupName.trim() || selectedMembers.size < 2) && { opacity: 0.5 },
+                ]}
+                onPress={() => void createGroup()}
+                disabled={!groupName.trim() || selectedMembers.size < 2}
+              >
+                <Text style={[styles.btnText, { color: "#fff" }]}>创建</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -531,6 +640,7 @@ const styles = StyleSheet.create({
   },
   memberAvatarText: { fontSize: 14, fontWeight: "700" },
   memberName: { flex: 1, color: colors.text, fontSize: fontSize.sm },
+  memberType: { color: colors.textFaint, fontSize: 10, marginRight: 4 },
   sheetActions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
   btn: {
     flex: 1,
