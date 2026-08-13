@@ -1,7 +1,7 @@
 {
   "name": "ensemble",
   "private": true,
-  "version": "0.7.7",
+  "version": "0.7.8",
   "description": "多 Agent 协作平台 —— 接入 Hermes Agent 与 Claude Code，提供前端编排与实时协作",
   "packageManager": "pnpm@10.33.2",
   "engines": {

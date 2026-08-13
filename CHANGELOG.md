@@ -4,6 +4,13 @@
 
 ---
 
+## v0.7.8 (2026-08-13) — 修复：用户-用户消息方向 + 输入法遮挡
+
+**消息方向**：用户-用户会话服务端双方 `role` 都是 "user"，此前按 role 判定导致双方消息挤在一边。改为按发送者是否当前用户判定——自己的消息右侧（绿色）、对方左侧（白色），双方屏幕各自正确
+**输入法遮挡**：Android 键盘弹出时输入框被挡住。manifest 已有 `adjustResize`，但 KeyboardAvoidingView 用 `behavior="height"` 与系统 resize 冲突；改为 Android 交给系统 `adjustResize`（behavior 置 undefined），iOS 保持 `padding`
+
+**版本**：0.7.7 → 0.7.8，APK versionCode 17
+
 ## v0.7.7 (2026-08-13) — 修复：聊天页显示用户昵称（不再显示 user id）
 
 **问题**：移动端聊天页消息发送者名直接显示 user id（`agentId`），会话列表卡片标题也显示对方 user id

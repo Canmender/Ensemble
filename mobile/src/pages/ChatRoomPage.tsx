@@ -345,7 +345,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   };
 
   const renderMessage = ({ item }: { item: MessageItem }) => {
-    const isUser = item.role === "user";
+    // 用户-用户会话（runId 以 conv_ 开头）：服务端双方 role 都是 "user"，方向必须按发送者是否当前用户判定
+    // —— 自己的消息右侧（绿色），对方消息左侧（白色）。agent 会话仍按 role 判定。
+    const isUserConv = !!conv && conv.runId.startsWith("conv_");
+    const isUser = isUserConv
+      ? item.agentName === meId || item.id.startsWith("u-")
+      : item.role === "user";
     const isRead = isUser && peerReadTs !== undefined && new Date(item.ts).getTime() <= peerReadTs;
     return (
       <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
@@ -384,7 +389,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      // Android：manifest 已配 windowSoftInputMode=adjustResize，系统自动把输入框顶起，behavior 置 undefined 避免与系统 resize 冲突；
+      // iOS：用 padding 避开键盘
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <FlatList
         ref={flatListRef}
