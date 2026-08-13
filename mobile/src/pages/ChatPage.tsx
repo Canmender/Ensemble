@@ -21,7 +21,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useChatTarget } from "../store/chatTargetStore";
 import { useUnreadStore } from "../store/unreadStore";
 import { wsLink } from "../services/wslink";
-import { Badge, EmptyState } from "../components/ui";
+import { EmptyState } from "../components/ui";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
@@ -187,12 +187,10 @@ export default function ChatPage() {
           </Text>
           <Text style={styles.convTime}>{timeStr(item.lastMessageTs)}</Text>
         </View>
-        <View style={styles.convRow}>
-          <Text style={styles.convLast} numberOfLines={1}>
-            {item.lastMessage || "开始聊天吧"}
-          </Text>
-          {item.unread > 0 && <Badge count={item.unread} />}
-        </View>
+        <Text style={styles.convLast} numberOfLines={1}>
+          {item.lastMessage || "开始聊天吧"}
+        </Text>
+        {item.unread > 0 && <Text style={styles.convUnread}>未读 {item.unread} 条</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -304,5 +302,6 @@ const styles = StyleSheet.create({
   convTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: "600", flex: 1 },
   convTime: { color: colors.textFaint, fontSize: 10 },
   convLast: { color: colors.textMuted, fontSize: fontSize.xs, flex: 1, marginTop: 2 },
+  convUnread: { color: colors.danger, fontSize: fontSize.xs, marginTop: 3, fontWeight: "600" },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 48 + spacing.lg + spacing.md },
 });
