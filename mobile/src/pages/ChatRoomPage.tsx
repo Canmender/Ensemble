@@ -90,6 +90,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
   const activeRunIdRef = useRef<string | null>(null);
 
   const isConnected = connectionState === "connected";
@@ -254,6 +255,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       setQuoting(null);
       // 刷新历史拿到真实 msgId（撤回可用）
       void loadMessages();
+      // 保持输入框聚焦，键盘不收起，方便连续发送
+      setTimeout(() => inputRef.current?.focus(), 80);
     } catch (err) {
       setSendError(err instanceof Error ? err.message : "发送失败");
     } finally {
@@ -626,6 +629,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           />
         </TouchableOpacity>
         <TextInput
+          ref={inputRef}
           style={styles.input}
           placeholder="输入消息…"
           placeholderTextColor={colors.textFaint}
@@ -636,7 +640,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           }}
           multiline
           maxLength={2000}
-          editable={isConnected && !isSending && !uploading}
+          // editable 不随 isSending 切换（editable 变 false 会让输入框失焦收起键盘）
+          editable={isConnected && !uploading}
         />
         {isSending || uploading ? (
           <View style={styles.sendBtn}>
