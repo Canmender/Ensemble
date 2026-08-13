@@ -137,26 +137,27 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
 
-  /** 发送者显示名：用户-用户会话显示对方昵称，agent 会话显示 agent 名 */
+  /** 发送者显示名：用户显示昵称，agent 显示名（群聊 / 混合群通用） */
   const resolveSenderName = useCallback(
     (agentId: string): string => {
-      if (conv?.runId.startsWith("conv_")) {
-        const u = usersById.get(agentId);
-        return u ? u.displayName || u.username || agentId : agentId;
-      }
+      const u = usersById.get(agentId);
+      if (u) return u.displayName || u.username || agentId;
       const a = agentsById.get(agentId);
       return a ? a.name : agentId;
     },
-    [conv, usersById, agentsById],
+    [usersById, agentsById],
   );
 
-  /** 是否自己发送的消息（用户-用户会话按发送者 id，agent 会话按 role）——决定能否撤回 */
+  /** 是否自己发送的消息（用户-用户会话按发送者 id；direct agent / 群聊按发送者判定） */
   const isMyMessage = useCallback(
     (item: MessageItem): boolean => {
       const isUserConv = !!conv && conv.runId.startsWith("conv_");
-      return isUserConv
-        ? item.agentName === meId || item.id.startsWith("u-")
-        : item.role === "user";
+      if (isUserConv) return item.agentName === meId || item.id.startsWith("u-");
+      // direct agent / 群聊（含人+Agent 混合群）：用户消息按发送者判定（自己 / "user" 回显 / 乐观追加）
+      return (
+        item.role === "user" &&
+        (item.agentName === meId || item.agentName === "user" || item.id.startsWith("u-"))
+      );
     },
     [conv, meId],
   );

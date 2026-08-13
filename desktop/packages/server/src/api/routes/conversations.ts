@@ -51,6 +51,10 @@ function canAccessConv(conv: Conversation, userId?: string): boolean {
   if (isUserConv(conv)) {
     return !!userId && (conv.userId === userId || conv.participantIds.includes(userId));
   }
+  if (conv.type === "group") {
+    // 群聊：归属用户或参与者可访问（人+Agent 混合群的其他用户也能进）
+    return !conv.userId || conv.userId === userId || (!!userId && conv.participantIds.includes(userId));
+  }
   return !conv.userId || conv.userId === userId;
 }
 
@@ -88,24 +92,21 @@ export function conversationsRouter(ctx: AppContext): Router {
       const isUser = (id: string) => id.startsWith("user_") || !!ctx.userStore.getById(id);
       const userParticipants = participantIds.filter(isUser);
       const agentParticipants = participantIds.filter((id) => !isUser(id));
-      if (userParticipants.length > 0 && agentParticipants.length > 0) {
-        return fail(res, new Error("暂不支持用户与 Agent 混合会话"), 400);
-      }
       if (type === "direct" && participantIds.length !== 1) {
         return fail(res, new Error("direct 会话需要一个参与者"), 400);
       }
 
       const title = typeof body.title === "string" && body.title.trim() ? body.title.trim() : type === "direct" ? participantIds[0] : "群聊";
 
-      // 用户-用户会话（无 Agent 参与）：不创建 run，消息直接落库 + 定向推送
-      if (userParticipants.length > 0) {
+      // 纯用户会话（无 Agent 参与，含纯用户群）：不创建 run，消息直接落库 + 定向推送
+      if (agentParticipants.length === 0) {
         const id = newId("conv");
         const conv: Conversation = {
           id,
           userId: req.user?.id,
           type,
           title,
-          participantIds: userParticipants,
+          participantIds,
           runId: id,
           unread: 0,
           createdAt: now(),
@@ -116,7 +117,7 @@ export function conversationsRouter(ctx: AppContext): Router {
         return;
       }
 
-      // Agent 会话：创建 chat 模式 run
+      // Agent 群 / 人+Agent 混合群：创建 chat 模式 run（调度 agent 讨论）
       const prompt = body.prompt ?? `会话「${title}」已创建，请开始。`;
       const run = await ctx.engine.createAndExecuteTask(
         title,
@@ -129,7 +130,7 @@ export function conversationsRouter(ctx: AppContext): Router {
         userId: req.user?.id,
         type,
         title,
-        participantIds: agentParticipants,
+        participantIds,
         runId: run.id,
         unread: 0,
         createdAt: now(),
@@ -152,7 +153,9 @@ export function conversationsRouter(ctx: AppContext): Router {
       const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 200);
 
       // 用户-用户会话（runId = conv id）：消息双方共享，不做 userId 过滤（否则对方看不到自己的消息）
-      const all = isUserConv(conv)
+      // 共享历史：用户-用户会话 / 群聊（含 Agent 群、人+Agent 混合群）双方可见；direct agent 会话按归属过滤
+      const shared = isUserConv(conv) || conv.type === "group";
+      const all = shared
         ? ctx.store.listChatMessages(conv.runId)
         : ctx.store.listChatMessages(conv.runId, req.user?.id);
       const filtered = before ? all.filter((m) => m.ts < before) : all;
@@ -235,7 +238,8 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       const msgId = String(req.params.msgId);
-      const all = isUserConv(conv)
+      const shared = isUserConv(conv) || conv.type === "group";
+      const all = shared
         ? ctx.store.listChatMessages(conv.runId)
         : ctx.store.listChatMessages(conv.runId, req.user?.id);
       const msg = all.find((m) => m.id === msgId);
