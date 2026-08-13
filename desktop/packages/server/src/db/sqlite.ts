@@ -127,6 +127,18 @@ CREATE TABLE IF NOT EXISTS conversation_reads (
 
 CREATE INDEX IF NOT EXISTS idx_conv_reads_user ON conversation_reads(user_id);
 
+-- 用户设备（多端在线状态：手机端 / 电脑端等）
+CREATE TABLE IF NOT EXISTS devices (
+  id           TEXT PRIMARY KEY,
+  user_id      TEXT NOT NULL,
+  name         TEXT NOT NULL DEFAULT '',
+  type         TEXT NOT NULL DEFAULT 'mobile',
+  last_seen_at TEXT,
+  created_at   TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
+
 CREATE TABLE IF NOT EXISTS workflows (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,

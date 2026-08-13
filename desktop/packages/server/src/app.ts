@@ -16,6 +16,7 @@ import { discoveryRouter } from "./api/routes/discovery";
 import { relayRouter } from "./api/routes/relay";
 import { chatRouter } from "./api/routes/chat";
 import { conversationsRouter } from "./api/routes/conversations";
+import { devicesRouter } from "./api/routes/devices";
 import { uploadRouter } from "./api/routes/upload";
 import { initRelayClient } from "./api/routes/relay";
 import { apiAuth } from "./api/auth";
@@ -115,6 +116,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/relay", relayRouter(ctx));
   app.use("/api/chat", chatRouter(ctx));
   app.use("/api/conversations", conversationsRouter(ctx));
+  app.use("/api/devices", devicesRouter(ctx));
   app.use("/api/upload", uploadRouter(ctx));
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）

@@ -89,7 +89,16 @@ class WsClient {
 
     const proto = location.protocol === "https:" ? "wss" : "ws";
     const tokenParam = this.wsToken ? `?token=${this.wsToken}` : "";
-    const ws = new WebSocket(`${proto}://${location.host}/ws${tokenParam}`);
+    // 设备上报（电脑端/浏览器）：多端在线状态
+    let deviceId = localStorage.getItem("ensemble_device_id");
+    if (!deviceId) {
+      deviceId = `web_${Math.random().toString(36).slice(2, 10)}_${Date.now().toString(36)}`;
+      localStorage.setItem("ensemble_device_id", deviceId);
+    }
+    const devParams = tokenParam
+      ? `&deviceId=${encodeURIComponent(deviceId)}&type=desktop&deviceName=${encodeURIComponent("电脑端")}`
+      : "";
+    const ws = new WebSocket(`${proto}://${location.host}/ws${tokenParam}${devParams}`);
     this.ws = ws;
 
     ws.onopen = () => {

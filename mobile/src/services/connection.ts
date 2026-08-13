@@ -210,7 +210,7 @@ class ConnectionService {
       name: await this.getDeviceName(),
       type: "mobile",
       os: "React Native",
-      appVersion: "0.7.19",
+      appVersion: "0.7.20",
       wsPort: 0,
       httpPort: 0,
       ip: "0.0.0.0",
@@ -316,9 +316,15 @@ class ConnectionService {
       useDeviceStore.getState().setConnectionState("connected");
       this.emit("connection:state", "connected");
 
-      // 3. 启动原生 WS 事件流（携带用户会话 token，云服务器无需 ws-token bootstrap）
+      // 3. 启动原生 WS 事件流（携带用户会话 token，云服务器无需 ws-token bootstrap）；上报设备信息用于多端在线
+      const dev = useDeviceStore.getState().currentDevice;
       wsLink.on({ onConnectionState: (s) => this.handleWsState(s) });
-      await wsLink.connect(ip, port, await api.getAuthToken());
+      await wsLink.connect(
+        ip,
+        port,
+        await api.getAuthToken(),
+        dev ? { id: dev.id, name: dev.name, type: "mobile" } : undefined,
+      );
 
       // 4. 拉取初始数据
       await this.syncData();

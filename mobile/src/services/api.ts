@@ -621,6 +621,13 @@ class ApiService {
     return this.request<{ read: boolean }>("POST", `/api/conversations/${convId}/read`);
   }
 
+  /** 当前用户的所有设备（多端在线状态：在线 / 离线） */
+  async getDevices(): Promise<
+    ApiResponse<Array<{ id: string; name: string; type: string; online: boolean; lastSeenAt?: string }>>
+  > {
+    return this.request("GET", "/api/devices");
+  }
+
   // ========== Memory API ==========
 
   /** 获取记忆摘要 */

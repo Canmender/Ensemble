@@ -23,6 +23,7 @@ export interface WsLinkCallbacks {
   onChatMessage?: (msg: ChatWsMessage) => void;
   onChatDeleted?: (msg: { runId: string; msgId: string }) => void;
   onChatRead?: (msg: { runId: string; userId: string; readTs: string }) => void;
+  onDeviceStatus?: (msg: { deviceId: string; name: string; kind: string; online: boolean }) => void;
   onConnectionState?: (state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error") => void;
   onRunStatus?: (runId: string, status: string) => void;
 }
@@ -47,6 +48,10 @@ interface WsEnvelope {
     msgId?: string;
     userId?: string;
     readTs?: string;
+    deviceId?: string;
+    name?: string;
+    kind?: string;
+    online?: boolean;
     event?: { type: string; tool?: string; input?: unknown; ts?: number };
   };
 }
@@ -70,8 +75,13 @@ export class WsLink {
     this.globalChatMessageCbs.push(cb);
   }
 
-  /** 直连桌面端/云服务器：优先使用传入 token（用户会话），缺省回退 /api/ws-token bootstrap */
-  async connect(ip: string, httpPort: number, token?: string | null): Promise<boolean> {
+  /** 直连桌面端/云服务器：优先使用传入 token（用户会话），缺省回退 /api/ws-token bootstrap；device 用于多端在线注册 */
+  async connect(
+    ip: string,
+    httpPort: number,
+    token?: string | null,
+    device?: { id: string; name: string; type: string },
+  ): Promise<boolean> {
     let wsToken = token;
     if (!wsToken) {
       try {
@@ -85,7 +95,13 @@ export class WsLink {
       }
     }
     this.token = wsToken;
-    this.url = `ws://${ip}:${httpPort}/ws?token=${this.token}`;
+    const params = new URLSearchParams({ token: this.token });
+    if (device) {
+      params.set("deviceId", device.id);
+      params.set("deviceName", device.name);
+      params.set("type", device.type);
+    }
+    this.url = `ws://${ip}:${httpPort}/ws?${params.toString()}`;
     this.manuallyClosed = false;
     this.open();
     return true;
@@ -242,6 +258,16 @@ export class WsLink {
       case "chat.read":
         if (ev.userId && ev.readTs) {
           this.callbacks.onChatRead?.({ runId: env.runId, userId: ev.userId, readTs: ev.readTs });
+        }
+        break;
+      case "device.status":
+        if (ev.deviceId) {
+          this.callbacks.onDeviceStatus?.({
+            deviceId: ev.deviceId,
+            name: ev.name ?? "",
+            kind: ev.kind ?? "mobile",
+            online: !!ev.online,
+          });
         }
         break;
       case "run.result":

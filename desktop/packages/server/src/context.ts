@@ -10,6 +10,7 @@ import { syncAgent } from "./discovery/sync";
 import { AdapterRegistry } from "./adapters/registry";
 import { OrchestrationEngine } from "./orchestration/engine";
 import { WsHub } from "./api/ws/hub";
+import type { RunEvent } from "./api/ws/protocol";
 import { ProviderRegistry } from "./llm/registry";
 import { FileKeyStore, type KeyStore } from "./keychain";
 import { ToolRegistry } from "./tools/types";
@@ -106,6 +107,12 @@ export function createAppContext(
   const hub = new WsHub();
   // headless/Docker 部署：用固定 API key 覆盖随机 session token（HTTP + WS 统一凭证）
   if (env.apiKey) hub.overrideToken(env.apiKey);
+  // 设备多端在线：WS 上线注册设备表，下线/上线广播给同用户其他设备
+  hub.onDeviceStatus = (userId, device, online) => {
+    if (online) store.upsertDevice({ id: device.id, userId, name: device.name, type: device.type });
+    const event: RunEvent = { type: "device.status", deviceId: device.id, name: device.name, kind: device.type, online };
+    hub.broadcastToUser(userId, event);
+  };
   const keyStore = deps.keyStore ?? new FileKeyStore(resolve(env.configDir, "secrets.json"));
   const providerRegistry = new ProviderRegistry(keyStore);
   const toolRegistry = new ToolRegistry();

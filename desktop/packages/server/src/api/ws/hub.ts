@@ -70,6 +70,10 @@ export class WsHub {
   private resolveUser?: (token: string) => AuthUser | undefined;
   private wsUsers = new Map<WebSocket, AuthUser>();
   private userSockets = new Map<string, Set<WebSocket>>();
+  /** ws → 设备信息（多端在线状态：deviceId / 类型 / 名称） */
+  private wsDevices = new Map<WebSocket, { userId: string; deviceId: string; name: string; type: string }>();
+  /** 设备状态回调（context 注入：注册设备表 + 广播给同用户其他设备） */
+  onDeviceStatus?: (userId: string, device: { id: string; name: string; type: string }, online: boolean) => void;
 
   /** 获取当前 session token（前端用于建立 WebSocket 连接） */
   get sessionToken(): string {
@@ -106,13 +110,26 @@ export class WsHub {
 
       // 关联用户（用户-用户 IM：session token → user）
       if (this.resolveUser) {
-        const token = new URL(req.url ?? "/", "http://x").searchParams.get("token");
+        const url = new URL(req.url ?? "/", "http://x");
+        const token = url.searchParams.get("token");
         const user = token ? this.resolveUser(token) : undefined;
         if (user) {
           this.wsUsers.set(ws, user);
           let set = this.userSockets.get(user.id);
           if (!set) { set = new Set(); this.userSockets.set(user.id, set); }
           set.add(ws);
+          // 设备信息（多端在线状态）：连接时上报 deviceId/type/name
+          const deviceId = url.searchParams.get("deviceId");
+          if (deviceId) {
+            const type = url.searchParams.get("type") || "mobile";
+            const device = {
+              id: deviceId,
+              name: url.searchParams.get("deviceName") || (type === "desktop" ? "电脑端" : "手机端"),
+              type,
+            };
+            this.wsDevices.set(ws, { userId: user.id, deviceId, name: device.name, type });
+            this.onDeviceStatus?.(user.id, device, true);
+          }
         }
       }
 
@@ -146,6 +163,11 @@ export class WsHub {
         if (u) {
           this.wsUsers.delete(ws);
           this.userSockets.get(u.id)?.delete(ws);
+        }
+        const dev = this.wsDevices.get(ws);
+        if (dev) {
+          this.wsDevices.delete(ws);
+          this.onDeviceStatus?.(dev.userId, { id: dev.deviceId, name: dev.name, type: dev.type }, false);
         }
         for (const [runId, set] of this.runSubs) {
           set.delete(ws);
@@ -292,6 +314,25 @@ export class WsHub {
     const sockets = this.userSockets.get(userId);
     if (!sockets || sockets.size === 0) return;
     const envelope = JSON.stringify({ v: 1, ts: Date.now(), runId, seq: 0, event });
+    for (const ws of sockets) {
+      if (ws.readyState === WebSocket.OPEN) ws.send(envelope);
+    }
+  }
+
+  /** 当前用户在线设备 id 集合（多端在线状态） */
+  getOnlineDeviceIds(userId: string): Set<string> {
+    const ids = new Set<string>();
+    for (const d of this.wsDevices.values()) {
+      if (d.userId === userId) ids.add(d.deviceId);
+    }
+    return ids;
+  }
+
+  /** 广播事件给某用户的全部在线连接（多端同步，如设备状态变化） */
+  broadcastToUser(userId: string, event: RunEvent): void {
+    const sockets = this.userSockets.get(userId);
+    if (!sockets || sockets.size === 0) return;
+    const envelope = JSON.stringify({ v: 1, ts: Date.now(), runId: "", seq: 0, event });
     for (const ws of sockets) {
       if (ws.readyState === WebSocket.OPEN) ws.send(envelope);
     }

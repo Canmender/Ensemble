@@ -23,6 +23,7 @@ import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { api, type UserInfo } from "../services/api";
 import { useChatTarget } from "../store/chatTargetStore";
+import { wsLink } from "../services/wslink";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { AgentConfig } from "@ensemble/shared-protocol";
 
@@ -41,8 +42,9 @@ type Row =
 
 export default function ContactsPage({ navigation }: { navigation: any }) {
   const { agents } = useTaskStore();
-  const { currentDevice, connectedDevice } = useDeviceStore();
+  const { currentDevice } = useDeviceStore();
   const [users, setUsers] = useState<UserInfo[]>([]);
+  const [devices, setDevices] = useState<Array<{ id: string; name: string; type: string; online: boolean }>>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState<ContactGroup[]>([]);
@@ -83,10 +85,22 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     void AsyncStorage.setItem(GROUPS_KEY, JSON.stringify(next)).catch(() => {});
   }, []);
 
+  const loadDevices = useCallback(async () => {
+    try {
+      const res = await api.getDevices();
+      if (res.data) setDevices(res.data);
+    } catch {
+      /* 忽略 */
+    }
+  }, []);
+
   useEffect(() => {
     void loadUsers();
     void loadGroups();
-  }, [loadUsers, loadGroups]);
+    void loadDevices();
+    // 设备在线状态变化实时刷新
+    wsLink.on({ onDeviceStatus: () => void loadDevices() });
+  }, [loadUsers, loadGroups, loadDevices]);
 
   const q = query.trim().toLowerCase();
   const matchUser = (u: UserInfo) =>
@@ -161,10 +175,15 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
       key: "devices",
       title: "设备",
       system: true,
-      rows: [
-        { type: "item" as const, key: "dev-phone", kind: "device" as const, id: "phone", name: "手机端", subtitle: currentDevice?.name || "本机", deviceIcon: "phone-portrait-outline" as const },
-        { type: "item" as const, key: "dev-pc", kind: "device" as const, id: "pc", name: "电脑端", subtitle: connectedDevice?.name || "云端服务器", deviceIcon: "desktop-outline" as const },
-      ],
+      rows: devices.map((d) => ({
+        type: "item" as const,
+        key: `dev-${d.id}`,
+        kind: "device" as const,
+        id: d.id,
+        name: d.name || (d.type === "desktop" ? "电脑端" : "手机端"),
+        subtitle: `${d.id === currentDevice?.id ? "本机 · " : ""}${d.online ? "在线" : "离线"}`,
+        deviceIcon: (d.type === "desktop" ? "desktop-outline" : "phone-portrait-outline") as keyof typeof Ionicons.glyphMap,
+      })),
     },
     {
       key: "users",
@@ -219,6 +238,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     if (item.type === "header") return renderHeader(item);
     const row = item;
     if (row.kind === "device") {
+      const online = row.subtitle.includes("在线");
       return (
         <View style={styles.row}>
           <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
@@ -228,6 +248,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
             <Text style={styles.rowName}>{row.name}</Text>
             <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
           </View>
+          <View style={[styles.onlineDot, { backgroundColor: online ? "#10b981" : "#9ca3af" }]} />
         </View>
       );
     }
@@ -440,6 +461,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarText: { fontSize: 17, fontWeight: "700" },
+  onlineDot: { width: 8, height: 8, borderRadius: 4, marginLeft: "auto" },
   rowInfo: { flex: 1 },
   rowName: { color: colors.text, fontSize: fontSize.md, fontWeight: "500" },
   rowSubtitle: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 },

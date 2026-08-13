@@ -22,7 +22,7 @@ import { api, type UserInfo } from "../services/api";
 import { useAuthGate } from "../store/authGateStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 
-const APP_VERSION = "0.7.19";
+const APP_VERSION = "0.7.20";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
