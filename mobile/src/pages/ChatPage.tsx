@@ -19,6 +19,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
 import { useChatTarget } from "../store/chatTargetStore";
+import { useUnreadStore } from "../store/unreadStore";
 import { wsLink } from "../services/wslink";
 import { Badge, EmptyState } from "../components/ui";
 import { colors, spacing, radius, fontSize } from "../theme";
@@ -78,7 +79,12 @@ export default function ChatPage() {
 
   const loadConversations = useCallback(async () => {
     const res = await api.getConversations();
-    if (res.data) setConversations(res.data);
+    if (res.data) {
+      setConversations(res.data);
+      useUnreadStore
+        .getState()
+        .setTotalUnread(res.data.reduce((sum, c) => sum + (c.unread || 0), 0));
+    }
     setLoading(false);
     if (res.error) setError(res.error);
   }, []);
@@ -90,12 +96,32 @@ export default function ChatPage() {
     });
   }, [loadConversations]);
 
-  // WS 收到新消息 → 节流刷新列表（未读 / 最后消息实时更新）
+  // WS 收到新消息 → 本地立即更新对应会话最后消息预览（无延迟），节流整表刷新兜底（未读等）
   useFocusEffect(
     useCallback(() => {
       wsLink.on({
-        onChatMessage: () => {
-          if (Date.now() - lastReload.current > 2000) {
+        onChatMessage: (msg) => {
+          const preview =
+            msg.content ||
+            (msg.attachment
+              ? msg.attachment.type === "image"
+                ? "[图片]"
+                : `[文件] ${msg.attachment.name}`
+              : "");
+          if (preview) {
+            setConversations((prev) =>
+              prev.map((c) =>
+                c.runId === msg.runId
+                  ? {
+                      ...c,
+                      lastMessage: preview.slice(0, 50),
+                      lastMessageTs: new Date().toISOString(),
+                    }
+                  : c,
+              ),
+            );
+          }
+          if (Date.now() - lastReload.current > 3000) {
             lastReload.current = Date.now();
             void loadConversations();
           }

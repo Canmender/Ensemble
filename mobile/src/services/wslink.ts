@@ -9,8 +9,18 @@
 import { useTaskStore } from "../store/taskStore";
 import type { MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
 
+/** WS 聊天消息（chat.message 事件负载） */
+export interface ChatWsMessage {
+  runId: string;
+  jobId?: string;
+  agentId: string;
+  content: string;
+  attachment?: MessageAttachment;
+  replyTo?: MessageReply;
+}
+
 export interface WsLinkCallbacks {
-  onChatMessage?: (msg: { runId: string; jobId?: string; agentId: string; content: string; attachment?: MessageAttachment; replyTo?: MessageReply }) => void;
+  onChatMessage?: (msg: ChatWsMessage) => void;
   onChatDeleted?: (msg: { runId: string; msgId: string }) => void;
   onConnectionState?: (state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error") => void;
   onRunStatus?: (runId: string, status: string) => void;
@@ -45,9 +55,16 @@ export class WsLink {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private manuallyClosed = false;
   private callbacks: WsLinkCallbacks = {};
+  /** 全局聊天消息监听（弹通知 / 未读红点用，不随页面 on() 覆盖） */
+  private globalChatMessageCbs: Array<(msg: ChatWsMessage) => void> = [];
 
   on(cb: WsLinkCallbacks): void {
     this.callbacks = { ...this.callbacks, ...cb };
+  }
+
+  /** 注册全局聊天消息监听（始终触发，页面 onChatMessage 覆盖不影响） */
+  onGlobalChatMessage(cb: (msg: ChatWsMessage) => void): void {
+    this.globalChatMessageCbs.push(cb);
   }
 
   /** 直连桌面端/云服务器：优先使用传入 token（用户会话），缺省回退 /api/ws-token bootstrap */
@@ -195,14 +212,24 @@ export class WsLink {
         }
         break;
       case "chat.message":
-        this.callbacks.onChatMessage?.({
-          runId: env.runId,
-          jobId: env.jobId,
-          agentId: ev.agentId ?? "agent",
-          content: ev.content ?? "",
-          attachment: ev.attachment,
-          replyTo: ev.replyTo,
-        });
+        {
+          const chatMsg: ChatWsMessage = {
+            runId: env.runId,
+            jobId: env.jobId,
+            agentId: ev.agentId ?? "agent",
+            content: ev.content ?? "",
+            attachment: ev.attachment,
+            replyTo: ev.replyTo,
+          };
+          this.callbacks.onChatMessage?.(chatMsg);
+          for (const cb of this.globalChatMessageCbs) {
+            try {
+              cb(chatMsg);
+            } catch {
+              /* 全局监听异常不影响 WS 连接 */
+            }
+          }
+        }
         break;
       case "chat.deleted":
         if (ev.msgId) {

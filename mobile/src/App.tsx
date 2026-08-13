@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { View, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
@@ -7,8 +7,10 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { connectionService } from "./services/connection";
+import { initNotifications } from "./services/notifications";
 import { api } from "./services/api";
 import { useAuthGate } from "./store/authGateStore";
+import { useUnreadStore } from "./store/unreadStore";
 
 // Pages
 import DashboardPage from "./pages/DashboardPage";
@@ -49,6 +51,32 @@ const TAB_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Settings: { active: "settings", inactive: "settings-outline" },
 };
 
+/** 底部「聊天」Tab 未读红点角标 */
+function ChatTabBadge() {
+  const total = useUnreadStore((s) => s.totalUnread);
+  if (total <= 0) return null;
+  return (
+    <View
+      style={{
+        position: "absolute",
+        top: -3,
+        right: -6,
+        minWidth: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: colors.danger,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 4,
+      }}
+    >
+      <Text style={{ color: "#fff", fontSize: 9, fontWeight: "700" }}>
+        {total > 99 ? "99+" : total}
+      </Text>
+    </View>
+  );
+}
+
 // 底部标签导航
 function MainTabs() {
   return (
@@ -62,7 +90,12 @@ function MainTabs() {
         tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
         tabBarIcon: ({ color, focused }) => {
           const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
-          return <Ionicons name={focused ? icon.active : icon.inactive} size={22} color={color} />;
+          return (
+            <View style={{ width: 26, height: 26 }}>
+              <Ionicons name={focused ? icon.active : icon.inactive} size={22} color={color} />
+              {route.name === "Chat" && <ChatTabBadge />}
+            </View>
+          );
         },
       })}
     >
@@ -144,8 +177,9 @@ export default function App() {
   const gate = useAuthGate((s) => s.gate);
   const setGate = useAuthGate((s) => s.setGate);
 
-  // 启动：连接云端 → 读取登录态 → 进登录页或主界面
+  // 启动：初始化通知 → 连接云端 → 读取登录态 → 进登录页或主界面
   useEffect(() => {
+    initNotifications();
     (async () => {
       try {
         await connectionService.init();

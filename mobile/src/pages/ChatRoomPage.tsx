@@ -25,6 +25,7 @@ import * as Sharing from "expo-sharing";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
+import { useUnreadStore } from "../store/unreadStore";
 import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { colors, spacing, radius, fontSize } from "../theme";
@@ -106,11 +107,22 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       if (c) {
         setConv(c);
         activeRunIdRef.current = c.runId;
+        // 当前会话新消息不弹通知、不计未读；该会话未读从总数中扣除
+        useUnreadStore.getState().setLastActiveConvId(c.runId);
+        if (c.unread > 0) {
+          const cur = useUnreadStore.getState().totalUnread;
+          useUnreadStore.getState().setTotalUnread(Math.max(0, cur - c.unread));
+        }
         // 标题优先用进入时传入的（ChatPage 已解析为昵称）；缺省回退会话 title
         if (!title) navigation.setOptions({ title: c.title || "聊天" });
       }
     });
   }, [convId, runId, title, navigation]);
+
+  // 退出会话：清除活跃标记（恢复通知 / 未读统计）
+  useEffect(() => {
+    return () => useUnreadStore.getState().setLastActiveConvId(null);
+  }, []);
 
   // 用户/Agent 列表（解析消息发送者昵称，不直接显示 user id / agent id）
   useEffect(() => {
