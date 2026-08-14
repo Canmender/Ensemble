@@ -151,6 +151,10 @@ export interface Conversation {
   lastMessageTs?: string;
   unread: number;
   archived?: boolean;
+  /** 静音（不弹通知） */
+  muted?: boolean;
+  /** 置顶（排最前） */
+  pinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }

@@ -12,6 +12,9 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -63,6 +66,12 @@ export default function ChatPage() {
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const lastReload = useRef(0);
+  // 搜索
+  const [searchText, setSearchText] = useState("");
+  const [searchResults, setSearchResults] = useState<Conversation[]>([]);
+  const [searching, setSearching] = useState(false);
+  // 长按操作菜单
+  const [menuConv, setMenuConv] = useState<Conversation | null>(null);
 
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
 
@@ -84,6 +93,10 @@ export default function ChatPage() {
       useUnreadStore
         .getState()
         .setTotalUnread(res.data.reduce((sum, c) => sum + (c.unread || 0), 0));
+      // 同步静音会话列表到 unreadStore（通知判断用）
+      useUnreadStore.getState().setMutedRunIds(
+        new Set(res.data.filter((c) => c.muted).map((c) => c.runId)),
+      );
     }
     setLoading(false);
     if (res.error) setError(res.error);
@@ -175,10 +188,88 @@ export default function ChatPage() {
     navigation.navigate("ChatRoom", { convId: c.id, runId: c.runId, title: convTitle(c, usersById) });
   };
 
+  // 会话内消息搜索
+  const doSearch = useCallback(async (q: string) => {
+    setSearchText(q);
+    if (!q.trim()) { setSearchResults([]); return; }
+    setSearching(true);
+    try {
+      // 搜索所有会话的消息，返回匹配的会话列表
+      const results: Conversation[] = [];
+      for (const c of conversations) {
+        const res = await api.searchMessages(c.id, q.trim());
+        if (res.data && res.data.total > 0 && !results.find((r) => r.id === c.id)) {
+          results.push(c);
+        }
+      }
+      setSearchResults(results);
+    } catch {} finally { setSearching(false); }
+  }, [conversations]);
+
+  // 静音 / 取消静音
+  const toggleMute = useCallback(async (conv: Conversation) => {
+    setMenuConv(null);
+    const newMuted = !conv.muted;
+    const res = await api.muteConversation(conv.id, newMuted);
+    if (!res.error) {
+      setConversations((prev) => prev.map((c) => c.id === conv.id ? { ...c, muted: newMuted } : c));
+      // 刷新 mutedRunIds
+      useUnreadStore.getState().setMutedRunIds(
+        new Set(conversations.map((c) => c.id === conv.id ? { ...c, muted: newMuted } : c).filter((c) => c.muted).map((c) => c.runId)),
+      );
+    }
+  }, [conversations]);
+
+  // 置顶 / 取消置顶
+  const togglePin = useCallback(async (conv: Conversation) => {
+    setMenuConv(null);
+    const newPinned = !conv.pinned;
+    const res = await api.pinConversation(conv.id, newPinned);
+    if (!res.error) {
+      setConversations((prev) => {
+        const updated = prev.map((c) => c.id === conv.id ? { ...c, pinned: newPinned } : c);
+        // 置顶排前面
+        return [...updated].sort((a, b) => (a.pinned ? 0 : 1) - (b.pinned ? 0 : 1) || new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      });
+    }
+  }, []);
+
+  // 删除会话
+  const deleteConv = useCallback((conv: Conversation) => {
+    setMenuConv(null);
+    Alert.alert("删除会话", `确定删除与「${convTitle(conv, usersById)}」的会话？`, [
+      { text: "取消", style: "cancel" },
+      {
+        text: "删除", style: "destructive",
+        onPress: async () => {
+          const res = await api.request("DELETE", `/api/conversations/${conv.id}`);
+          if (!res.error) {
+            setConversations((prev) => prev.filter((c) => c.id !== conv.id));
+          } else {
+            setError(res.error);
+          }
+        },
+      },
+    ]);
+  }, [usersById]);
+
+  // 搜索结果或全部会话
+  const displayConversations = searchText.trim() ? searchResults : conversations;
+
   const renderItem = ({ item }: { item: Conversation }) => (
-    <TouchableOpacity style={styles.convCard} onPress={() => openConv(item)} activeOpacity={0.7}>
+    <TouchableOpacity
+      style={[styles.convCard, item.muted && styles.convCardMuted]}
+      onPress={() => openConv(item)}
+      onLongPress={() => setMenuConv(item)}
+      activeOpacity={0.7}
+    >
       <View style={styles.avatar}>
         <Ionicons name={convIcon(item)} size={22} color={colors.primary} />
+        {item.pinned && (
+          <View style={styles.pinBadge}>
+            <Ionicons name="pin" size={10} color="#fff" />
+          </View>
+        )}
       </View>
       <View style={styles.convBody}>
         <View style={styles.convRow}>
@@ -187,10 +278,13 @@ export default function ChatPage() {
           </Text>
           <Text style={styles.convTime}>{timeStr(item.lastMessageTs)}</Text>
         </View>
-        <Text style={styles.convLast} numberOfLines={1}>
-          {item.lastMessage || "开始聊天吧"}
-        </Text>
-        {item.unread > 0 && <Text style={styles.convUnread}>未读 {item.unread} 条</Text>}
+        <View style={styles.convLastRow}>
+          {item.muted && <Ionicons name="volume-mute" size={12} color={colors.textFaint} style={{ marginRight: 4 }} />}
+          <Text style={styles.convLast} numberOfLines={1}>
+            {item.lastMessage || "开始聊天吧"}
+          </Text>
+        </View>
+        {item.unread > 0 && !item.muted && <Text style={styles.convUnread}>{item.unread}</Text>}
       </View>
     </TouchableOpacity>
   );
@@ -215,22 +309,76 @@ export default function ChatPage() {
           <ActivityIndicator color={colors.primary} />
         </View>
       ) : (
-        <FlatList
-          data={conversations}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          extraData={usersById}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={styles.sep} />}
-          ListEmptyComponent={
-            <EmptyState
-              icon={<Ionicons name="chatbubbles-outline" size={28} color={colors.textFaint} />}
-              title="暂无会话"
-              subtitle="点击右上角「新对话」，或在联系人页选择用户 / Agent 开始聊天"
+        <>
+          {/* 搜索栏 */}
+          <View style={styles.searchBar}>
+            <Ionicons name="search" size={16} color={colors.textFaint} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="搜索会话…"
+              placeholderTextColor={colors.textFaint}
+              value={searchText}
+              onChangeText={doSearch}
+              returnKeyType="search"
             />
-          }
-        />
+            {searchText.length > 0 && (
+              <TouchableOpacity onPress={() => { setSearchText(""); setSearchResults([]); }} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color={colors.textFaint} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <FlatList
+            data={displayConversations}
+            keyExtractor={(item) => item.id}
+            renderItem={renderItem}
+            extraData={usersById}
+            contentContainerStyle={styles.list}
+            ItemSeparatorComponent={() => <View style={styles.sep} />}
+            ListEmptyComponent={
+              <EmptyState
+                icon={<Ionicons name={searchText ? "search-outline" : "chatbubbles-outline"} size={28} color={colors.textFaint} />}
+                title={searchText ? "无搜索结果" : "暂无会话"}
+                subtitle={searchText ? "试试其他关键词" : "在联系人页选择用户 / Agent 开始聊天"}
+              />
+            }
+          />
+        </>
       )}
+
+      {/* 长按会话操作菜单：静音 / 置顶 / 删除 */}
+      <Modal
+        transparent
+        visible={!!menuConv}
+        animationType="fade"
+        onRequestClose={() => setMenuConv(null)}
+      >
+        <TouchableOpacity
+          style={styles.overlay}
+          activeOpacity={1}
+          onPress={() => setMenuConv(null)}
+        >
+          <View style={styles.actionSheet}>
+            <TouchableOpacity style={styles.actionItem} onPress={() => menuConv && togglePin(menuConv)} activeOpacity={0.7}>
+              <Ionicons name={menuConv?.pinned ? "pin-outline" : "pin"} size={20} color={colors.text} />
+              <Text style={styles.actionText}>{menuConv?.pinned ? "取消置顶" : "置顶"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionItem} onPress={() => menuConv && toggleMute(menuConv)} activeOpacity={0.7}>
+              <Ionicons name={menuConv?.muted ? "volume-high-outline" : "volume-mute-outline"} size={20} color={colors.text} />
+              <Text style={styles.actionText}>{menuConv?.muted ? "取消静音" : "静音"}</Text>
+            </TouchableOpacity>
+            <View style={styles.actionDivider} />
+            <TouchableOpacity style={styles.actionItem} onPress={() => menuConv && deleteConv(menuConv)} activeOpacity={0.7}>
+              <Ionicons name="trash-outline" size={20} color={colors.danger} />
+              <Text style={[styles.actionText, { color: colors.danger }]}>删除</Text>
+            </TouchableOpacity>
+            <View style={styles.actionDivider} />
+            <TouchableOpacity style={styles.actionItem} onPress={() => setMenuConv(null)} activeOpacity={0.7}>
+              <Text style={[styles.actionText, styles.actionCancel]}>取消</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </View>
   );
 }
@@ -280,6 +428,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     backgroundColor: colors.surface,
   },
+  convCardMuted: { opacity: 0.65 },
   avatar: {
     width: 48,
     height: 48,
@@ -289,13 +438,51 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: spacing.md,
   },
+  pinBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   convBody: { flex: 1, minWidth: 0 },
   convRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
   convTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: "600", flex: 1 },
   convTime: { color: colors.textFaint, fontSize: 10 },
-  convLast: { color: colors.textMuted, fontSize: fontSize.xs, flex: 1, marginTop: 2 },
-  convUnread: { color: colors.danger, fontSize: fontSize.xs, marginTop: 3, fontWeight: "600" },
+  convLastRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
+  convLast: { color: colors.textMuted, fontSize: fontSize.xs, flex: 1 },
+  convUnread: {
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+    backgroundColor: colors.danger,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    textAlign: "center",
+    lineHeight: 18,
+    paddingHorizontal: 5,
+    marginTop: 3,
+    overflow: "hidden",
+  },
   sep: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 48 + spacing.lg + spacing.md },
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+  },
+  searchInput: { flex: 1, color: colors.text, fontSize: fontSize.sm },
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   actionSheet: {
     backgroundColor: colors.surface,

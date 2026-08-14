@@ -337,6 +337,46 @@ export function conversationsRouter(ctx: AppContext): Router {
     }),
   );
 
+  /** 静音 / 取消静音 */
+  r.post(
+    "/:id/mute",
+    asyncH(async (req, res) => {
+      const conv = ctx.store.getConversation(String(req.params.id));
+      if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      const muted = (req.body as { muted?: boolean })?.muted !== false;
+      ctx.store.setConversationMuted(conv.id, muted);
+      ok(res, { muted });
+    }),
+  );
+
+  /** 置顶 / 取消置顶 */
+  r.post(
+    "/:id/pin",
+    asyncH(async (req, res) => {
+      const conv = ctx.store.getConversation(String(req.params.id));
+      if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      const pinned = (req.body as { pinned?: boolean })?.pinned !== false;
+      ctx.store.setConversationPinned(conv.id, pinned);
+      ok(res, { pinned });
+    }),
+  );
+
+  /** 消息搜索：在会话内按关键词检索 */
+  r.get(
+    "/:id/messages/search",
+    asyncH(async (req, res) => {
+      const conv = ctx.store.getConversation(String(req.params.id));
+      if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      if (!q) return fail(res, new Error("搜索关键词不能为空"), 400);
+      const messages = ctx.store.searchChatMessages(conv.runId, q);
+      ok(res, { messages, total: messages.length });
+    }),
+  );
+
   /** 删除会话 */
   r.delete(
     "/:id",

@@ -46,9 +46,11 @@ export function initNotifications(): void {
   void Notifications.requestPermissionsAsync().catch(() => {});
 
   wsLink.onGlobalChatMessage((msg) => {
-    const { lastActiveConvId, addUnread } = useUnreadStore.getState();
-    // 当前正在看的会话不弹通知、不计未读（列表页在其它 Tab 时照样提示）
+    const { lastActiveConvId, mutedRunIds, addUnread } = useUnreadStore.getState();
+    // 当前正在看的会话不弹通知、不计未读
     if (msg.runId === lastActiveConvId) return;
+    // 静音会话不弹通知、不计未读
+    if (mutedRunIds.has(msg.runId)) return;
     addUnread();
     void Notifications.scheduleNotificationAsync({
       content: { title: "新消息", body: previewOf(msg), sound: false },
@@ -56,9 +58,11 @@ export function initNotifications(): void {
     }).catch(() => {});
   });
 
-  // @提及通知：被@时始终弹通知（高优先级），即使在当前会话内
+  // @提及通知：被@时弹通知（高优先级），但静音会话仍不弹
   wsLink.onGlobalMention((ev) => {
-    const { lastActiveConvId, addUnread } = useUnreadStore.getState();
+    const { mutedRunIds, addUnread } = useUnreadStore.getState();
+    // 静音会话：即使被@也不弹通知
+    if (mutedRunIds.has(ev.convId)) return;
     addUnread();
     void Notifications.scheduleNotificationAsync({
       content: {

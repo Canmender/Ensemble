@@ -113,6 +113,8 @@ CREATE TABLE IF NOT EXISTS conversations (
   last_message_ts TEXT,
   unread          INTEGER NOT NULL DEFAULT 0,
   archived        INTEGER NOT NULL DEFAULT 0,
+  muted           INTEGER NOT NULL DEFAULT 0,
+  pinned          INTEGER NOT NULL DEFAULT 0,
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
 );
@@ -225,6 +227,14 @@ function migrateUserColumns(db: DatabaseSync): void {
   const cmMentions = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
   if (!cmMentions.some((c) => c.name === "mentions")) {
     db.exec("ALTER TABLE chat_messages ADD COLUMN mentions TEXT");
+  }
+  // conversations.muted / pinned（静音 / 置顶）
+  const convCols2 = db.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>;
+  if (!convCols2.some((c) => c.name === "muted")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN muted INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!convCols2.some((c) => c.name === "pinned")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
   }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;

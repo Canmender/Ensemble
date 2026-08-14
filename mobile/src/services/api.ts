@@ -626,6 +626,24 @@ class ApiService {
     return this.request<{ read: boolean }>("POST", `/api/conversations/${convId}/read`);
   }
 
+  /** 静音 / 取消静音会话 */
+  async muteConversation(convId: string, muted: boolean): Promise<ApiResponse<{ muted: boolean }>> {
+    return this.request<{ muted: boolean }>("POST", `/api/conversations/${convId}/mute`, { muted });
+  }
+
+  /** 置顶 / 取消置顶会话 */
+  async pinConversation(convId: string, pinned: boolean): Promise<ApiResponse<{ pinned: boolean }>> {
+    return this.request<{ pinned: boolean }>("POST", `/api/conversations/${convId}/pin", { pinned });
+  }
+
+  /** 搜索会话内消息 */
+  async searchMessages(convId: string, query: string): Promise<ApiResponse<{ messages: any[]; total: number }>> {
+    return this.request<{ messages: any[]; total: number }>(
+      "GET",
+      `/api/conversations/${convId}/messages/search?q=${encodeURIComponent(query)}`,
+    );
+  }
+
   /** 当前用户的所有设备（多端在线状态：在线 / 离线） */
   async getDevices(): Promise<
     ApiResponse<Array<{ id: string; name: string; type: string; online: boolean; lastSeenAt?: string }>>

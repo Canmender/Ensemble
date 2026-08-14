@@ -101,8 +101,10 @@ export class Store {
       // Conversations
       createConversation: db.prepare("INSERT INTO conversations (id, user_id, type, title, participant_ids, run_id, last_message, last_message_ts, unread, archived, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"),
       setConversationArchived: db.prepare("UPDATE conversations SET archived = ?, updated_at = ? WHERE id = ?"),
+      setConversationMuted: db.prepare("UPDATE conversations SET muted = ?, updated_at = ? WHERE id = ?"),
+      setConversationPinned: db.prepare("UPDATE conversations SET pinned = ?, updated_at = ? WHERE id = ?"),
       getConversation: db.prepare("SELECT * FROM conversations WHERE id = ?"),
-      listConversations: db.prepare("SELECT * FROM conversations ORDER BY updated_at DESC"),
+      listConversations: db.prepare("SELECT * FROM conversations ORDER BY pinned DESC, updated_at DESC"),
       deleteConversation: db.prepare("DELETE FROM conversations WHERE id = ?"),
       updateConvMeta: db.prepare("UPDATE conversations SET last_message = ?, last_message_ts = ?, updated_at = ? WHERE id = ?"),
       incrementUnread: db.prepare("UPDATE conversations SET unread = unread + 1, updated_at = ? WHERE id = ?"),
@@ -400,16 +402,44 @@ export class Store {
             FROM conversations c
             LEFT JOIN conversation_reads cr ON cr.conv_id = c.id AND cr.user_id = ?
             WHERE c.archived = ? AND (c.user_id = ? OR c.user_id = '' OR c.participant_ids LIKE ?)
-            ORDER BY c.updated_at DESC
+            ORDER BY c.pinned DESC, c.updated_at DESC
           `)
           .all(userId, archived ? 1 : 0, userId, `%"${userId}"%`) as any[])
-      : (this.db.prepare("SELECT * FROM conversations WHERE archived = ? ORDER BY updated_at DESC").all(archived ? 1 : 0) as any[]);
+      : (this.db.prepare("SELECT * FROM conversations WHERE archived = ? ORDER BY pinned DESC, updated_at DESC").all(archived ? 1 : 0) as any[]);
     return rows.map(rowToConversation);
   }
 
   /** 归档 / 恢复会话 */
   setConversationArchived(id: string, archived: boolean): void {
     this.stmts.setConversationArchived.run(archived ? 1 : 0, new Date().toISOString(), id);
+  }
+
+  setConversationMuted(id: string, muted: boolean): void {
+    this.stmts.setConversationMuted.run(muted ? 1 : 0, new Date().toISOString(), id);
+  }
+
+  setConversationPinned(id: string, pinned: boolean): void {
+    this.stmts.setConversationPinned.run(pinned ? 1 : 0, new Date().toISOString(), id);
+  }
+
+  /** 消息搜索：在指定会话中按关键词检索消息内容 */
+  searchChatMessages(runId: string, query: string): ChatMessage[] {
+    const rows = this.db.prepare(
+      "SELECT * FROM chat_messages WHERE run_id = ? AND content LIKE ? ORDER BY ts DESC LIMIT 50"
+    ).all(runId, `%${query}%`) as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      runId: r.run_id,
+      jobId: r.job_id ?? undefined,
+      agentId: r.agent_id,
+      role: r.role,
+      content: r.content,
+      attachment: r.attachment ? (JSON.parse(r.attachment) as ChatMessage["attachment"]) : undefined,
+      replyTo: r.reply_to ? (JSON.parse(r.reply_to) as ChatMessage["replyTo"]) : undefined,
+      mentions: r.mentions ? (JSON.parse(r.mentions) as string[]) : undefined,
+      deleted: !!r.deleted,
+      ts: r.ts,
+    }));
   }
 
   updateConversationMeta(id: string, lastMessage: string, lastMessageTs: string): void {
@@ -522,6 +552,8 @@ function rowToConversation(r: any): Conversation {
     lastMessageTs: r.last_message_ts ?? undefined,
     unread: Number(r.unread ?? 0),
     archived: Boolean(r.archived),
+    muted: Boolean(r.muted),
+    pinned: Boolean(r.pinned),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
