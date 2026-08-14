@@ -41,6 +41,7 @@ type MessageItem = {
   agentName?: string;
   attachment?: MessageAttachment;
   replyTo?: MessageReply;
+  mentions?: string[];
   deleted?: boolean;
   ts: string;
 };
@@ -87,6 +88,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 「+」扩展栏（相册/视频/文件）与全屏查看附件
   const [showExtend, setShowExtend] = useState(false);
   const [viewerAttachment, setViewerAttachment] = useState<MessageAttachment | null>(null);
+  // @提及：输入框中 @ 触发参与者选择列表
+  const [showMentionPicker, setShowMentionPicker] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState("");
   // 已读回执：当前用户 id + 对方最后已读时间（自己消息 ts ≤ 该时间 → 显示「已读」）
   const [meId, setMeId] = useState<string | undefined>();
   const [peerReadTs, setPeerReadTs] = useState<number | undefined>();
@@ -140,6 +144,69 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
 
+  // @提及：可@的参与者列表（排除自己）
+  const mentionableParticipants = useMemo(() => {
+    if (!conv) return [];
+    const me = useDeviceStore.getState().connectedDevice?.id;
+    const items: Array<{ id: string; name: string }> = [];
+    for (const pid of conv.participantIds) {
+      if (pid === meId) continue;
+      const u = usersById.get(pid);
+      if (u) { items.push({ id: pid, name: u.displayName || u.username || pid }); continue; }
+      const a = agentsById.get(pid);
+      if (a) items.push({ id: pid, name: a.name });
+    }
+    return items;
+  }, [conv, usersById, agentsById, meId]);
+
+  // @提及：输入框输入时检测 @，显示/隐藏 picker，支持按名称过滤
+  const onInputChange = useCallback((text: string) => {
+    setInputText(text);
+    if (sendError) setSendError(null);
+    // 检测最后一个 @ 触发 picker（@ 在最后一个 \n 或空格之后）
+    const lastAt = text.lastIndexOf("@");
+    if (lastAt >= 0 && (lastAt === 0 || /[\s\n]/.test(text[lastAt - 1]))) {
+      const query = text.slice(lastAt + 1);
+      if (!/[\s\n]/.test(query) && mentionableParticipants.length > 0) {
+        setMentionFilter(query);
+        setShowMentionPicker(true);
+        return;
+      }
+    }
+    setShowMentionPicker(false);
+  }, [sendError, mentionableParticipants]);
+
+  // @提及：选中参与者后，替换 @query 为 @名称 + 空格
+  const selectMention = useCallback((item: { id: string; name: string }) => {
+    const lastAt = inputText.lastIndexOf("@");
+    if (lastAt < 0) { setShowMentionPicker(false); return; }
+    const before = inputText.slice(0, lastAt);
+    const newText = `${before}@${item.name} `;
+    setInputText(newText);
+    setShowMentionPicker(false);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, [inputText]);
+
+  /** 解析文本中的 @提及 → 被@的参与者 ID 列表 */
+  const parseMentions = useCallback(
+    (text: string): string[] => {
+      if (!conv) return [];
+      const mentioned: string[] = [];
+      const re = /@([\p{L}\p{N}_]{1,20})/gu;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(text)) !== null) {
+        const name = m[1];
+        for (const p of mentionableParticipants) {
+          if (!mentioned.includes(p.id) && p.name === name) {
+            mentioned.push(p.id);
+          }
+        }
+      }
+      return mentioned;
+    },
+    [conv, mentionableParticipants],
+  );
+
   /** 发送者显示名：用户显示昵称，agent 显示名（群聊 / 混合群通用） */
   const resolveSenderName = useCallback(
     (agentId: string): string => {
@@ -177,6 +244,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           agentName: m.agentId,
           attachment: m.attachment,
           replyTo: m.replyTo,
+          mentions: m.mentions,
           deleted: m.deleted,
           ts: m.ts,
         })),
@@ -209,6 +277,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               agentName: msg.agentId,
               attachment: msg.attachment,
               replyTo: msg.replyTo,
+              mentions: msg.mentions,
               ts: new Date().toISOString(),
             }),
           );
@@ -262,11 +331,13 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     setIsSending(true);
     setSendError(null);
     try {
+      const mentions = parseMentions(text);
       const res = await api.sendConversationMessage(
         convId,
         text,
         draftAttachment ?? undefined,
         quoting ?? undefined,
+        mentions.length > 0 ? mentions : undefined,
       );
       if (res.error) {
         setSendError(res.error);
@@ -279,12 +350,14 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           content: text,
           attachment: draftAttachment ?? undefined,
           replyTo: quoting ?? undefined,
+          mentions: mentions.length > 0 ? mentions : undefined,
           ts: new Date().toISOString(),
         }),
       );
       setInputText("");
       setDraftAttachment(null);
       setQuoting(null);
+      setShowMentionPicker(false);
       // 刷新历史拿到真实 msgId（撤回可用）
       void loadMessages();
       // 保持输入框聚焦，键盘不收起，方便连续发送
@@ -294,7 +367,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     } finally {
       setIsSending(false);
     }
-  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages]);
+  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages, parseMentions]);
 
   // 撤回消息（长按自己的消息触发）
   const recallMessage = useCallback(
@@ -582,7 +655,15 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               )}
               {item.attachment && renderAttachment(item.attachment, isUser)}
               {!!item.content && (
-                <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>{item.content}</Text>
+                <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
+                  {item.content.split(/(@[\p{L}\p{N}_]{1,20})/gu).map((part, i) =>
+                    /^@[\p{L}\p{N}_]{1,20}$/u.test(part) ? (
+                      <Text key={i} style={[styles.mentionText, isUser && styles.mentionTextUser]}>{part}</Text>
+                    ) : (
+                      <Text key={i}>{part}</Text>
+                    ),
+                  )}
+                </Text>
               )}
             </>
           )}
@@ -692,10 +773,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           placeholder="输入消息…"
           placeholderTextColor={colors.textFaint}
           value={inputText}
-          onChangeText={(t) => {
-            setInputText(t);
-            if (sendError) setSendError(null);
-          }}
+          onChangeText={onInputChange}
           multiline
           maxLength={2000}
           // editable 不随 isSending 切换（editable 变 false 会让输入框失焦收起键盘）
@@ -728,6 +806,28 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           />
         </TouchableOpacity>
       </View>
+
+      {/* @提及选择列表（输入框上方弹出） */}
+      {showMentionPicker && mentionableParticipants.length > 0 && (
+        <View style={styles.mentionPicker}>
+          {mentionableParticipants
+            .filter((p) => !mentionFilter || p.name.toLowerCase().includes(mentionFilter.toLowerCase()))
+            .slice(0, 8)
+            .map((p) => (
+              <TouchableOpacity
+                key={p.id}
+                style={styles.mentionItem}
+                onPress={() => selectMention(p)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.mentionAvatar}>
+                  <Ionicons name="person" size={16} color={colors.primary} />
+                </View>
+                <Text style={styles.mentionName}>{p.name}</Text>
+              </TouchableOpacity>
+            ))}
+        </View>
+      )}
 
       {/* 长按消息操作菜单：引用 / 转发 / 撤回（仅自己的消息） */}
       <Modal
@@ -995,6 +1095,33 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   extendLabel: { color: colors.textMuted, fontSize: fontSize.xs },
+  // @提及选择列表
+  mentionPicker: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    maxHeight: 220,
+  },
+  mentionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  mentionAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: radius.full,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mentionName: { color: colors.text, fontSize: fontSize.md },
+  mentionText: { color: colors.primary, fontWeight: "600" },
+  mentionTextUser: { color: "#e0e0ff" },
   viewerOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.92)",

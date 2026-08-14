@@ -91,7 +91,7 @@ export class Store {
       insertRunEvent: db.prepare("INSERT INTO run_events (run_id, seq, job_id, user_id, event_json, ts) VALUES (?, ?, ?, ?, ?, ?)"),
       getRunEvents: db.prepare("SELECT seq, job_id, event_json FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq"),
       // Chat messages
-      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
       listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY ts"),
       deleteChatMessage: db.prepare("UPDATE chat_messages SET deleted = 1 WHERE id = ?"),
       // Workflows
@@ -113,6 +113,12 @@ export class Store {
       upsertDevice: db.prepare("INSERT INTO devices (id, user_id, name, type, last_seen_at, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, last_seen_at = excluded.last_seen_at"),
       listDevices: db.prepare("SELECT * FROM devices WHERE user_id = ? ORDER BY created_at ASC"),
     };
+  }
+
+  /** 查找用户（@提及解析用） */
+  getUser(id: string): { id: string; username: string; displayName?: string } | undefined {
+    const r = this.db.prepare("SELECT id, username, display_name FROM users WHERE id = ?").get(id) as any;
+    return r ? { id: r.id, username: r.username, displayName: r.display_name ?? undefined } : undefined;
   }
 
   // ---------- Tasks ----------
@@ -310,7 +316,7 @@ export class Store {
 
   // ---------- Chat messages ----------
   createChatMessage(msg: ChatMessage): void {
-    this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.deleted ? 1 : 0, msg.ts);
+    this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts);
   }
 
   /** 撤回消息：标记 deleted（保留原始内容，前端显示「已撤回」） */
@@ -331,6 +337,7 @@ export class Store {
       content: r.content,
       attachment: r.attachment ? (JSON.parse(r.attachment) as ChatMessage["attachment"]) : undefined,
       replyTo: r.reply_to ? (JSON.parse(r.reply_to) as ChatMessage["replyTo"]) : undefined,
+      mentions: r.mentions ? (JSON.parse(r.mentions) as string[]) : undefined,
       deleted: !!r.deleted,
       ts: r.ts,
     }));

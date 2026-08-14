@@ -14,9 +14,10 @@ export type RunEvent =
   | { type: "run.status"; status: RunStatus }
   | { type: "job.status"; jobId: string; agentId: string; status: JobStatus }
   | { type: "agent.event"; jobId: string; agentId: string; event: AgentEvent }
-  | { type: "chat.message"; jobId: string; agentId: string; content: string; attachment?: MessageAttachment; replyTo?: MessageReply }
+  | { type: "chat.message"; jobId: string; agentId: string; content: string; attachment?: MessageAttachment; replyTo?: MessageReply; mentions?: string[] }
   | { type: "chat.deleted"; msgId: string }
   | { type: "chat.read"; userId: string; readTs: string }
+  | { type: "chat.mention"; convId: string; convTitle: string; senderId: string; senderName: string; content: string }
   | { type: "device.status"; deviceId: string; name: string; kind: string; online: boolean }
   | { type: "run.result"; result: string }
   | { type: "run.error"; message: string }

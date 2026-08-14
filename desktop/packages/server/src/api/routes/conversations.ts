@@ -1,5 +1,6 @@
 import { Router } from "express";
 import type { AppContext } from "../../context";
+import type { Store } from "../../orchestration/store";
 import { asyncH, fail, ok } from "./helpers";
 import { newId } from "../../util/id";
 import type { Conversation, MessageAttachment, MessageReply } from "@ensemble/shared";
@@ -64,6 +65,30 @@ function canAccessConv(conv: Conversation, userId?: string): boolean {
  * - group：多 agent 群聊
  * 消息沿用 chat_messages（run_id 关联），未读计数与会话元数据存 conversations 表。
  */
+
+/** 解析文本中的 @提及 → 被@的参与者 ID 列表 */
+function parseMentions(
+  content: string,
+  participantIds: string[],
+  senderId: string,
+  store: Store,
+): string[] {
+  const mentioned: string[] = [];
+  const mentionRe = /@([\p{L}\p{N}_]{1,20})/gu;
+  let match: RegExpExecArray | null;
+  while ((match = mentionRe.exec(content)) !== null) {
+    const name = match[1];
+    for (const pid of participantIds) {
+      if (pid === senderId || mentioned.includes(pid)) continue;
+      const user = store.getUser(pid);
+      if (user && (user.displayName === name || user.username === name)) {
+        mentioned.push(pid);
+      }
+    }
+  }
+  return mentioned;
+}
+
 export function conversationsRouter(ctx: AppContext): Router {
   const r = Router();
 
@@ -183,6 +208,8 @@ export function conversationsRouter(ctx: AppContext): Router {
       // 用户-用户会话（无 run）：消息落库 + 实时推送参与者用户 + per-user 未读
       if (isUserConv(conv)) {
         const senderId = req.user?.id ?? "user";
+        // 解析 @提及：@昵称 或 @用户名 → 参与者 ID
+        const mentions = parseMentions(content, conv.participantIds, senderId, ctx.store);
         ctx.store.createChatMessage({
           id: newId("msg"),
           runId: conv.runId,
@@ -192,6 +219,7 @@ export function conversationsRouter(ctx: AppContext): Router {
           content,
           attachment,
           replyTo,
+          mentions: mentions.length > 0 ? mentions : undefined,
           userId: req.user?.id,
           ts: now(),
         });
@@ -199,6 +227,7 @@ export function conversationsRouter(ctx: AppContext): Router {
         // 推送参与者（除发送者）+ 未读。接收者 = 归属用户 + participants（创建者不在 participants 里）
         // runId = conv.runId（conv id），客户端据此把实时消息关联到会话
         const recipients = new Set<string>([conv.userId, ...conv.participantIds].filter((x): x is string => !!x));
+        const senderName = ctx.store.getUser(senderId)?.displayName || ctx.store.getUser(senderId)?.username || senderId;
         for (const pid of recipients) {
           if (pid === senderId) continue;
           ctx.hub.sendToUser(pid, {
@@ -208,8 +237,20 @@ export function conversationsRouter(ctx: AppContext): Router {
             content,
             attachment,
             replyTo,
+            mentions: mentions.length > 0 ? mentions : undefined,
           }, conv.runId);
           ctx.store.incrementUnread(conv.id, pid);
+          // @提及通知：被@的用户额外收到 chat.mention 事件（优先级更高，始终弹通知）
+          if (mentions.includes(pid)) {
+            ctx.hub.sendToUser(pid, {
+              type: "chat.mention",
+              convId: conv.id,
+              convTitle: conv.title || senderName,
+              senderId,
+              senderName,
+              content: content.slice(0, 100),
+            });
+          }
         }
         ok(res, { sent: true });
         return;

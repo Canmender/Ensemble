@@ -1,12 +1,13 @@
 /**
  * 通知服务（应用内 + 系统通知）
  * - WS 收到新消息（非当前打开会话）→ 弹系统通知 + 未读计数 +1
+ * - @提及通知：被@时始终弹通知（高优先级），不受当前会话限制
  * - Android 需要通知 channel；Android 13+ 需运行时请求通知权限
  *
  * 局限：依赖 WS 连接（app 前台/后台未杀时），app 被杀后需远程推送（FCM/Expo push，当前自用场景未接）。
  */
 import * as Notifications from "expo-notifications";
-import { wsLink, type ChatWsMessage } from "./wslink";
+import { wsLink, type ChatWsMessage, type MentionEvent } from "./wslink";
 import { useUnreadStore } from "../store/unreadStore";
 
 // 前台也展示横幅/列表（iOS 默认前台不弹，需显式设置）
@@ -51,6 +52,20 @@ export function initNotifications(): void {
     addUnread();
     void Notifications.scheduleNotificationAsync({
       content: { title: "新消息", body: previewOf(msg), sound: false },
+      trigger: null,
+    }).catch(() => {});
+  });
+
+  // @提及通知：被@时始终弹通知（高优先级），即使在当前会话内
+  wsLink.onGlobalMention((ev) => {
+    const { lastActiveConvId, addUnread } = useUnreadStore.getState();
+    addUnread();
+    void Notifications.scheduleNotificationAsync({
+      content: {
+        title: `${ev.senderName} 提到了你`,
+        body: ev.content || "提到了你",
+        sound: true,
+      },
       trigger: null,
     }).catch(() => {});
   });

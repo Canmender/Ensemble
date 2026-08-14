@@ -97,6 +97,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   content  TEXT NOT NULL,
   attachment TEXT,
   reply_to TEXT,
+  mentions TEXT,
   deleted  INTEGER NOT NULL DEFAULT 0,
   ts       TEXT NOT NULL
 );
@@ -196,6 +197,7 @@ function migrateUserColumns(db: DatabaseSync): void {
         content  TEXT NOT NULL,
         attachment TEXT,
         reply_to TEXT,
+        mentions TEXT,
         deleted  INTEGER NOT NULL DEFAULT 0,
         ts       TEXT NOT NULL
       );
@@ -218,6 +220,11 @@ function migrateUserColumns(db: DatabaseSync): void {
   const cmReply = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
   if (!cmReply.some((c) => c.name === "reply_to")) {
     db.exec("ALTER TABLE chat_messages ADD COLUMN reply_to TEXT");
+  }
+  // chat_messages.mentions（@用户提及）
+  const cmMentions = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmMentions.some((c) => c.name === "mentions")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN mentions TEXT");
   }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;

@@ -130,6 +130,8 @@ export interface ChatMessage {
   attachment?: MessageAttachment;
   /** 引用的消息摘要（引用回复） */
   replyTo?: MessageReply;
+  /** 被@的用户/Agent ID 列表 */
+  mentions?: string[];
   /** 是否已撤回（撤回后内容隐藏，前端显示占位） */
   deleted?: boolean;
   ts: string;

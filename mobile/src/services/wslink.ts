@@ -17,12 +17,22 @@ export interface ChatWsMessage {
   content: string;
   attachment?: MessageAttachment;
   replyTo?: MessageReply;
+  mentions?: string[];
+}
+
+export interface MentionEvent {
+  convId: string;
+  convTitle: string;
+  senderId: string;
+  senderName: string;
+  content: string;
 }
 
 export interface WsLinkCallbacks {
   onChatMessage?: (msg: ChatWsMessage) => void;
   onChatDeleted?: (msg: { runId: string; msgId: string }) => void;
   onChatRead?: (msg: { runId: string; userId: string; readTs: string }) => void;
+  onChatMention?: (msg: MentionEvent) => void;
   onDeviceStatus?: (msg: { deviceId: string; name: string; kind: string; online: boolean }) => void;
   onConnectionState?: (state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error") => void;
   onRunStatus?: (runId: string, status: string) => void;
@@ -45,9 +55,14 @@ interface WsEnvelope {
     message?: string;
     attachment?: MessageAttachment;
     replyTo?: MessageReply;
+    mentions?: string[];
     msgId?: string;
     userId?: string;
     readTs?: string;
+    convId?: string;
+    convTitle?: string;
+    senderId?: string;
+    senderName?: string;
     deviceId?: string;
     name?: string;
     kind?: string;
@@ -65,6 +80,7 @@ export class WsLink {
   private callbacks: WsLinkCallbacks = {};
   /** 全局聊天消息监听（弹通知 / 未读红点用，不随页面 on() 覆盖） */
   private globalChatMessageCbs: Array<(msg: ChatWsMessage) => void> = [];
+  private globalMentionCbs: Array<(msg: MentionEvent) => void> = [];
 
   on(cb: WsLinkCallbacks): void {
     this.callbacks = { ...this.callbacks, ...cb };
@@ -73,6 +89,11 @@ export class WsLink {
   /** 注册全局聊天消息监听（始终触发，页面 onChatMessage 覆盖不影响） */
   onGlobalChatMessage(cb: (msg: ChatWsMessage) => void): void {
     this.globalChatMessageCbs.push(cb);
+  }
+
+  /** 全局 @提及监听（被@时始终弹通知，不受 lastActiveConvId 限制） */
+  onGlobalMention(cb: (msg: MentionEvent) => void): void {
+    this.globalMentionCbs.push(cb);
   }
 
   /** 直连桌面端/云服务器：优先使用传入 token（用户会话），缺省回退 /api/ws-token bootstrap；device 用于多端在线注册 */
@@ -239,11 +260,31 @@ export class WsLink {
             content: ev.content ?? "",
             attachment: ev.attachment,
             replyTo: ev.replyTo,
+            mentions: ev.mentions,
           };
           this.callbacks.onChatMessage?.(chatMsg);
           for (const cb of this.globalChatMessageCbs) {
             try {
               cb(chatMsg);
+            } catch {
+              /* 全局监听异常不影响 WS 连接 */
+            }
+          }
+        }
+        break;
+      case "chat.mention":
+        {
+          const mentionData: MentionEvent = {
+            convId: ev.convId ?? "",
+            convTitle: ev.convTitle ?? "",
+            senderId: ev.senderId ?? "",
+            senderName: ev.senderName ?? "",
+            content: ev.content ?? "",
+          };
+          this.callbacks.onChatMention?.(mentionData);
+          for (const cb of this.globalMentionCbs) {
+            try {
+              cb(mentionData);
             } catch {
               /* 全局监听异常不影响 WS 连接 */
             }

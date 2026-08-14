@@ -608,11 +608,16 @@ class ApiService {
     content: string,
     attachment?: MessageAttachment,
     replyTo?: MessageReply,
+    mentions?: string[],
   ): Promise<ApiResponse<{ sent: boolean }>> {
+    const body: Record<string, unknown> = { content };
+    if (attachment) body.attachment = attachment;
+    if (replyTo) body.replyTo = replyTo;
+    if (mentions && mentions.length > 0) body.mentions = mentions;
     return this.request<{ sent: boolean }>(
       "POST",
       `/api/conversations/${convId}/messages`,
-      attachment || replyTo ? { content, attachment, replyTo } : { content },
+      body,
     );
   }
 
