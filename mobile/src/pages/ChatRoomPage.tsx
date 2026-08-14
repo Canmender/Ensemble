@@ -1237,34 +1237,6 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           </View>
         )}
 
-        <FlatList
-                data={forwardConversations}
-                keyExtractor={(c) => c.id}
-                extraData={usersById}
-                renderItem={({ item: c }) => (
-                  <TouchableOpacity
-                    style={styles.forwardItem}
-                    onPress={() => void doForward(c)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.forwardAvatar}>
-                      <Ionicons
-                        name={c.runId.startsWith("conv_") ? "person" : c.type === "group" ? "people" : "flash"}
-                        size={20}
-                        color={colors.primary}
-                      />
-                    </View>
-                    <Text style={styles.forwardTitle} numberOfLines={1}>
-                      {targetTitle(c)}
-                    </Text>
-                  </TouchableOpacity>
-                )}
-              />
-            )}
-          </View>
-        </View>
-      </Modal>
-
       {/* 全屏查看附件（图片/视频/文件），可下载 */}
       <Modal transparent visible={!!viewerAttachment} animationType="fade" onRequestClose={() => setViewerAttachment(null)}>
         <View style={styles.viewerOverlay}>
