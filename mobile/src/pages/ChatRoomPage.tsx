@@ -1181,7 +1181,35 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                 subtitle="先创建会话再转发"
               />
             ) : (
-              {/* 多选模式工具栏 */}
+              <FlatList
+                data={forwardConversations}
+                keyExtractor={(c) => c.id}
+                extraData={usersById}
+                renderItem={({ item: c }) => (
+                  <TouchableOpacity
+                    style={styles.forwardItem}
+                    onPress={() => void doForward(c)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.forwardAvatar}>
+                      <Ionicons
+                        name={c.runId.startsWith("conv_") ? "person" : c.type === "group" ? "people" : "flash"}
+                        size={20}
+                        color={colors.primary}
+                      />
+                    </View>
+                    <Text style={styles.forwardTitle} numberOfLines={1}>
+                      {targetTitle(c)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* 多选模式工具栏 */}
       {selectMode && (
         <View style={styles.selectBar}>
           <TouchableOpacity onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }} hitSlop={8}>
