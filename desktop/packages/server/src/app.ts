@@ -16,6 +16,7 @@ import { discoveryRouter } from "./api/routes/discovery";
 import { relayRouter } from "./api/routes/relay";
 import { chatRouter } from "./api/routes/chat";
 import { conversationsRouter } from "./api/routes/conversations";
+import { privacyRouter } from "./api/routes/privacy";
 import { devicesRouter } from "./api/routes/devices";
 import { uploadRouter } from "./api/routes/upload";
 import { initRelayClient } from "./api/routes/relay";
@@ -116,6 +117,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/relay", relayRouter(ctx));
   app.use("/api/chat", chatRouter(ctx));
   app.use("/api/conversations", conversationsRouter(ctx));
+  app.use("/api/privacy", privacyRouter(ctx));
   app.use("/api/devices", devicesRouter(ctx));
   app.use("/api/upload", uploadRouter(ctx));
 

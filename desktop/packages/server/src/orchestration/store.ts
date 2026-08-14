@@ -458,11 +458,14 @@ export class Store {
       .run(JSON.stringify(adminIds), new Date().toISOString(), id);
   }
 
-  /** 消息搜索：在指定会话中按关键词检索消息内容 */
-  searchChatMessages(runId: string, query: string): ChatMessage[] {
-    const rows = this.db.prepare(
-      "SELECT * FROM chat_messages WHERE run_id = ? AND content LIKE ? ORDER BY ts DESC LIMIT 50"
-    ).all(runId, `%${query}%`) as any[];
+  /** 消息搜索：在指定会话中按关键词检索消息内容（支持日期范围筛选） */
+  searchChatMessages(runId: string, query: string, opts?: { before?: string; after?: string }): ChatMessage[] {
+    let sql = "SELECT * FROM chat_messages WHERE run_id = ? AND content LIKE ?";
+    const params: any[] = [runId, `%${query}%`];
+    if (opts?.before) { sql += " AND ts < ?"; params.push(opts.before); }
+    if (opts?.after) { sql += " AND ts > ?"; params.push(opts.after); }
+    sql += " ORDER BY ts DESC LIMIT 50";
+    const rows = this.db.prepare(sql).all(...params) as any[];
     return rows.map((r) => ({
       id: r.id,
       runId: r.run_id,

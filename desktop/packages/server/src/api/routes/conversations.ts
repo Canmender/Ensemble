@@ -3,6 +3,7 @@ import type { AppContext } from "../../context";
 import type { Store } from "../../orchestration/store";
 import { asyncH, fail, ok } from "./helpers";
 import { newId } from "../../util/id";
+import { isDuplicateMessage } from "./dedup";
 import type { Conversation, MessageAttachment, MessageReply } from "@ensemble/shared";
 
 const now = () => new Date().toISOString();
@@ -211,6 +212,10 @@ export function conversationsRouter(ctx: AppContext): Router {
       const replyTo = parseReply(body.replyTo);
       if (!content && !attachment) {
         return fail(res, new Error("content 或 attachment 必填"), 400);
+      }
+      // 服务端防重复提交（同用户+同会话+同内容 2秒内不重复）
+      if (content && isDuplicateMessage(req.user?.id ?? "user", String(req.params.id), content)) {
+        return fail(res, new Error("消息发送过快，请稍后再试"), 429);
       }
 
       // 用户-用户会话（无 run）：消息落库 + 实时推送参与者用户 + per-user 未读
@@ -427,8 +432,29 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
       if (!q) return fail(res, new Error("搜索关键词不能为空"), 400);
-      const messages = ctx.store.searchChatMessages(conv.runId, q);
+      // 高级搜索：支持日期范围 + 消息类型筛选
+      const before = typeof req.query.before === "string" ? req.query.before : undefined;
+      const after = typeof req.query.after === "string" ? req.query.after : undefined;
+      const messages = ctx.store.searchChatMessages(conv.runId, q, { before, after });
       ok(res, { messages, total: messages.length });
+    }),
+  );
+
+  /** 全局消息搜索：跨会话搜索（返回匹配的会话列表） */
+  r.get(
+    "/search",
+    asyncH(async (req, res) => {
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      if (!q) return fail(res, new Error("搜索关键词不能为空"), 400);
+      const convs = ctx.store.listConversations(req.user?.id);
+      const results: Array<{ convId: string; convTitle: string; count: number }> = [];
+      for (const c of convs.slice(0, 50)) { // 限制搜索 50 个会话
+        const msgs = ctx.store.searchChatMessages(c.runId, q);
+        if (msgs.length > 0) {
+          results.push({ convId: c.id, convTitle: c.title || "会话", count: msgs.length });
+        }
+      }
+      ok(res, { results, total: results.length });
     }),
   );
 
