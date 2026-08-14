@@ -213,6 +213,12 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
                 </Text>
               </View>
               <Text style={styles.memberName}>{u.displayName || u.username}</Text>
+              {conv?.groupOwner === u.id && (
+                <Text style={styles.roleTag}>群主</Text>
+              )}
+              {conv?.groupAdmins?.includes(u.id) && conv?.groupOwner !== u.id && (
+                <Text style={[styles.roleTag, styles.roleTagAdmin]}>管理员</Text>
+              )}
               <TouchableOpacity onPress={() => removeMember(u.id)} hitSlop={8}>
                 <Ionicons name="close-circle" size={20} color={colors.danger} />
               </TouchableOpacity>
@@ -334,6 +340,8 @@ const styles = StyleSheet.create({
   },
   memberAvatarText: { color: colors.primary, fontSize: 14, fontWeight: "700" },
   memberName: { flex: 1, color: colors.text, fontSize: fontSize.md },
+  roleTag: { color: "#fff", fontSize: 10, fontWeight: "700", backgroundColor: colors.primary, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  roleTagAdmin: { backgroundColor: colors.success },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   modalSheet: {
     backgroundColor: colors.surface,

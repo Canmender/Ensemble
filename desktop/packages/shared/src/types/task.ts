@@ -161,6 +161,10 @@ export interface Conversation {
   announcement?: string;
   /** 群禁言（全体禁言） */
   groupMuted?: boolean;
+  /** 群主 ID */
+  groupOwner?: string;
+  /** 管理员 ID 列表 */
+  groupAdmins?: string[];
   createdAt: string;
   updatedAt: string;
 }

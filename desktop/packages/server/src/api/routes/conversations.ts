@@ -138,6 +138,10 @@ export function conversationsRouter(ctx: AppContext): Router {
           updatedAt: now(),
         };
         ctx.store.createConversation(conv);
+        // 群聊设置群主（创建者）
+        if (type === "group" && req.user?.id) {
+          ctx.store.setConversationGroupOwner(id, req.user.id);
+        }
         ok(res, conv, 201);
         return;
       }
@@ -376,7 +380,7 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       if (conv.runId.startsWith("conv_")) return fail(res, new Error("用户会话不支持修改"), 400);
-      const body = (req.body ?? {}) as { title?: string; participantIds?: string[]; announcement?: string; groupMuted?: boolean };
+      const body = (req.body ?? {}) as { title?: string; participantIds?: string[]; announcement?: string; groupMuted?: boolean; groupAdmins?: string[] };
       if (body.title !== undefined) {
         ctx.store.updateConversationTitle(conv.id, body.title);
       }
@@ -388,6 +392,9 @@ export function conversationsRouter(ctx: AppContext): Router {
       }
       if (body.groupMuted !== undefined) {
         ctx.store.setConversationGroupMuted(conv.id, body.groupMuted);
+      }
+      if (body.groupAdmins !== undefined && Array.isArray(body.groupAdmins)) {
+        ctx.store.setConversationGroupAdmins(conv.id, body.groupAdmins);
       }
       // 广播群变更事件（群成员实时看到更新）
       const updated = ctx.store.getConversation(conv.id);

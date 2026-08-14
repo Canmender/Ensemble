@@ -262,6 +262,12 @@ function migrateUserColumns(db: DatabaseSync): void {
   if (!convCols3.some((c) => c.name === "group_muted")) {
     db.exec("ALTER TABLE conversations ADD COLUMN group_muted INTEGER NOT NULL DEFAULT 0");
   }
+  if (!convCols3.some((c) => c.name === "group_owner")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN group_owner TEXT");
+  }
+  if (!convCols3.some((c) => c.name === "group_admins")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN group_admins TEXT");
+  }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
     if (!cols.some((c) => c.name === "user_id")) {

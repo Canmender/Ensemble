@@ -446,6 +446,18 @@ export class Store {
       .run(muted ? 1 : 0, new Date().toISOString(), id);
   }
 
+  /** 设置群主 */
+  setConversationGroupOwner(id: string, ownerId: string): void {
+    this.db.prepare("UPDATE conversations SET group_owner = ?, updated_at = ? WHERE id = ?")
+      .run(ownerId, new Date().toISOString(), id);
+  }
+
+  /** 设置管理员列表 */
+  setConversationGroupAdmins(id: string, adminIds: string[]): void {
+    this.db.prepare("UPDATE conversations SET group_admins = ?, updated_at = ? WHERE id = ?")
+      .run(JSON.stringify(adminIds), new Date().toISOString(), id);
+  }
+
   /** 消息搜索：在指定会话中按关键词检索消息内容 */
   searchChatMessages(runId: string, query: string): ChatMessage[] {
     const rows = this.db.prepare(
@@ -580,6 +592,8 @@ function rowToConversation(r: any): Conversation {
     pinned: Boolean(r.pinned),
     announcement: r.announcement ?? undefined,
     groupMuted: Boolean(r.group_muted),
+    groupOwner: r.group_owner ?? undefined,
+    groupAdmins: r.group_admins ? JSON.parse(r.group_admins) : undefined,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
