@@ -354,15 +354,46 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     });
   }, [meId]);
 
-  // 断线重连后补拉当前会话历史（chat.message 不走 run_events/seq，catchUp 补不回，重拉服务端历史兜底）
+  // 断线重连后增量补拉当前会话新消息（只拉最后一条消息之后的）
   const prevConnRef = useRef(connectionState);
   useEffect(() => {
     const prev = prevConnRef.current;
     prevConnRef.current = connectionState;
     if (connectionState === "connected" && prev !== "connected") {
-      void loadMessages();
+      // 增量拉取：用最后一条消息的时间戳作为 before 游标
+      const lastTs = messages.length > 0 ? messages[messages.length - 1].ts : undefined;
+      if (lastTs) {
+        void (async () => {
+          const res = await api.getConversationMessages(convId, undefined, 100);
+          if (res.data) {
+            const newMsgs = res.data.messages
+              .filter((m) => m.ts > lastTs)
+              .map((m) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+                agentName: m.agentId,
+                attachment: m.attachment,
+                replyTo: m.replyTo,
+                mentions: m.mentions,
+                deleted: m.deleted,
+                ts: m.ts,
+              }));
+            if (newMsgs.length > 0) {
+              setMessages((prev) => {
+                const existingIds = new Set(prev.map((m) => m.id));
+                const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
+                return fresh.length > 0 ? [...prev, ...fresh] : prev;
+              });
+            }
+          }
+          void api.markConversationRead(convId);
+        })();
+      } else {
+        void loadMessages();
+      }
     }
-  }, [connectionState, loadMessages]);
+  }, [connectionState, loadMessages, convId, messages]);
 
   useEffect(() => {
     if (messages.length > 0) {
