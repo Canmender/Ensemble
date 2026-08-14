@@ -26,6 +26,7 @@ import { api, type UserInfo } from "../services/api";
 import { useChatTarget } from "../store/chatTargetStore";
 import { wsLink } from "../services/wslink";
 import { colors, spacing, radius, fontSize } from "../theme";
+import { Avatar } from "../components/Avatar";
 import type { AgentConfig } from "@ensemble/shared-protocol";
 
 const GROUPS_KEY = "@ensemble/contact-groups";
@@ -288,15 +289,11 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     const isUser = row.kind === "user";
     return (
       <TouchableOpacity style={styles.row} onPress={() => openContact(row)} activeOpacity={0.7}>
-        <View style={[styles.avatar, { backgroundColor: isUser ? colors.primarySoft : colors.accent + "1A" }]}>
-          {isUser ? (
-            <Text style={[styles.avatarText, { color: colors.primary }]}>
-              {row.user?.displayName?.[0] || row.user?.username?.[0]?.toUpperCase() || "?"}
-            </Text>
-          ) : (
-            <Ionicons name={row.agent?.kind === "builtin" ? "flash" : "terminal"} size={20} color={colors.accent} />
-          )}
-        </View>
+        <Avatar
+          name={row.name}
+          avatarUrl={isUser ? row.user?.avatarUrl : undefined}
+          size={44}
+        />
         <View style={styles.rowInfo}>
           <Text style={styles.rowName}>{row.name}</Text>
           <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
