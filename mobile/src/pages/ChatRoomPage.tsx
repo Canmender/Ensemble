@@ -89,6 +89,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 「+」扩展栏（相册/视频/文件）与全屏查看附件
   const [showExtend, setShowExtend] = useState(false);
   const [viewerAttachment, setViewerAttachment] = useState<MessageAttachment | null>(null);
+  // 消息分页：首屏 20 条，滚动到顶部加载更多
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   // @提及：输入框中 @ 触发参与者选择列表
   const [showMentionPicker, setShowMentionPicker] = useState(false);
   const [mentionFilter, setMentionFilter] = useState("");
@@ -247,9 +250,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     [conv, meId],
   );
 
-  // 加载消息历史 + 已读回执（readers）+ 已读清零；发送成功后也调用以刷新真实 msgId（撤回可用）
+  // 加载消息历史（首屏 20 条）+ 已读回执（readers）+ 已读清零
   const loadMessages = useCallback(async () => {
-    const [histRes, meRes] = await Promise.all([api.getConversationMessages(convId), api.getMe()]);
+    const [histRes, meRes] = await Promise.all([
+      api.getConversationMessages(convId, undefined, 20),
+      api.getMe(),
+    ]);
     if (histRes.data) {
       setMessages(
         histRes.data.messages.map((m) => ({
@@ -264,6 +270,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           ts: m.ts,
         })),
       );
+      setHasMore(histRes.data.messages.length >= 20);
       const me = meRes.data?.id;
       if (me) setMeId(me);
       const readers = histRes.data.readers ?? [];
@@ -272,6 +279,35 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     }
     void api.markConversationRead(convId);
   }, [convId]);
+
+  // 加载更多消息（滚动到顶部时调用）
+  const loadMoreMessages = useCallback(async () => {
+    if (loadingMore || !hasMore || messages.length === 0) return;
+    setLoadingMore(true);
+    try {
+      const oldest = messages[0];
+      const res = await api.getConversationMessages(convId, oldest.ts, 20);
+      if (res.data && res.data.messages.length > 0) {
+        const older = res.data.messages.map((m) => ({
+          id: m.id,
+          role: m.role,
+          content: m.content,
+          agentName: m.agentId,
+          attachment: m.attachment,
+          replyTo: m.replyTo,
+          mentions: m.mentions,
+          deleted: m.deleted,
+          ts: m.ts,
+        }));
+        setMessages((prev) => [...older, ...prev]);
+        setHasMore(res.data.messages.length >= 20);
+      } else {
+        setHasMore(false);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [convId, messages, loadingMore, hasMore]);
 
   useEffect(() => {
     void loadMessages();
@@ -712,6 +748,14 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messageList}
+        inverted={false}
+        onEndReached={loadMoreMessages}
+        onEndReachedThreshold={0.3}
+        ListFooterComponent={loadingMore ? (
+          <View style={styles.loadingMore}>
+            <ActivityIndicator size="small" color={colors.primary} />
+          </View>
+        ) : null}
         ListEmptyComponent={
           <EmptyState
             icon={<Ionicons name="chatbubble-ellipses-outline" size={28} color={colors.textFaint} />}
@@ -999,6 +1043,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   messageList: { padding: spacing.lg },
+  loadingMore: { paddingVertical: spacing.md, alignItems: "center" },
   msgRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: spacing.md },
   msgRowUser: { justifyContent: "flex-end" },
   msgRowAgent: { justifyContent: "flex-start", gap: spacing.xs },
