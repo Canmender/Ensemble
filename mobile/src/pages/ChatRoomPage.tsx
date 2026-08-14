@@ -381,7 +381,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   // WS 实时：新消息推送到当前会话
   useEffect(() => {
-    wsLink.on({
+    const unsub = wsLink.on({
       onChatMessage: (msg) => {
         if (msg.runId === activeRunIdRef.current) {
           // agent 会话中用户发言会被广播回发送者（agentId="user"），与乐观追加去重；agentId 非 "user" 视为对方消息
@@ -403,11 +403,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         }
       },
     });
+    return unsub;
   }, [convId]);
 
   // 已读回执实时更新：对方读了会话 → 更新已读状态
   useEffect(() => {
-    wsLink.on({
+    const unsub = wsLink.on({
       onChatRead: ({ runId, userId, readTs }) => {
         if (runId === activeRunIdRef.current && userId !== meId) {
           const ts = new Date(readTs).getTime();
@@ -422,6 +423,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         }
       },
     });
+    return unsub;
   }, [meId, conv]);
 
   // 断线重连后增量补拉当前会话新消息（只拉最后一条消息之后的）
@@ -658,11 +660,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   // WS 撤回事件：对方撤回时实时标记
   useEffect(() => {
-    wsLink.on({
+    const unsub = wsLink.on({
       onChatDeleted: ({ msgId }) => {
         setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, deleted: true } : m)));
       },
     });
+    return unsub;
   }, []);
 
   // 键盘弹出/收起监听（Android 15+/edge-to-edge 下 windowSoftInputMode 不生效，手动顶起输入栏）

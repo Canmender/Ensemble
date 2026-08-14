@@ -218,9 +218,6 @@ function MainApp() {
             header: () => <AppHeader title="隐私设置" showBack showAvatar={false} />,
           }}
         />
-            headerBackTitle: "返回",
-          }}
-        />
       </Stack.Navigator>
       <StatusBar style="dark" />
     </NavigationContainer>
