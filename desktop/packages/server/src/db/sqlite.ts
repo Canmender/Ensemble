@@ -142,6 +142,19 @@ CREATE TABLE IF NOT EXISTS devices (
 
 CREATE INDEX IF NOT EXISTS idx_devices_user ON devices(user_id);
 
+-- 文件上传记录（MD5 去重 + 文件元数据）
+CREATE TABLE IF NOT EXISTS upload_files (
+  id         TEXT PRIMARY KEY,
+  md5        TEXT NOT NULL,
+  url        TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  size       INTEGER NOT NULL,
+  mime       TEXT NOT NULL,
+  type       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_upload_md5 ON upload_files(md5);
+
 CREATE TABLE IF NOT EXISTS workflows (
   id         TEXT PRIMARY KEY,
   name       TEXT NOT NULL,

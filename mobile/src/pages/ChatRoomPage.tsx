@@ -522,7 +522,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 上传附件（图片 base64 直取；文件经 expo-file-system 读 base64）
   const doUpload = useCallback(async (name: string, mime: string, base64: string) => {
     setUploading(true);
+    setSendError(null);
     try {
+      const sizeMB = Math.round((base64.length * 3) / 4 / 1024 / 1024);
+      if (sizeMB > 10) setSendError(`上传中…（${sizeMB}MB）`);
       const res = await api.uploadAttachment({ name, mime, data: base64 });
       if (res.error) {
         setSendError(res.error);
@@ -556,8 +559,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
-    if ((asset.fileSize ?? 0) > 20 * 1024 * 1024) {
-      setSendError("图片过大（上限 20MB）");
+    if ((asset.fileSize ?? 0) > 100 * 1024 * 1024) {
+      setSendError("图片过大（上限 100MB）");
       return;
     }
     if (!asset.base64) {
@@ -571,8 +574,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
-    if ((asset.size ?? 0) > 20 * 1024 * 1024) {
-      setSendError("文件过大（上限 20MB）");
+    if ((asset.size ?? 0) > 100 * 1024 * 1024) {
+      setSendError("文件过大（上限 100MB）");
       return;
     }
     const base64 = await FileSystem.readAsStringAsync(asset.uri, {
@@ -591,8 +594,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["videos"] });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
-    if ((asset.fileSize ?? 0) > 20 * 1024 * 1024) {
-      setSendError("视频过大（上限 20MB）");
+    if ((asset.fileSize ?? 0) > 100 * 1024 * 1024) {
+      setSendError("视频过大（上限 100MB）");
       return;
     }
     const base64 = await FileSystem.readAsStringAsync(asset.uri, {

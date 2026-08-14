@@ -1,11 +1,12 @@
 import { Router } from "express";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import type { AppContext } from "../../context";
 import { asyncH, fail, ok } from "./helpers";
 import { newId } from "../../util/id";
 
-const MAX_UPLOAD_BYTES = 20 * 1024 * 1024; // 20MB
+const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB（对齐 V-IM）
 
 /** 从文件名提取安全扩展名（仅字母数字，防路径穿越） */
 function extFromName(name: string): string {
@@ -13,9 +14,22 @@ function extFromName(name: string): string {
   return m ? m[1].toLowerCase() : "";
 }
 
+/** 按日期分目录存储（对齐 box-im/V-IM） */
+function dateDir(): string {
+  const d = new Date();
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** 计算文件 MD5 */
+function md5(buf: Buffer): string {
+  return createHash("md5").update(buf).digest("hex");
+}
+
 /**
- * 聊天附件上传端点：接收 base64 JSON（{ name, mime, data }），保存到 uploads 目录，返回可访问 url。
- * 用 base64 而非 multipart：跨端（web FileReader / RN expo-file-system）最简单，零新依赖。
+ * 聊天附件上传端点：base64 JSON（{ name, mime, data }）。
+ * - 大小上限 100MB（对齐 V-IM）
+ * - MD5 去重：相同文件秒传（对齐 box-im）
+ * - 日期目录存储：uploads/2026/08/14/upl_xxx.jpg
  */
 export function uploadRouter(ctx: AppContext): Router {
   const r = Router();
@@ -40,21 +54,41 @@ export function uploadRouter(ctx: AppContext): Router {
         return fail(res, new Error(`文件过大（上限 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB）`), 413);
       }
 
-      const ext = extFromName(name);
-      const filename = `${newId("upl")}${ext ? `.${ext}` : ""}`;
-      writeFileSync(join(ctx.uploadsDir, filename), buf);
+      // MD5 去重：查询是否已存在相同文件
+      const hash = md5(buf);
+      try {
+        const existing = ctx.db.prepare(
+          "SELECT url, name, size, mime, type FROM upload_files WHERE md5 = ?"
+        ).get(hash) as any;
+        if (existing) {
+          return ok(res, {
+            url: existing.url,
+            name: existing.name,
+            size: existing.size,
+            mime: existing.mime,
+            type: existing.type,
+          });
+        }
+      } catch {}
 
-      ok(
-        res,
-        {
-          url: `/uploads/${filename}`,
-          name,
-          size: buf.length,
-          mime,
-          type: mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : "file",
-        },
-        201,
-      );
+      const ext = extFromName(name);
+      const dir = dateDir();
+      const uploadDir = join(ctx.uploadsDir, dir);
+      mkdirSync(uploadDir, { recursive: true });
+      const filename = `${newId("upl")}${ext ? `.${ext}` : ""}`;
+      const url = `/uploads/${dir}/${filename}`;
+      writeFileSync(join(uploadDir, filename), buf);
+
+      const type = mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : "file";
+
+      // 记录文件信息（MD5 去重用）
+      try {
+        ctx.db.prepare(
+          "INSERT INTO upload_files (id, md5, url, name, size, mime, type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        ).run(newId("upl"), hash, url, name, buf.length, mime, type, new Date().toISOString());
+      } catch {}
+
+      ok(res, { url, name, size: buf.length, mime, type }, 201);
     }),
   );
 
