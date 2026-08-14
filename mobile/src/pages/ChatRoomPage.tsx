@@ -32,6 +32,7 @@ import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { EmojiPicker } from "../components/EmojiPicker";
 import { SmartMenu } from "../components/SmartMenu";
+import { VoiceRecorder } from "../components/VoiceRecorder";
 import { timeAgo } from "../utils/timeAgo";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
@@ -101,6 +102,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [viewerAttachment, setViewerAttachment] = useState<MessageAttachment | null>(null);
   // 表情面板
   const [showEmoji, setShowEmoji] = useState(false);
+  // 语音录制模式
+  const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   // 联系人资料面板（左滑触发）
   const [showProfile, setShowProfile] = useState(false);
   // 消息分页：首屏 20 条，滚动到顶部加载更多
@@ -1057,7 +1060,17 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         />
       )}
 
-      {/* 输入栏（键盘弹出时 paddingBottom 顶起，避免被输入法遮挡） */}
+      {/* 语音录制模式 */}
+      {showVoiceRecorder ? (
+        <VoiceRecorder
+          onSend={(url, dur) => {
+            setShowVoiceRecorder(false);
+            void api.sendConversationMessage(convId, `[语音 ${dur}s]`, { type: "audio", name: "voice.m4a", size: 0, mime: "audio/m4a", url });
+          }}
+          onCancel={() => setShowVoiceRecorder(false)}
+        />
+      ) : (
+      /* 输入栏 */
       <View style={[styles.inputBar, { paddingBottom: keyboardHeight + spacing.md }]}>
         <TouchableOpacity
           style={styles.emojiBtn}
@@ -1104,7 +1117,15 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             color={showExtend ? colors.primary : colors.text}
           />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.expandBtn}
+          onPress={() => setShowVoiceRecorder(true)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="mic" size={24} color={colors.text} />
+        </TouchableOpacity>
       </View>
+      )}
 
       {/* @提及选择列表（输入框上方弹出） */}
       {showMentionPicker && mentionableParticipants.length > 0 && (
