@@ -105,7 +105,8 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     void loadGroups();
     void loadDevices();
     // 设备在线状态变化实时刷新
-    wsLink.on({ onDeviceStatus: () => void loadDevices() });
+    const unsub = wsLink.on({ onDeviceStatus: () => void loadDevices() });
+    return unsub;
   }, [loadUsers, loadGroups, loadDevices]);
 
   const q = query.trim().toLowerCase();

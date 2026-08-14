@@ -138,7 +138,7 @@ export default function ChatPage() {
   useFocusEffect(
     useCallback(() => {
       void loadConversations();
-      wsLink.on({
+      const unsub = wsLink.on({
         onChatMessage: (msg) => {
           const preview =
             msg.content ||
@@ -166,6 +166,7 @@ export default function ChatPage() {
           }
         },
       });
+      return unsub;
     }, [loadConversations]),
   );
 

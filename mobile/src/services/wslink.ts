@@ -84,8 +84,17 @@ export class WsLink {
   private globalChatMessageCbs: Array<(msg: ChatWsMessage) => void> = [];
   private globalMentionCbs: Array<(msg: MentionEvent) => void> = [];
 
-  on(cb: WsLinkCallbacks): void {
+  on(cb: WsLinkCallbacks): () => void {
     this.callbacks = { ...this.callbacks, ...cb };
+    // 返回清理函数：组件 unmount 时调用
+    return () => {
+      const keys = Object.keys(cb) as Array<keyof WsLinkCallbacks>;
+      for (const key of keys) {
+        if (this.callbacks[key] === (cb as any)[key]) {
+          (this.callbacks as any)[key] = undefined;
+        }
+      }
+    };
   }
 
   /** 注册全局聊天消息监听（始终触发，页面 onChatMessage 覆盖不影响） */

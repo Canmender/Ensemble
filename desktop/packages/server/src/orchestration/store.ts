@@ -404,7 +404,7 @@ export class Store {
             WHERE c.archived = ? AND (c.user_id = ? OR c.user_id = '' OR c.participant_ids LIKE ?)
             ORDER BY c.pinned DESC, c.updated_at DESC
           `)
-          .all(userId, archived ? 1 : 0, userId, `%"${userId}"%`) as any[])
+          .all(userId, archived ? 1 : 0, userId, `%${JSON.stringify(userId)}%`) as any[])
       : (this.db.prepare("SELECT * FROM conversations WHERE archived = ? ORDER BY pinned DESC, updated_at DESC").all(archived ? 1 : 0) as any[]);
     return rows.map(rowToConversation);
   }
