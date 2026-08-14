@@ -99,6 +99,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 已读回执：当前用户 id + 对方最后已读时间（自己消息 ts ≤ 该时间 → 显示「已读」）
   const [meId, setMeId] = useState<string | undefined>();
   const [peerReadTs, setPeerReadTs] = useState<number | undefined>();
+  // 群聊已读：每个成员的最后已读时间 Map<userId, timestamp>
+  const [groupReadTs, setGroupReadTs] = useState<Map<string, number>>(new Map());
   // 用户/Agent 列表（消息发送者昵称解析）
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
@@ -275,8 +277,22 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       const me = meRes.data?.id;
       if (me) setMeId(me);
       const readers = histRes.data.readers ?? [];
-      const peer = readers.find((r) => r.userId !== me);
-      setPeerReadTs(peer?.readTs ? new Date(peer.readTs).getTime() : undefined);
+      const isGroup = conv && !conv.runId.startsWith("conv_");
+      if (isGroup) {
+        // 群聊：收集所有成员已读时间
+        const readMap = new Map<string, number>();
+        for (const r of readers) {
+          if (r.userId !== me && r.readTs) {
+            const ts = new Date(r.readTs).getTime();
+            if (!Number.isNaN(ts)) readMap.set(r.userId, ts);
+          }
+        }
+        setGroupReadTs(readMap);
+      } else {
+        // 私聊：找对方已读时间
+        const peer = readers.find((r) => r.userId !== me);
+        setPeerReadTs(peer?.readTs ? new Date(peer.readTs).getTime() : undefined);
+      }
     }
     void api.markConversationRead(convId);
   }, [convId]);
@@ -340,19 +356,24 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     });
   }, [convId]);
 
-  // 已读回执实时更新：对方读了会话 → 更新 peerReadTs，我的消息从未读变已读
+  // 已读回执实时更新：对方读了会话 → 更新已读状态
   useEffect(() => {
     wsLink.on({
       onChatRead: ({ runId, userId, readTs }) => {
         if (runId === activeRunIdRef.current && userId !== meId) {
           const ts = new Date(readTs).getTime();
           if (!Number.isNaN(ts)) {
-            setPeerReadTs((prev) => (prev === undefined || ts > prev ? ts : prev));
+            const isGroup = conv && !conv.runId.startsWith("conv_");
+            if (isGroup) {
+              setGroupReadTs((prev) => new Map(prev).set(userId, ts));
+            } else {
+              setPeerReadTs((prev) => (prev === undefined || ts > prev ? ts : prev));
+            }
           }
         }
       },
     });
-  }, [meId]);
+  }, [meId, conv]);
 
   // 断线重连后增量补拉当前会话新消息（只拉最后一条消息之后的）
   const prevConnRef = useRef(connectionState);
@@ -729,7 +750,18 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   const renderMessage = ({ item }: { item: MessageItem }) => {
     const isUser = isMyMessage(item);
-    const isRead = isUser && peerReadTs !== undefined && new Date(item.ts).getTime() <= peerReadTs;
+    const isGroup = conv && !conv.runId.startsWith("conv_");
+    // 已读状态：私聊看 peerReadTs，群聊看多少人已读
+    const msgTs = new Date(item.ts).getTime();
+    let readLabel = "";
+    if (isUser && !item.deleted) {
+      if (isGroup) {
+        const readCount = [...groupReadTs.values()].filter((ts) => ts >= msgTs).length;
+        readLabel = readCount > 0 ? `已读 ${readCount}人` : "未读";
+      } else {
+        readLabel = peerReadTs !== undefined ? (msgTs <= peerReadTs ? "已读" : "未读") : "";
+      }
+    }
     const senderName = item.agentName ? resolveSenderName(item.agentName) : "";
     const senderAvatar = item.agentName ? usersById.get(item.agentName)?.avatarUrl : undefined;
     return (
@@ -776,11 +808,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             <Text style={[styles.bubbleTime, isUser && styles.bubbleTimeUser]}>
               {timeAgo(item.ts)}
             </Text>
-            {isUser && !item.deleted && peerReadTs !== undefined && (
-              <Text style={isRead ? styles.bubbleRead : styles.bubbleUnread}>
-                {isRead ? "已读" : "未读"}
+            {isUser && !item.deleted && readLabel ? (
+              <Text style={readLabel.startsWith("已读") ? styles.bubbleRead : styles.bubbleUnread}>
+                {readLabel}
               </Text>
-            )}
+            ) : null}
           </View>
         </TouchableOpacity>
       </View>
