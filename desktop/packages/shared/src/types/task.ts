@@ -108,6 +108,8 @@ export interface MessageAttachment {
   size: number;
   mime?: string;
   url: string;
+  /** 缩略图 URL（图片上传时自动生成） */
+  thumbnailUrl?: string;
 }
 
 /** 引用的消息摘要（引用回复） */
