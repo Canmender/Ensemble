@@ -26,6 +26,7 @@ import { useUnreadStore } from "../store/unreadStore";
 import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
+import { timeAgo } from "../utils/timeAgo";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
@@ -286,7 +287,7 @@ export default function ChatPage() {
           <Text style={styles.convTitle} numberOfLines={1}>
             {convTitle(item, usersById)}
           </Text>
-          <Text style={styles.convTime}>{timeStr(item.lastMessageTs)}</Text>
+          <Text style={styles.convTime}>{timeAgo(item.lastMessageTs)}</Text>
         </View>
         <View style={styles.convLastRow}>
           {item.muted && <Ionicons name="volume-mute" size={12} color={colors.textFaint} style={{ marginRight: 4 }} />}

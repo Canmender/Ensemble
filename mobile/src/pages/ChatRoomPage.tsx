@@ -29,6 +29,7 @@ import { useUnreadStore } from "../store/unreadStore";
 import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
+import { timeAgo } from "../utils/timeAgo";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
 import type { RootStackParamList } from "../App";
@@ -725,7 +726,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           )}
           <View style={[styles.bubbleMeta, isUser && styles.bubbleMetaUser]}>
             <Text style={[styles.bubbleTime, isUser && styles.bubbleTimeUser]}>
-              {new Date(item.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              {timeAgo(item.ts)}
             </Text>
             {isUser && !item.deleted && peerReadTs !== undefined && (
               <Text style={isRead ? styles.bubbleRead : styles.bubbleUnread}>
