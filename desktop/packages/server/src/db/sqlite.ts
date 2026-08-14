@@ -236,6 +236,11 @@ function migrateUserColumns(db: DatabaseSync): void {
   if (!convCols2.some((c) => c.name === "pinned")) {
     db.exec("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
   }
+  // users.avatar_url（用户头像）
+  const userCols = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  if (!userCols.some((c) => c.name === "avatar_url")) {
+    db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
+  }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
     if (!cols.some((c) => c.name === "user_id")) {

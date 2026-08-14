@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 import type { AppContext } from "../../context";
 import { ok, fail } from "./helpers";
 
@@ -58,7 +60,9 @@ export function authRouter(ctx: AppContext): Router {
     const token = bearerToken(req.headers.authorization);
     const user = token ? ctx.userStore.getUserBySessionToken(token) : undefined;
     if (!user) return fail(res, new Error("未认证"), 401);
-    ok(res, user);
+    // 附带 avatar_url
+    const row = ctx.db.prepare("SELECT avatar_url FROM users WHERE id = ?").get(user.id) as any;
+    ok(res, { ...user, avatarUrl: row?.avatar_url ?? undefined });
   });
 
   /** 更新当前用户昵称 */
@@ -75,12 +79,35 @@ export function authRouter(ctx: AppContext): Router {
     ok(res, { id: user.id, username: user.username, displayName: name, role: user.role });
   });
 
-  /** 用户列表（创建用户-用户会话选人；不含敏感信息） */
+  /** 上传头像（base64 JSON） */
+  r.post("/avatar", (req, res) => {
+    const token = bearerToken(req.headers.authorization);
+    const user = token ? ctx.userStore.getUserBySessionToken(token) : undefined;
+    if (!user) return fail(res, new Error("未认证"), 401);
+    const { data, mime } = (req.body ?? {}) as { data?: string; mime?: string };
+    if (typeof data !== "string" || !data) return fail(res, new Error("data required"), 400);
+    const ext = mime?.includes("png") ? ".png" : mime?.includes("webp") ? ".webp" : ".jpg";
+    const filename = `avatar-${user.id}${ext}`;
+    const dir = join(ctx.uploadsDir, "avatars");
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, filename), Buffer.from(data, "base64"));
+    const url = `/uploads/avatars/${filename}`;
+    ctx.db.prepare("UPDATE users SET avatar_url = ? WHERE id = ?").run(url, user.id);
+    ok(res, { url });
+  });
+
+  /** 用户列表（创建用户-用户会话选人；含头像） */
   r.get("/users", (req, res) => {
     const rows = ctx.db
-      .prepare("SELECT id, username, display_name, role FROM users ORDER BY created_at ASC")
+      .prepare("SELECT id, username, display_name, role, avatar_url FROM users ORDER BY created_at ASC")
       .all() as Array<Record<string, unknown>>;
-    ok(res, rows.map((u) => ({ id: String(u.id), username: String(u.username), displayName: u.display_name as string | undefined, role: String(u.role) })));
+    ok(res, rows.map((u) => ({
+      id: String(u.id),
+      username: String(u.username),
+      displayName: u.display_name as string | undefined,
+      role: String(u.role),
+      avatarUrl: u.avatar_url as string | undefined,
+    })));
   });
 
   /** 登出：删除会话 */

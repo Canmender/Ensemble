@@ -112,6 +112,7 @@ export interface UserInfo {
   username: string;
   displayName?: string;
   role: string;
+  avatarUrl?: string;
 }
 
 /** 会话（企业级 IM） */
@@ -540,6 +541,11 @@ class ApiService {
   /** 更新当前用户昵称 */
   async updateProfile(displayName: string): Promise<ApiResponse<UserInfo>> {
     return this.request<UserInfo>("PATCH", "/api/auth/me", { displayName });
+  }
+
+  /** 上传头像（base64） */
+  async uploadAvatar(base64: string, mime: string): Promise<ApiResponse<{ url: string }>> {
+    return this.request<{ url: string }>("POST", "/api/auth/avatar", { data: base64, mime });
   }
 
   /** 登出：服务端删除会话 + 清除本地用户 token */

@@ -1,6 +1,6 @@
 /**
  * 个人信息（二级页）
- * 展示昵称 / 用户名 / 用户 ID，可修改昵称（保存到服务器）。
+ * 展示头像 / 昵称 / 用户名 / 用户 ID，可修改昵称、上传头像。
  */
 
 import React, { useState, useEffect } from "react";
@@ -12,14 +12,19 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { api, type UserInfo } from "../services/api";
+import { Avatar } from "../components/Avatar";
 import { colors, spacing, radius, fontSize } from "../theme";
 
 export default function ProfilePage() {
   const [me, setMe] = useState<UserInfo | null>(null);
   const [displayName, setDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
@@ -30,6 +35,30 @@ export default function ProfilePage() {
       }
     });
   }, []);
+
+  const pickAndUploadAvatar = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) { Alert.alert("需要相册权限"); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      base64: true,
+      quality: 0.8,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    if (result.canceled || !result.assets[0]?.base64) return;
+    setUploadingAvatar(true);
+    try {
+      const res = await api.uploadAvatar(result.assets[0].base64, result.assets[0].mimeType ?? "image/jpeg");
+      if (res.error) { setMsg(res.error); return; }
+      setMe((prev) => prev ? { ...prev, avatarUrl: res.data!.url } : prev);
+      setMsg("头像已更新");
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : "上传失败");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const save = async () => {
     if (!displayName.trim()) {
@@ -56,11 +85,16 @@ export default function ProfilePage() {
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.avatarWrap}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {me?.displayName?.[0] || me?.username?.[0]?.toUpperCase() || "?"}
-          </Text>
-        </View>
+        <TouchableOpacity onPress={pickAndUploadAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
+          <Avatar name={me?.displayName || me?.username || "?"} avatarUrl={me?.avatarUrl} size={84} />
+          <View style={styles.avatarEditBadge}>
+            {uploadingAvatar ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="camera" size={14} color="#fff" />
+            )}
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.infoCard}>
@@ -107,15 +141,19 @@ export default function ProfilePage() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   avatarWrap: { alignItems: "center", marginTop: spacing.xl },
-  avatar: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: colors.primarySoft,
+  avatarEditBadge: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.bg,
   },
-  avatarText: { color: colors.primary, fontSize: 32, fontWeight: "700" },
   infoCard: {
     backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,

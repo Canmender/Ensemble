@@ -25,6 +25,7 @@ import { useChatTarget } from "../store/chatTargetStore";
 import { useUnreadStore } from "../store/unreadStore";
 import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
+import { Avatar } from "../components/Avatar";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
@@ -256,6 +257,15 @@ export default function ChatPage() {
   // 搜索结果或全部会话
   const displayConversations = searchText.trim() ? searchResults : conversations;
 
+  // 获取会话头像 URL（用户-用户会话取对方头像，群聊暂无群头像）
+  const convAvatarUrl = (c: Conversation): string | undefined => {
+    if (c.runId.startsWith("conv_")) {
+      const otherId = c.participantIds.find((pid) => pid !== useDeviceStore.getState().connectedDevice?.id);
+      return otherId ? usersById.get(otherId)?.avatarUrl : undefined;
+    }
+    return undefined;
+  };
+
   const renderItem = ({ item }: { item: Conversation }) => (
     <TouchableOpacity
       style={[styles.convCard, item.muted && styles.convCardMuted]}
@@ -263,8 +273,8 @@ export default function ChatPage() {
       onLongPress={() => setMenuConv(item)}
       activeOpacity={0.7}
     >
-      <View style={styles.avatar}>
-        <Ionicons name={convIcon(item)} size={22} color={colors.primary} />
+      <View style={styles.avatarWrap}>
+        <Avatar name={convTitle(item, usersById)} avatarUrl={convAvatarUrl(item)} size={48} />
         {item.pinned && (
           <View style={styles.pinBadge}>
             <Ionicons name="pin" size={10} color="#fff" />
@@ -429,13 +439,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   convCardMuted: { opacity: 0.65 },
-  avatar: {
+  avatarWrap: {
     width: 48,
     height: 48,
-    borderRadius: radius.full,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
     marginRight: spacing.md,
   },
   pinBadge: {

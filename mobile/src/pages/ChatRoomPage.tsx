@@ -28,6 +28,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useUnreadStore } from "../store/unreadStore";
 import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
+import { Avatar } from "../components/Avatar";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
 import type { RootStackParamList } from "../App";
@@ -644,8 +645,13 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const renderMessage = ({ item }: { item: MessageItem }) => {
     const isUser = isMyMessage(item);
     const isRead = isUser && peerReadTs !== undefined && new Date(item.ts).getTime() <= peerReadTs;
+    const senderName = item.agentName ? resolveSenderName(item.agentName) : "";
+    const senderAvatar = item.agentName ? usersById.get(item.agentName)?.avatarUrl : undefined;
     return (
       <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
+        {!isUser && (
+          <Avatar name={senderName} avatarUrl={senderAvatar} size={32} />
+        )}
         <TouchableOpacity
           style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}
           activeOpacity={0.6}
@@ -993,9 +999,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   messageList: { padding: spacing.lg },
-  msgRow: { marginBottom: spacing.md },
-  msgRowUser: { alignItems: "flex-end" },
-  msgRowAgent: { alignItems: "flex-start" },
+  msgRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: spacing.md },
+  msgRowUser: { justifyContent: "flex-end" },
+  msgRowAgent: { justifyContent: "flex-start", gap: spacing.xs },
   bubble: {
     maxWidth: "80%",
     paddingHorizontal: spacing.md,
