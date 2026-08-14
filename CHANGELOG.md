@@ -12,6 +12,9 @@
 - 语音录制迁移到 expo-audio 57.0.3（`useAudioRecorder` / `useAudioRecorderState` / `RecordingPresets`），移除 expo-av
 - 修复 ChatRoomPage 中 SmartMenu 后的孤立 JSX 残留（旧 Modal 尾巴，潜在语法错误）
 - 提取 `convTitle` 公共函数，修复滑动个人信息面板崩溃（ChatRoomPage 未导入即调用 → ReferenceError）
+- 自检修复：录音重录失效（expo-audio 构造器不自动 prepare，重录时跳过 prepare → record 空操作）
+- 自检修复：分页加载崩溃（FlatList 无 `getScrollOffset` 方法抛 TypeError，改用 onScroll 跟踪滚动位置）
+- 补全 Conversation/ChatMessage/MessageAttachment 类型定义，tsc --noEmit 全绿
 
 **版本**：0.7.47 → 0.7.48，APK versionCode 37
 
