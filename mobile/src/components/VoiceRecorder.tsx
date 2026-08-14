@@ -48,9 +48,8 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     try {
       await requestRecordingPermissionsAsync();
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      if (!recState.canRecord) {
-        await recorder.prepareToRecordAsync();
-      }
+      // 构造器不自动 prepare，stop 后也会 reset，故每次 start 前都需要 prepare
+      await recorder.prepareToRecordAsync();
       recorder.record();
       setStatus("recording");
     } catch (err) {
@@ -81,6 +80,8 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   const handleSend = async () => {
     setSending(true);
     try {
+      // 时长需在 stop 前捕获（stop 后 reset，getStatus 归零）
+      const dur = Math.max(1, Math.round(recState.durationMillis / 1000));
       await stopRecording();
       const uri = recorder.uri;
       if (!uri) return;
@@ -88,7 +89,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
       const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
       const res = await api.uploadAttachment({ name: "voice.m4a", mime: "audio/m4a", data: base64 });
       if (!res.error && res.data) {
-        onSend(res.data.url, Math.max(1, Math.round(recorder.currentTime || duration)));
+        onSend(res.data.url, dur);
       }
     } catch (err) {
       console.error("发送语音失败:", err);
@@ -98,21 +99,12 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   };
 
   const handleCancel = async () => {
-    try {
-      if (recorder.isRecording) await recorder.stop();
-    } catch (err) {
-      console.error("取消录音失败:", err);
-    }
+    await stopRecording();
     onCancel();
   };
 
   const handleReset = async () => {
-    try {
-      await recorder.stop();
-    } catch (err) {
-      console.error("重录失败:", err);
-    }
-    setStatus("idle");
+    await stopRecording();
     startRecording();
   };
 
@@ -126,8 +118,9 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   useEffect(() => {
     void startRecording();
     return () => {
+      // 卸载时释放 MediaRecorder（stop 对未启动/已 stop 的 recorder 是幂等安全的）
       try {
-        if (recorder.isRecording) void recorder.stop();
+        void recorder.stop();
       } catch (err) {
         console.error("卸载清理失败:", err);
       }
