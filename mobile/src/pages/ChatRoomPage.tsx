@@ -16,6 +16,7 @@ import {
   Image,
   Alert,
   Modal,
+  PanResponder,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -99,6 +100,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [viewerAttachment, setViewerAttachment] = useState<MessageAttachment | null>(null);
   // 表情面板
   const [showEmoji, setShowEmoji] = useState(false);
+  // 联系人资料面板（左滑触发）
+  const [showProfile, setShowProfile] = useState(false);
   // 消息分页：首屏 20 条，滚动到顶部加载更多
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -118,6 +121,21 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const activeRunIdRef = useRef<string | null>(null);
   // 防重复提交：记录最后一次发送内容和时间
   const lastSendRef = useRef<{ content: string; ts: number }>({ content: "", ts: 0 });
+  // 左滑手势：从右边缘向左滑动触发联系人资料面板
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        // 从屏幕右半部分开始，向左滑动超过 50px
+        return gestureState.dx < -50 && Math.abs(gestureState.dy) < 30;
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dx < -80) {
+          setShowProfile(true);
+        }
+      },
+    }),
+  ).current;
 
   const isConnected = connectionState === "connected";
   // 附件仅支持用户-用户会话（agent 链路只处理文本）；用户会话 runId 以 conv_ 开头
@@ -924,7 +942,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const canSend = (inputText.trim() || !!draftAttachment) && isConnected && !isSending && !uploading;
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...panResponder.panHandlers}>
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -1275,6 +1293,64 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           )}
         </View>
       </Modal>
+      {/* 联系人资料面板（左滑触发） */}
+      <Modal
+        transparent
+        visible={showProfile}
+        animationType="slide"
+        onRequestClose={() => setShowProfile(false)}
+      >
+        <View style={styles.profileOverlay}>
+          <View style={styles.profilePanel}>
+            <View style={styles.profileHeader}>
+              <Text style={styles.profileTitle}>{conv ? convTitle(conv, usersById) : "资料"}</Text>
+              <TouchableOpacity onPress={() => setShowProfile(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+            {conv && (
+              <View style={styles.profileBody}>
+                {/* 头像 */}
+                <View style={styles.profileAvatarWrap}>
+                  <Avatar
+                    name={convTitle(conv, usersById)}
+                    avatarUrl={conv.runId.startsWith("conv_") ? usersById.get(conv.participantIds.find((p) => p !== meId) || "")?.avatarUrl : undefined}
+                    size={80}
+                  />
+                </View>
+                {/* 名称 */}
+                <Text style={styles.profileName}>{convTitle(conv, usersById)}</Text>
+                {/* 群信息 */}
+                {!conv.runId.startsWith("conv_") && (
+                  <Text style={styles.profileSubtitle}>
+                    群聊 · {conv.participantIds.length} 人
+                    {conv.groupOwner ? " · 群主: " + resolveSenderName(conv.groupOwner) : ""}
+                  </Text>
+                )}
+                {/* 操作按钮 */}
+                <View style={styles.profileActions}>
+                  <TouchableOpacity
+                    style={styles.profileActionBtn}
+                    onPress={() => { setShowProfile(false); if (!conv.runId.startsWith("conv_")) navigation.navigate("GroupSettings", { convId: conv.id, title: conv.title || "" }); }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name={conv.runId.startsWith("conv_") ? "person" : "people"} size={24} color={colors.primary} />
+                    <Text style={styles.profileActionText}>{conv.runId.startsWith("conv_") ? "个人资料" : "群设置"}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.profileActionBtn}
+                    onPress={() => setShowProfile(false)}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="search" size={24} color={colors.primary} />
+                    <Text style={styles.profileActionText}>搜索聊天</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1310,6 +1386,31 @@ const styles = StyleSheet.create({
   selectForwardBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: 6 },
   selectForwardText: { color: "#fff", fontSize: fontSize.sm, fontWeight: "600" },
   selectCheck: { marginRight: spacing.xs },
+  // 联系人资料面板
+  profileOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  profilePanel: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingBottom: spacing.xl,
+    maxHeight: "60%",
+  },
+  profileHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  profileTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: "600" },
+  profileBody: { alignItems: "center", padding: spacing.xl },
+  profileAvatarWrap: { marginBottom: spacing.md },
+  profileName: { color: colors.text, fontSize: fontSize.xl, fontWeight: "700", marginBottom: 4 },
+  profileSubtitle: { color: colors.textMuted, fontSize: fontSize.sm, marginBottom: spacing.lg },
+  profileActions: { flexDirection: "row", gap: spacing.xl },
+  profileActionBtn: { alignItems: "center", gap: spacing.sm },
+  profileActionText: { color: colors.text, fontSize: fontSize.sm },
   msgRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: spacing.md },
   msgRowUser: { justifyContent: "flex-end" },
   msgRowAgent: { justifyContent: "flex-start", gap: spacing.xs },

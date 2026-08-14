@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -26,6 +27,7 @@ export default function ProfilePage() {
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [showAvatarViewer, setShowAvatarViewer] = useState(false);
 
   useEffect(() => {
     void api.getMe().then((r) => {
@@ -85,15 +87,15 @@ export default function ProfilePage() {
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.avatarWrap}>
-        <TouchableOpacity onPress={pickAndUploadAvatar} disabled={uploadingAvatar} activeOpacity={0.8}>
+        <TouchableOpacity onPress={() => setShowAvatarViewer(true)} disabled={uploadingAvatar} activeOpacity={0.8}>
           <Avatar name={me?.displayName || me?.username || "?"} avatarUrl={me?.avatarUrl} size={84} />
-          <View style={styles.avatarEditBadge}>
-            {uploadingAvatar ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Ionicons name="camera" size={14} color="#fff" />
-            )}
-          </View>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={pickAndUploadAvatar} disabled={uploadingAvatar} activeOpacity={0.8} style={styles.avatarEditBadge}>
+          {uploadingAvatar ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="camera" size={14} color="#fff" />
+          )}
         </TouchableOpacity>
       </View>
 
@@ -134,6 +136,20 @@ export default function ProfilePage() {
         </TouchableOpacity>
         {msg && <Text style={[styles.msg, msg === "已保存" && styles.msgOk]}>{msg}</Text>}
       </View>
+
+      {/* 全屏头像查看 */}
+      <Modal transparent visible={showAvatarViewer} animationType="fade" onRequestClose={() => setShowAvatarViewer(false)}>
+        <View style={styles.avatarViewerOverlay}>
+          <TouchableOpacity style={styles.avatarViewerClose} onPress={() => setShowAvatarViewer(false)} hitSlop={10}>
+            <Ionicons name="close" size={30} color="#fff" />
+          </TouchableOpacity>
+          <Avatar name={me?.displayName || me?.username || "?"} avatarUrl={me?.avatarUrl} size={280} />
+          <TouchableOpacity style={styles.avatarViewerBtn} onPress={() => { setShowAvatarViewer(false); pickAndUploadAvatar(); }} activeOpacity={0.8}>
+            <Ionicons name="camera" size={20} color="#fff" />
+            <Text style={styles.avatarViewerBtnText}>更换头像</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -196,4 +212,23 @@ const styles = StyleSheet.create({
   saveBtnText: { color: "#fff", fontSize: fontSize.md, fontWeight: "600" },
   msg: { color: colors.danger, fontSize: fontSize.xs, marginTop: spacing.sm, textAlign: "center" },
   msgOk: { color: colors.success },
+  // 全屏头像查看
+  avatarViewerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarViewerClose: { position: "absolute", top: 50, right: 20, zIndex: 10 },
+  avatarViewerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: spacing.xl,
+    backgroundColor: colors.primary,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: 10,
+  },
+  avatarViewerBtnText: { color: "#fff", fontSize: fontSize.md, fontWeight: "600" },
 });
