@@ -27,6 +27,7 @@ import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { timeAgo } from "../utils/timeAgo";
+import { loadDrafts } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
@@ -74,6 +75,8 @@ export default function ChatPage() {
   const [searching, setSearching] = useState(false);
   // 长按操作菜单
   const [menuConv, setMenuConv] = useState<Conversation | null>(null);
+  // 会话草稿
+  const [drafts, setDrafts] = useState<Map<string, string>>(new Map());
 
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
 
@@ -99,6 +102,9 @@ export default function ChatPage() {
       useUnreadStore.getState().setMutedRunIds(
         new Set(res.data.filter((c) => c.muted).map((c) => c.runId)),
       );
+      // 加载草稿
+      const draftMap = await loadDrafts(res.data.map((c) => c.id));
+      setDrafts(draftMap);
     }
     setLoading(false);
     if (res.error) setError(res.error);
@@ -291,9 +297,13 @@ export default function ChatPage() {
         </View>
         <View style={styles.convLastRow}>
           {item.muted && <Ionicons name="volume-mute" size={12} color={colors.textFaint} style={{ marginRight: 4 }} />}
-          <Text style={styles.convLast} numberOfLines={1}>
-            {item.lastMessage || "开始聊天吧"}
-          </Text>
+          {drafts.has(item.id) ? (
+            <Text style={styles.draftText} numberOfLines={1}>[草稿] {drafts.get(item.id)}</Text>
+          ) : (
+            <Text style={styles.convLast} numberOfLines={1}>
+              {item.lastMessage || "开始聊天吧"}
+            </Text>
+          )}
         </View>
         {item.unread > 0 && !item.muted && <Text style={styles.convUnread}>{item.unread}</Text>}
       </View>
@@ -462,6 +472,7 @@ const styles = StyleSheet.create({
   convTime: { color: colors.textFaint, fontSize: 10 },
   convLastRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
   convLast: { color: colors.textMuted, fontSize: fontSize.xs, flex: 1 },
+  draftText: { color: colors.danger, fontSize: fontSize.xs, flex: 1, fontWeight: "500" },
   convUnread: {
     color: "#fff",
     fontSize: 10,

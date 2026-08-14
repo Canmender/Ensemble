@@ -30,6 +30,7 @@ import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { timeAgo } from "../utils/timeAgo";
+import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
 import type { RootStackParamList } from "../App";
@@ -180,10 +181,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     return items;
   }, [conv, usersById, agentsById, meId]);
 
-  // @提及：输入框输入时检测 @，显示/隐藏 picker，支持按名称过滤
+  // @提及：输入框输入时检测 @，显示/隐藏 picker，支持按名称过滤；同时保存草稿
   const onInputChange = useCallback((text: string) => {
     setInputText(text);
     if (sendError) setSendError(null);
+    // 保存草稿（防抖：直接保存，AsyncStorage 写入很快）
+    void saveDraft(convId, text);
     // 检测最后一个 @ 触发 picker（@ 在最后一个 \n 或空格之后）
     const lastAt = text.lastIndexOf("@");
     if (lastAt >= 0 && (lastAt === 0 || /[\s\n]/.test(text[lastAt - 1]))) {
@@ -328,7 +331,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   useEffect(() => {
     void loadMessages();
-  }, [loadMessages]);
+    // 加载草稿
+    void loadDraft(convId).then((draft) => {
+      if (draft) setInputText(draft);
+    });
+  }, [loadMessages, convId]);
 
   // WS 实时：新消息推送到当前会话
   useEffect(() => {
@@ -474,6 +481,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         if (res.data?.msgId) {
           setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: res.data!.msgId! } : m));
         }
+        void clearDraft(convId);
         setIsSending(false);
         void loadMessages();
         return;
