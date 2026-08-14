@@ -4,6 +4,17 @@
 
 ---
 
+## v0.7.48 (2026-08-14) — 启动崩溃修复（expo-av → expo-audio）
+
+**启动崩溃根因**：expo-av 16.0.8 已从 Expo SDK 57 移除，与 expo-modules-core 57 ABI 不兼容，原生模块启动初始化即崩溃（v0.7.47 打开即退出的元凶）
+
+**修复内容**：
+- 语音录制迁移到 expo-audio 57.0.3（`useAudioRecorder` / `useAudioRecorderState` / `RecordingPresets`），移除 expo-av
+- 修复 ChatRoomPage 中 SmartMenu 后的孤立 JSX 残留（旧 Modal 尾巴，潜在语法错误）
+- 提取 `convTitle` 公共函数，修复滑动个人信息面板崩溃（ChatRoomPage 未导入即调用 → ReferenceError）
+
+**版本**：0.7.47 → 0.7.48，APK versionCode 37
+
 ## v0.7.47 (2026-08-14) — 聊天左滑资料 + 个人信息全屏头像
 
 **聊天左滑查看资料**：在聊天界面从右向左滑动，弹出联系人资料面板（头像大图、名称、群信息、操作按钮）
