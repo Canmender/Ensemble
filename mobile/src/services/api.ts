@@ -275,11 +275,13 @@ class ApiService {
   }
 
   /** 发起 API 请求 */
+  /** 发起 API 请求（含 401 自动重试：清除旧 Token → 重新获取 → 重试一次） */
   private async request<T>(
     method: string,
     path: string,
     body?: unknown,
-    timeoutMs?: number
+    timeoutMs?: number,
+    _isRetry = false,
   ): Promise<ApiResponse<T>> {
     const baseUrl = this.getBaseUrl();
     if (!baseUrl) {
@@ -309,8 +311,12 @@ class ApiService {
       const response = await fetch(`${baseUrl}${path}`, options);
 
       if (!response.ok) {
-        // 桌面端重启后 session token 变更，清除缓存让下一次请求重新获取
-        if (response.status === 401) this.resetToken();
+        // 401：自动刷新 Token 并重试一次（对齐 box-im/V-IM）
+        if (response.status === 401 && !_isRetry) {
+          this.resetToken();
+          clearTimeout(timer);
+          return this.request<T>(method, path, body, timeoutMs, true);
+        }
 
         let detail: string | undefined;
         try {
