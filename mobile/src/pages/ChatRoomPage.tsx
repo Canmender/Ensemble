@@ -761,6 +761,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     });
     await doUpload(asset.name ?? "audio.mp3", asset.mimeType ?? "audio/mpeg", base64);
   }, [doUpload]);
+
+  // 下载附件到本地 downloads/ 目录，并调起系统分享/保存面板
+  const downloadAttachment = useCallback(
     async (att: MessageAttachment) => {
       if (downloading) return;
       setDownloading(true);
