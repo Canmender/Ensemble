@@ -360,7 +360,7 @@ class ApiService {
 
   /** 获取单个 Agent */
   async getAgent(id: string): Promise<ApiResponse<AgentConfig>> {
-    return this.request<AgentConfig>("GET", `/api/agents/${id}`);
+    return this.request<AgentConfig>("GET", "/api/agents/" + id);
   }
 
   /** 创建 Agent */
@@ -370,12 +370,12 @@ class ApiService {
 
   /** 更新 Agent */
   async updateAgent(id: string, updates: Partial<AgentConfig>): Promise<ApiResponse<AgentConfig>> {
-    return this.request<AgentConfig>("PATCH", `/api/agents/${id}`, updates);
+    return this.request<AgentConfig>("PATCH", "/api/agents/" + id, updates);
   }
 
   /** 删除 Agent */
   async deleteAgent(id: string): Promise<ApiResponse<void>> {
-    return this.request<void>("DELETE", `/api/agents/${id}`);
+    return this.request<void>("DELETE", "/api/agents/" + id);
   }
 
   // ========== Provider API ==========
@@ -392,17 +392,17 @@ class ApiService {
 
   /** 更新 Provider */
   async updateProvider(id: string, updates: Partial<ProviderConfig>): Promise<ApiResponse<ProviderConfig>> {
-    return this.request<ProviderConfig>("PATCH", `/api/providers/${id}`, updates);
+    return this.request<ProviderConfig>("PATCH", "/api/providers/" + id, updates);
   }
 
   /** 删除 Provider */
   async deleteProvider(id: string): Promise<ApiResponse<void>> {
-    return this.request<void>("DELETE", `/api/providers/${id}`);
+    return this.request<void>("DELETE", "/api/providers/" + id);
   }
 
   /** 测试 Provider 连接 */
   async testProvider(id: string): Promise<ApiResponse<ProviderTestResult>> {
-    return this.request<ProviderTestResult>("POST", `/api/providers/${id}/test`);
+    return this.request<ProviderTestResult>("POST", "/api/providers/" + id + "/test");
   }
 
   // ========== Task API ==========
@@ -419,7 +419,7 @@ class ApiService {
 
   /** 删除任务 */
   async deleteTask(id: string): Promise<ApiResponse<void>> {
-    return this.request<void>("DELETE", `/api/tasks/${id}`);
+    return this.request<void>("DELETE", "/api/tasks/" + id);
   }
 
   // ========== Run API ==========
@@ -431,7 +431,7 @@ class ApiService {
 
   /** 获取运行详情 */
   async getRun(id: string): Promise<ApiResponse<Run>> {
-    return this.request<Run>("GET", `/api/runs/${id}`);
+    return this.request<Run>("GET", "/api/runs/" + id);
   }
 
   /** 获取运行的事件流 */
@@ -450,12 +450,12 @@ class ApiService {
 
   /** 获取运行的 Job 列表 */
   async getRunJobs(runId: string): Promise<ApiResponse<Job[]>> {
-    return this.request<Job[]>(`GET`, `/api/runs/${runId}/jobs`);
+    return this.request<Job[]>(`GET`, "/api/runs/" + runId + "/jobs");
   }
 
   /** 取消运行 */
   async cancelRun(runId: string): Promise<ApiResponse<{ cancelled: string }>> {
-    return this.request<{ cancelled: string }>("POST", `/api/runs/${runId}/cancel`);
+    return this.request<{ cancelled: string }>("POST", "/api/runs/" + runId + "/cancel");
   }
 
   // ========== Workflow API ==========
@@ -472,7 +472,7 @@ class ApiService {
 
   /** 删除工作流 */
   async deleteWorkflow(id: string): Promise<ApiResponse<void>> {
-    return this.request<void>("DELETE", `/api/workflows/${id}`);
+    return this.request<void>("DELETE", "/api/workflows/" + id);
   }
 
   // ========== Chat API ==========
@@ -492,12 +492,12 @@ class ApiService {
 
   /** 获取群聊消息 */
   async getChatMessages(runId: string): Promise<ApiResponse<ChatMessage[]>> {
-    return this.request<ChatMessage[]>(`GET`, `/api/chat/${runId}/messages`);
+    return this.request<ChatMessage[]>(`GET`, "/api/chat/" + runId + "/messages");
   }
 
   /** 发送群聊消息（fire-and-forget，回复通过 WS 实时推送） */
   async sendChatMessage(runId: string, content: string): Promise<ApiResponse<{ sent: boolean }>> {
-    return this.request<{ sent: boolean }>("POST", `/api/chat/${runId}/messages`, { content });
+    return this.request<{ sent: boolean }>("POST", "/api/chat/" + runId + "/messages", { content });
   }
 
   // ========== 用户 API ==========
@@ -597,7 +597,7 @@ class ApiService {
 
   /** 撤回消息（发送者可撤） */
   async recallMessage(convId: string, msgId: string): Promise<ApiResponse<{ recalled: string }>> {
-    return this.request<{ recalled: string }>("DELETE", `/api/conversations/${convId}/messages/${msgId}`);
+    return this.request<{ recalled: string }>("DELETE", "/api/conversations/" + convId + "/messages/" + msgId);
   }
 
   /** 发送会话消息（fire-and-forget，回复经 WS 推送） */
@@ -627,25 +627,23 @@ class ApiService {
     if (replyTo) body.replyTo = replyTo;
     if (mentions && mentions.length > 0) body.mentions = mentions;
     return this.request<{ sent: boolean; msgId?: string }>(
-      "POST",
-      `/api/conversations/${convId}/messages`,
-      body,
+      "POST", "/api/conversations/${convId}/messages", body,
     );
   }
 
   /** 标记会话已读 */
   async markConversationRead(convId: string): Promise<ApiResponse<{ read: boolean }>> {
-    return this.request<{ read: boolean }>("POST", `/api/conversations/${convId}/read`);
+    return this.request<{ read: boolean }>("POST", "/api/conversations/" + convId + "/read");
   }
 
   /** 静音 / 取消静音会话 */
   async muteConversation(convId: string, muted: boolean): Promise<ApiResponse<{ muted: boolean }>> {
-    return this.request<{ muted: boolean }>("POST", `/api/conversations/${convId}/mute`, { muted });
+    return this.request<{ muted: boolean }>("POST", "/api/conversations/" + convId + "/mute", { muted });
   }
 
   /** 置顶 / 取消置顶会话 */
   async pinConversation(convId: string, pinned: boolean): Promise<ApiResponse<{ pinned: boolean }>> {
-    return this.request<{ pinned: boolean }>("POST", `/api/conversations/${convId}/pin", { pinned });
+    return this.request<{ pinned: boolean }>("POST", "/api/conversations/" + convId + "/pin", { pinned });
   }
 
   /** 搜索会话内消息 */
@@ -658,7 +656,7 @@ class ApiService {
 
   /** 修改群信息（群名 / 成员列表） */
   async updateConversation(convId: string, data: { title?: string; participantIds?: string[] }): Promise<ApiResponse<{ updated: boolean }>> {
-    return this.request<{ updated: boolean }>("PATCH", `/api/conversations/${convId}`, data);
+    return this.request<{ updated: boolean }>("PATCH", "/api/conversations/" + convId, data);
   }
 
   /** 当前用户的所有设备（多端在线状态：在线 / 离线） */
@@ -677,7 +675,7 @@ class ApiService {
 
   /** 获取 Agent 的记忆条目 */
   async getAgentMemory(agentId: string): Promise<ApiResponse<unknown[]>> {
-    return this.request<unknown[]>("GET", `/api/memory/${agentId}`);
+    return this.request<unknown[]>("GET", "/api/memory/" + agentId);
   }
 
   // ========== Skill API ==========
