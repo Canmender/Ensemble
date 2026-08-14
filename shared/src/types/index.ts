@@ -128,9 +128,9 @@ export interface WorkflowEdge {
   when: EdgeCondition;
 }
 
-/** 聊天附件（图片/视频/文件） */
+/** 聊天附件（图片/视频/语音/文件） */
 export interface MessageAttachment {
-  type: "image" | "video" | "file";
+  type: "image" | "video" | "audio" | "file";
   name: string;
   size: number;
   mime?: string;
@@ -158,6 +158,8 @@ export interface ChatMessage {
   replyTo?: MessageReply;
   /** 是否已撤回（撤回后内容隐藏，前端显示占位） */
   deleted?: boolean;
+  /** @提及的用户 ID 列表 */
+  mentions?: string[];
   ts: string;
 }
 
