@@ -77,6 +77,7 @@ export class WsLink {
   private url: string | null = null;
   private reconnectDelay = 1000;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private manuallyClosed = false;
   private callbacks: WsLinkCallbacks = {};
   /** 全局聊天消息监听（弹通知 / 未读红点用，不随页面 on() 覆盖） */
@@ -162,6 +163,7 @@ export class WsLink {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    this.stopHeartbeat();
     try {
       this.ws?.close();
     } catch {
@@ -196,6 +198,8 @@ export class WsLink {
           this.subscribe(run.id);
         }
       }
+      // 启动心跳：每 3s 发送，检测连接存活
+      this.startHeartbeat();
     };
 
     ws.onmessage = (e) => {
@@ -338,6 +342,23 @@ export class WsLink {
       this.open();
     }, delay);
     this.reconnectDelay = Math.min(this.reconnectDelay * 2, 8000);
+  }
+
+  /** 心跳：每 3s 发送 ping，服务端回 pong，超时未收到则判定断线 */
+  private startHeartbeat(): void {
+    this.stopHeartbeat();
+    this.heartbeatTimer = setInterval(() => {
+      if (this.ws?.readyState === WebSocket.OPEN) {
+        try { this.ws.send(JSON.stringify({ type: "ping" })); } catch {}
+      }
+    }, 3000);
+  }
+
+  private stopHeartbeat(): void {
+    if (this.heartbeatTimer) {
+      clearInterval(this.heartbeatTimer);
+      this.heartbeatTimer = null;
+    }
   }
 }
 

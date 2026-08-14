@@ -54,7 +54,9 @@ type MessageItem = {
 function appendMessage(list: MessageItem[], msg: MessageItem): MessageItem[] {
   const last = list[list.length - 1];
   if (last && last.content === msg.content && last.role === msg.role) return list;
-  return [...list, msg];
+  const next = [...list, msg];
+  // 消息裁剪：超过 100 条时裁剪为最新 50 条（防内存溢出，对齐 box-im/V-IM）
+  return next.length > 100 ? next.slice(-50) : next;
 }
 
 function fmtSize(bytes: number): string {
@@ -308,12 +310,18 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     void api.markConversationRead(convId);
   }, [convId]);
 
-  // 加载更多消息（滚动到顶部时调用）
+  // 加载更多消息（滚动到顶部时调用，保持视口位置）
   const loadMoreMessages = useCallback(async () => {
     if (loadingMore || !hasMore || messages.length === 0) return;
     setLoadingMore(true);
     try {
       const oldest = messages[0];
+      // 记录当前滚动位置（加载后恢复）
+      const scrollOffset = flatListRef.current
+        ? await new Promise<number>((resolve) => {
+            flatListRef.current?.getScrollOffset()?.then((o) => resolve(o.y)).catch(() => resolve(0));
+          })
+        : 0;
       const res = await api.getConversationMessages(convId, oldest.ts, 20);
       if (res.data && res.data.messages.length > 0) {
         const older = res.data.messages.map((m) => ({
@@ -327,8 +335,16 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           deleted: m.deleted,
           ts: m.ts,
         }));
+        const prevCount = messages.length;
         setMessages((prev) => [...older, ...prev]);
         setHasMore(res.data.messages.length >= 20);
+        // 恢复滚动位置（新消息插入后视口不动）
+        const addedCount = older.length;
+        if (addedCount > 0) {
+          setTimeout(() => {
+            flatListRef.current?.scrollToOffset({ offset: scrollOffset + addedCount * 80, animated: false });
+          }, 50);
+        }
       } else {
         setHasMore(false);
       }

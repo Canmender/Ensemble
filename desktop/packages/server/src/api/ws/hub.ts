@@ -148,6 +148,14 @@ export class WsHub {
 
       ws.on("message", (data) => {
         const raw = data.toString();
+        // 心跳 pong：客户端发 ping，服务端回 pong
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed?.type === "ping") {
+            try { ws.send(JSON.stringify({ type: "pong" })); } catch {}
+            return;
+          }
+        } catch {}
         const msg = parseClientMsg(raw);
         if (!msg) return;
         switch (msg.type) {

@@ -28,6 +28,7 @@ import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { timeAgo } from "../utils/timeAgo";
 import { loadDrafts } from "../utils/draft";
+import { cacheConversations, getCachedConversations } from "../utils/convCache";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
@@ -92,19 +93,32 @@ export default function ChatPage() {
   const conn = connMap[connectionState] ?? connMap.disconnected;
 
   const loadConversations = useCallback(async () => {
+    // 先尝试读取本地缓存（秒加载）
+    const cached = await getCachedConversations();
+    if (cached) {
+      setConversations(cached);
+      useUnreadStore.getState().setTotalUnread(cached.reduce((sum: number, c: any) => sum + (c.unread || 0), 0));
+      useUnreadStore.getState().setMutedRunIds(
+        new Set(cached.filter((c: any) => c.muted).map((c: any) => c.runId)),
+      );
+      const draftMap = await loadDrafts(cached.map((c: any) => c.id));
+      setDrafts(draftMap);
+      setLoading(false);
+    }
+    // 拉取服务端最新数据（覆盖缓存）
     const res = await api.getConversations();
     if (res.data) {
       setConversations(res.data);
       useUnreadStore
         .getState()
         .setTotalUnread(res.data.reduce((sum, c) => sum + (c.unread || 0), 0));
-      // 同步静音会话列表到 unreadStore（通知判断用）
       useUnreadStore.getState().setMutedRunIds(
         new Set(res.data.filter((c) => c.muted).map((c) => c.runId)),
       );
-      // 加载草稿
       const draftMap = await loadDrafts(res.data.map((c) => c.id));
       setDrafts(draftMap);
+      // 保存到缓存
+      void cacheConversations(res.data);
     }
     setLoading(false);
     if (res.error) setError(res.error);
