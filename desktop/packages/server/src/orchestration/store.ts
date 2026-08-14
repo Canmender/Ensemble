@@ -434,6 +434,18 @@ export class Store {
       .run(JSON.stringify(participantIds), new Date().toISOString(), id);
   }
 
+  /** 修改群公告 */
+  updateConversationAnnouncement(id: string, announcement: string): void {
+    this.db.prepare("UPDATE conversations SET announcement = ?, updated_at = ? WHERE id = ?")
+      .run(announcement, new Date().toISOString(), id);
+  }
+
+  /** 群禁言 / 解禁 */
+  setConversationGroupMuted(id: string, muted: boolean): void {
+    this.db.prepare("UPDATE conversations SET group_muted = ?, updated_at = ? WHERE id = ?")
+      .run(muted ? 1 : 0, new Date().toISOString(), id);
+  }
+
   /** 消息搜索：在指定会话中按关键词检索消息内容 */
   searchChatMessages(runId: string, query: string): ChatMessage[] {
     const rows = this.db.prepare(
@@ -566,6 +578,8 @@ function rowToConversation(r: any): Conversation {
     archived: Boolean(r.archived),
     muted: Boolean(r.muted),
     pinned: Boolean(r.pinned),
+    announcement: r.announcement ?? undefined,
+    groupMuted: Boolean(r.group_muted),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

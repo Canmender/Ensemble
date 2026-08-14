@@ -30,6 +30,7 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
   const [conv, setConv] = useState<Conversation | null>(null);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [editTitle, setEditTitle] = useState(initialTitle || "");
+  const [announcement, setAnnouncement] = useState("");
   const [saving, setSaving] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [allUsers, setAllUsers] = useState<UserInfo[]>([]);
@@ -42,6 +43,7 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
       if (c) {
         setConv(c);
         setEditTitle(c.title || "");
+        setAnnouncement(c.announcement || "");
         // 加载成员信息
         void api.getUsers().then((r) => {
           if (r.data) {
@@ -67,6 +69,29 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
       navigation.setOptions({ title: editTitle.trim() });
     }
   }, [editTitle, conv, convId, navigation]);
+
+  // 保存群公告
+  const saveAnnouncement = useCallback(async () => {
+    setSaving(true);
+    const res = await api.updateConversation(convId, { announcement });
+    setSaving(false);
+    if (res.error) {
+      Alert.alert("保存失败", res.error);
+    } else {
+      setConv((prev) => prev ? { ...prev, announcement } : prev);
+      Alert.alert("已保存", "群公告已更新");
+    }
+  }, [announcement, convId]);
+
+  // 群禁言 / 解禁
+  const toggleGroupMute = useCallback(async () => {
+    if (!conv) return;
+    const newMuted = !conv.groupMuted;
+    const res = await api.updateConversation(convId, { groupMuted: newMuted });
+    if (!res.error) {
+      setConv((prev) => prev ? { ...prev, groupMuted: newMuted } : prev);
+    }
+  }, [conv, convId]);
 
   // 移除成员
   const removeMember = useCallback((userId: string) => {
@@ -130,6 +155,42 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
               </TouchableOpacity>
             )
           )}
+        </View>
+      </View>
+
+      {/* 群公告 */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>群公告</Text>
+        <TextInput
+          style={styles.announcementInput}
+          value={announcement}
+          onChangeText={setAnnouncement}
+          placeholder="输入群公告（所有成员可见）"
+          placeholderTextColor={colors.textFaint}
+          multiline
+          maxLength={500}
+        />
+        {announcement !== (conv?.announcement || "") && (
+          <TouchableOpacity style={styles.saveSmallBtn} onPress={saveAnnouncement} disabled={saving}>
+            <Text style={styles.saveSmallBtnText}>{saving ? "保存中…" : "保存公告"}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* 群禁言 */}
+      <View style={styles.section}>
+        <View style={styles.toggleRow}>
+          <View>
+            <Text style={styles.sectionTitle}>全体禁言</Text>
+            <Text style={styles.toggleDesc}>开启后普通成员不能发言</Text>
+          </View>
+          <TouchableOpacity onPress={toggleGroupMute} activeOpacity={0.7}>
+            <Ionicons
+              name={conv?.groupMuted ? "checkbox" : "square-outline"}
+              size={24}
+              color={conv?.groupMuted ? colors.primary : colors.textMuted}
+            />
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -230,6 +291,31 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: fontSize.md,
   },
+  announcementInput: {
+    backgroundColor: colors.inputBg,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    color: colors.text,
+    fontSize: fontSize.sm,
+    minHeight: 60,
+    textAlignVertical: "top",
+  },
+  saveSmallBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: spacing.lg,
+    alignSelf: "flex-end",
+    marginTop: spacing.sm,
+  },
+  saveSmallBtnText: { color: "#fff", fontSize: fontSize.sm, fontWeight: "600" },
+  toggleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  toggleDesc: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 },
   memberRow: {
     flexDirection: "row",
     alignItems: "center",

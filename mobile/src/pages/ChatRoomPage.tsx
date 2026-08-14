@@ -111,6 +111,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
   const activeRunIdRef = useRef<string | null>(null);
+  // 防重复提交：记录最后一次发送内容和时间
+  const lastSendRef = useRef<{ content: string; ts: number }>({ content: "", ts: 0 });
 
   const isConnected = connectionState === "connected";
   // 附件仅支持用户-用户会话（agent 链路只处理文本）；用户会话 runId 以 conv_ 开头
@@ -442,6 +444,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const handleSend = useCallback(async () => {
     const text = inputText.trim();
     if ((!text && !draftAttachment) || !isConnected || isSending || uploading) return;
+    // 防重复提交：2 秒内相同内容不重复发送
+    if (text && text === lastSendRef.current.content && Date.now() - lastSendRef.current.ts < 2000) return;
+    lastSendRef.current = { content: text, ts: Date.now() };
     setIsSending(true);
     setSendError(null);
     const tempId = `u-${Date.now()}`;
@@ -1080,7 +1085,17 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                 subtitle="先创建会话再转发"
               />
             ) : (
-              <FlatList
+              {/* 群公告提示 */}
+        {conv?.announcement && !conv.runId.startsWith("conv_") && (
+          <View style={styles.announcementBanner}>
+            <Ionicons name="megaphone" size={14} color={colors.primary} />
+            <Text style={styles.announcementText} numberOfLines={2}>
+              {conv.announcement}
+            </Text>
+          </View>
+        )}
+
+        <FlatList
                 data={forwardConversations}
                 keyExtractor={(c) => c.id}
                 extraData={usersById}
@@ -1154,6 +1169,18 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   messageList: { padding: spacing.lg },
   loadingMore: { paddingVertical: spacing.md, alignItems: "center" },
+  announcementBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    borderRadius: radius.md,
+  },
+  announcementText: { color: colors.text, fontSize: fontSize.xs, flex: 1 },
   msgRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: spacing.md },
   msgRowUser: { justifyContent: "flex-end" },
   msgRowAgent: { justifyContent: "flex-start", gap: spacing.xs },

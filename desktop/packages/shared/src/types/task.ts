@@ -155,6 +155,10 @@ export interface Conversation {
   muted?: boolean;
   /** 置顶（排最前） */
   pinned?: boolean;
+  /** 群公告 */
+  announcement?: string;
+  /** 群禁言（全体禁言） */
+  groupMuted?: boolean;
   createdAt: string;
   updatedAt: string;
 }

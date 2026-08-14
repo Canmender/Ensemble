@@ -254,6 +254,14 @@ function migrateUserColumns(db: DatabaseSync): void {
   if (!userCols.some((c) => c.name === "avatar_url")) {
     db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT");
   }
+  // conversations.announcement / group_muted（群公告 / 群禁言）
+  const convCols3 = db.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>;
+  if (!convCols3.some((c) => c.name === "announcement")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN announcement TEXT");
+  }
+  if (!convCols3.some((c) => c.name === "group_muted")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN group_muted INTEGER NOT NULL DEFAULT 0");
+  }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
     if (!cols.some((c) => c.name === "user_id")) {

@@ -197,6 +197,10 @@ export function conversationsRouter(ctx: AppContext): Router {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      // 群禁言检查（非用户-用户会话）
+      if (!conv.runId.startsWith("conv_") && conv.groupMuted) {
+        return fail(res, new Error("群已开启全体禁言"), 403);
+      }
       const body = (req.body ?? {}) as { content?: unknown; attachment?: unknown; replyTo?: unknown };
       const content = typeof body.content === "string" ? body.content.trim() : "";
       const attachment = parseAttachment(body.attachment);
@@ -364,7 +368,7 @@ export function conversationsRouter(ctx: AppContext): Router {
     }),
   );
 
-  /** 修改群信息（群名 / 成员列表） */
+  /** 修改群信息（群名 / 成员列表 / 群公告 / 群禁言） */
   r.patch(
     "/:id",
     asyncH(async (req, res) => {
@@ -372,24 +376,34 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       if (conv.runId.startsWith("conv_")) return fail(res, new Error("用户会话不支持修改"), 400);
-      const body = (req.body ?? {}) as { title?: string; participantIds?: string[] };
+      const body = (req.body ?? {}) as { title?: string; participantIds?: string[]; announcement?: string; groupMuted?: boolean };
       if (body.title !== undefined) {
         ctx.store.updateConversationTitle(conv.id, body.title);
       }
       if (body.participantIds !== undefined && Array.isArray(body.participantIds)) {
         ctx.store.updateConversationParticipants(conv.id, body.participantIds);
       }
+      if (body.announcement !== undefined) {
+        ctx.store.updateConversationAnnouncement(conv.id, body.announcement);
+      }
+      if (body.groupMuted !== undefined) {
+        ctx.store.setConversationGroupMuted(conv.id, body.groupMuted);
+      }
       // 广播群变更事件（群成员实时看到更新）
       const updated = ctx.store.getConversation(conv.id);
       if (updated) {
+        const changeMsg = body.title !== undefined ? `群名已改为「${body.title}」`
+          : body.announcement !== undefined ? "群公告已更新"
+          : body.groupMuted !== undefined ? (body.groupMuted ? "群已开启全体禁言" : "群已解除禁言")
+          : "群成员已变更";
         for (const pid of updated.participantIds) {
           ctx.hub.sendToUser(pid, {
-            type: "chat.mention" as any,
+            type: "chat.mention",
             convId: updated.id,
             convTitle: updated.title || "",
             senderId: "system",
-            senderName: "群信息已更新",
-            content: body.title !== undefined ? `群名已改为「${body.title}」` : "群成员已变更",
+            senderName: "系统通知",
+            content: changeMsg,
           });
         }
       }
