@@ -305,7 +305,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
 
   return (
     <View style={styles.container}>
-      {/* 搜索框 + 分组管理入口 */}
+      {/* 搜索框 */}
       <View style={styles.searchBar}>
         <Ionicons name="search" size={16} color={colors.textFaint} />
         <TextInput
@@ -321,11 +321,21 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
             <Ionicons name="close-circle" size={16} color={colors.textFaint} />
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={() => setShowCreateGroup(true)} hitSlop={8}>
-          <Ionicons name="chatbubbles-outline" size={20} color={colors.textMuted} />
+      </View>
+
+      {/* 操作栏：新建分组 + 创建群聊 */}
+      <View style={styles.actionBar}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => setShowCreateGroup(true)} activeOpacity={0.7}>
+          <View style={styles.actionIcon}>
+            <Ionicons name="chatbubbles-outline" size={18} color={colors.primary} />
+          </View>
+          <Text style={styles.actionLabel}>创建群聊</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={openManage} hitSlop={8}>
-          <Ionicons name="options-outline" size={20} color={colors.textMuted} />
+        <TouchableOpacity style={styles.actionBtn} onPress={openManage} activeOpacity={0.7}>
+          <View style={styles.actionIcon}>
+            <Ionicons name="folder-open-outline" size={18} color={colors.primary} />
+          </View>
+          <Text style={styles.actionLabel}>分组管理</Text>
         </TouchableOpacity>
       </View>
 
@@ -541,6 +551,26 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   searchInput: { flex: 1, color: colors.text, fontSize: fontSize.sm },
+  // 操作栏
+  actionBar: {
+    flexDirection: "row",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  actionBtn: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
+  actionIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionLabel: { color: colors.primary, fontSize: fontSize.sm, fontWeight: "600" },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
