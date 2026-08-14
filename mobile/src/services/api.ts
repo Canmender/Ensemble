@@ -644,6 +644,11 @@ class ApiService {
     );
   }
 
+  /** 修改群信息（群名 / 成员列表） */
+  async updateConversation(convId: string, data: { title?: string; participantIds?: string[] }): Promise<ApiResponse<{ updated: boolean }>> {
+    return this.request<{ updated: boolean }>("PATCH", `/api/conversations/${convId}`, data);
+  }
+
   /** 当前用户的所有设备（多端在线状态：在线 / 离线） */
   async getDevices(): Promise<
     ApiResponse<Array<{ id: string; name: string; type: string; online: boolean; lastSeenAt?: string }>>

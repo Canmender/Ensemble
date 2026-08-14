@@ -422,6 +422,18 @@ export class Store {
     this.stmts.setConversationPinned.run(pinned ? 1 : 0, new Date().toISOString(), id);
   }
 
+  /** 修改群名 */
+  updateConversationTitle(id: string, title: string): void {
+    this.db.prepare("UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?")
+      .run(title, new Date().toISOString(), id);
+  }
+
+  /** 修改群成员列表 */
+  updateConversationParticipants(id: string, participantIds: string[]): void {
+    this.db.prepare("UPDATE conversations SET participant_ids = ?, updated_at = ? WHERE id = ?")
+      .run(JSON.stringify(participantIds), new Date().toISOString(), id);
+  }
+
   /** 消息搜索：在指定会话中按关键词检索消息内容 */
   searchChatMessages(runId: string, query: string): ChatMessage[] {
     const rows = this.db.prepare(

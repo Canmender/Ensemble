@@ -105,7 +105,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 附件仅支持用户-用户会话（agent 链路只处理文本）；用户会话 runId 以 conv_ 开头
   const canSendAttachment = !!conv && conv.runId.startsWith("conv_");
 
-  // 会话信息（runId/标题），设置导航标题
+  // 会话信息（runId/标题），设置导航标题；群聊显示设置按钮
   useEffect(() => {
     activeRunIdRef.current = runId ?? null;
     if (title) navigation.setOptions({ title });
@@ -122,6 +122,20 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         }
         // 标题优先用进入时传入的（ChatPage 已解析为昵称）；缺省回退会话 title
         if (!title) navigation.setOptions({ title: c.title || "聊天" });
+        // 群聊：header 右侧加设置按钮
+        if (!c.runId.startsWith("conv_")) {
+          navigation.setOptions({
+            headerRight: () => (
+              <TouchableOpacity
+                onPress={() => navigation.navigate("GroupSettings", { convId: c.id, title: c.title || "" })}
+                hitSlop={8}
+                style={{ marginRight: 4 }}
+              >
+                <Ionicons name="settings-outline" size={22} color={colors.primary} />
+              </TouchableOpacity>
+            ),
+          });
+        }
       }
     });
   }, [convId, runId, title, navigation]);

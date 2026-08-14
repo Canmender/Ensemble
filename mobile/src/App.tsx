@@ -24,6 +24,7 @@ import ProfilePage from "./pages/ProfilePage";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage";
 import AboutPage from "./pages/AboutPage";
 import UserProfilePage from "./pages/UserProfilePage";
+import GroupSettingsPage from "./pages/GroupSettingsPage";
 import RunPage from "./pages/RunPage";
 import LoginPage from "./pages/LoginPage";
 
@@ -38,6 +39,7 @@ export type RootStackParamList = {
   Main: undefined;
   Run: { runId: string };
   ChatRoom: { convId: string; runId?: string; title?: string };
+  GroupSettings: { convId: string; title?: string };
   Profile: undefined;
   NotificationSettings: undefined;
   About: undefined;
@@ -158,6 +160,17 @@ function MainApp() {
           options={{
             headerShown: true,
             title: "聊天",
+            headerStyle: { backgroundColor: colors.bg },
+            headerTintColor: colors.text,
+            headerBackTitle: "返回",
+          }}
+        />
+        <Stack.Screen
+          name="GroupSettings"
+          component={GroupSettingsPage}
+          options={{
+            headerShown: true,
+            title: "群设置",
             headerStyle: { backgroundColor: colors.bg },
             headerTintColor: colors.text,
             headerBackTitle: "返回",

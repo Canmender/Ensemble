@@ -363,6 +363,39 @@ export function conversationsRouter(ctx: AppContext): Router {
     }),
   );
 
+  /** 修改群信息（群名 / 成员列表） */
+  r.patch(
+    "/:id",
+    asyncH(async (req, res) => {
+      const conv = ctx.store.getConversation(String(req.params.id));
+      if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      if (conv.runId.startsWith("conv_")) return fail(res, new Error("用户会话不支持修改"), 400);
+      const body = (req.body ?? {}) as { title?: string; participantIds?: string[] };
+      if (body.title !== undefined) {
+        ctx.store.updateConversationTitle(conv.id, body.title);
+      }
+      if (body.participantIds !== undefined && Array.isArray(body.participantIds)) {
+        ctx.store.updateConversationParticipants(conv.id, body.participantIds);
+      }
+      // 广播群变更事件（群成员实时看到更新）
+      const updated = ctx.store.getConversation(conv.id);
+      if (updated) {
+        for (const pid of updated.participantIds) {
+          ctx.hub.sendToUser(pid, {
+            type: "chat.mention" as any,
+            convId: updated.id,
+            convTitle: updated.title || "",
+            senderId: "system",
+            senderName: "群信息已更新",
+            content: body.title !== undefined ? `群名已改为「${body.title}」` : "群成员已变更",
+          });
+        }
+      }
+      ok(res, { updated: true });
+    }),
+  );
+
   /** 消息搜索：在会话内按关键词检索 */
   r.get(
     "/:id/messages/search",
