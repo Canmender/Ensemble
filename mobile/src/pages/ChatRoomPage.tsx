@@ -31,6 +31,7 @@ import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { EmojiPicker } from "../components/EmojiPicker";
+import { SmartMenu } from "../components/SmartMenu";
 import { timeAgo } from "../utils/timeAgo";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
@@ -952,6 +953,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         renderItem={renderMessage}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messageList}
+        // 虚拟滚动优化：仅渲染可视区域±屏幕高度的项
+        windowSize={11}
+        maxToRenderPerBatch={15}
+        updateCellsBatchingPeriod={50}
+        removeClippedSubviews={true}
+        initialNumToRender={20}
         inverted={false}
         onEndReached={loadMoreMessages}
         onEndReachedThreshold={0.3}
@@ -1122,45 +1129,18 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       )}
 
       {/* 长按消息操作菜单：引用 / 转发 / 撤回（仅自己的消息） */}
-      <Modal
-        transparent
+      <SmartMenu
         visible={!!menuMsg}
-        animationType="fade"
-        onRequestClose={() => setMenuMsg(null)}
-      >
-        <TouchableOpacity
-          style={styles.menuOverlay}
-          activeOpacity={1}
-          onPress={() => setMenuMsg(null)}
-        >
-          <View style={styles.actionSheet}>
-            <TouchableOpacity style={styles.actionItem} onPress={startQuote} activeOpacity={0.7}>
-              <Ionicons name="chatbox-ellipses-outline" size={20} color={colors.text} />
-              <Text style={styles.actionText}>引用</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionItem} onPress={startForward} activeOpacity={0.7}>
-              <Ionicons name="arrow-redo-outline" size={20} color={colors.text} />
-              <Text style={styles.actionText}>转发</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionItem} onPress={startMultiSelect} activeOpacity={0.7}>
-              <Ionicons name="checkmark-circle-outline" size={20} color={colors.text} />
-              <Text style={styles.actionText}>多选转发</Text>
-            </TouchableOpacity>
-            {menuMsg && isMyMessage(menuMsg) && !menuMsg.deleted && (
-              <TouchableOpacity
-                style={styles.actionItem}
-                onPress={() => {
-                  setMenuMsg(null);
-                  recallMessage(menuMsg);
-                }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="trash-outline" size={20} color={colors.danger} />
-                <Text style={[styles.actionText, { color: colors.danger }]}>撤回</Text>
-              </TouchableOpacity>
-            )}
-            <View style={styles.actionDivider} />
-            <TouchableOpacity
+        onClose={() => setMenuMsg(null)}
+        items={[
+          { icon: "chatbubble-ellipses-outline", label: "引用", onPress: startQuote },
+          { icon: "arrow-redo-outline", label: "转发", onPress: startForward },
+          { icon: "checkmark-circle-outline", label: "多选转发", onPress: startMultiSelect },
+          ...(menuMsg && isMyMessage(menuMsg) && !menuMsg.deleted
+            ? [{ icon: "trash-outline", label: "撤回", color: colors.danger, onPress: () => recallMessage(menuMsg!) }]
+            : []),
+        ]}
+      />
               style={styles.actionItem}
               onPress={() => setMenuMsg(null)}
               activeOpacity={0.7}
@@ -1617,29 +1597,6 @@ const styles = StyleSheet.create({
   quoteBlockUser: { backgroundColor: "rgba(255,255,255,0.18)", borderLeftColor: "#fff" },
   quoteText: { color: colors.textMuted, fontSize: fontSize.xs, lineHeight: 16 },
   quoteTextUser: { color: "rgba(255,255,255,0.85)" },
-  // 长按操作菜单
-  menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  actionSheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    paddingVertical: spacing.sm,
-    paddingBottom: spacing.xl,
-  },
-  actionItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-  },
-  actionText: { color: colors.text, fontSize: fontSize.md },
-  actionCancel: { color: colors.textMuted, textAlign: "center", flex: 1 },
-  actionDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.border,
-    marginVertical: spacing.xs,
-  },
   // 转发目标选择
   forwardOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   forwardSheet: {
