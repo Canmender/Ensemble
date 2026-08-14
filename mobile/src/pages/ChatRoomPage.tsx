@@ -34,6 +34,7 @@ import { EmojiPicker } from "../components/EmojiPicker";
 import { SmartMenu } from "../components/SmartMenu";
 import { VoiceRecorder } from "../components/VoiceRecorder";
 import { timeAgo } from "../utils/timeAgo";
+import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
