@@ -1,11 +1,17 @@
 /**
  * 语音消息录制组件（参考 box-im ChatRecord.vue）
- * 使用 expo-av 录音，支持开始/暂停/继续/重录/发送
+ * 使用 expo-audio 录音（expo-av 已从 SDK 57 移除），支持开始/暂停/继续/重录/发送
  */
 import React, { useState, useRef, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import {
+  useAudioRecorder,
+  useAudioRecorderState,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { api } from "../services/api";
 import { colors, spacing, radius, fontSize } from "../theme";
@@ -16,12 +22,13 @@ interface VoiceRecorderProps {
 }
 
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [status, setStatus] = useState<"idle" | "recording" | "paused">("idle");
-  const [duration, setDuration] = useState(0);
   const [sending, setSending] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recState = useAudioRecorderState(recorder, 500);
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const duration = Math.floor(recState.durationMillis / 1000);
 
   // 脉冲动画
   useEffect(() => {
@@ -37,61 +44,51 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
     }
   }, [status, pulseAnim]);
 
-  // 计时器
-  useEffect(() => {
-    if (status === "recording") {
-      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [status]);
-
   const startRecording = async () => {
     try {
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(recording);
-      setDuration(0);
+      await requestRecordingPermissionsAsync();
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      if (!recState.canRecord) {
+        await recorder.prepareToRecordAsync();
+      }
+      recorder.record();
       setStatus("recording");
     } catch (err) {
       console.error("录音启动失败:", err);
     }
   };
 
-  const pauseRecording = async () => {
-    if (!recording) return;
-    await recording.pauseAsync();
+  const pauseRecording = () => {
+    recorder.pause();
     setStatus("paused");
   };
 
-  const resumeRecording = async () => {
-    if (!recording) return;
-    await recording.startAsync();
+  const resumeRecording = () => {
+    recorder.record();
     setStatus("recording");
   };
 
   const stopRecording = async () => {
-    if (!recording) return;
-    await recording.stopAndUnloadAsync();
-    await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-    const uri = recording.getURI();
-    setRecording(null);
+    try {
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+    } catch (err) {
+      console.error("停止录音失败:", err);
+    }
     setStatus("idle");
-    return uri;
   };
 
   const handleSend = async () => {
     setSending(true);
     try {
-      const uri = await stopRecording();
+      await stopRecording();
+      const uri = recorder.uri;
       if (!uri) return;
       // 读取文件为 base64
       const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
       const res = await api.uploadAttachment({ name: "voice.m4a", mime: "audio/m4a", data: base64 });
       if (!res.error && res.data) {
-        onSend(res.data.url, duration);
+        onSend(res.data.url, Math.max(1, Math.round(recorder.currentTime || duration)));
       }
     } catch (err) {
       console.error("发送语音失败:", err);
@@ -101,13 +98,21 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   };
 
   const handleCancel = async () => {
-    await stopRecording();
+    try {
+      if (recorder.isRecording) await recorder.stop();
+    } catch (err) {
+      console.error("取消录音失败:", err);
+    }
     onCancel();
   };
 
   const handleReset = async () => {
-    await stopRecording();
-    setDuration(0);
+    try {
+      await recorder.stop();
+    } catch (err) {
+      console.error("重录失败:", err);
+    }
+    setStatus("idle");
     startRecording();
   };
 
@@ -120,6 +125,14 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   // 自动开始录音
   useEffect(() => {
     void startRecording();
+    return () => {
+      try {
+        if (recorder.isRecording) void recorder.stop();
+      } catch (err) {
+        console.error("卸载清理失败:", err);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
