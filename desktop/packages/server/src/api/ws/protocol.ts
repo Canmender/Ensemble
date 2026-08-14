@@ -22,6 +22,7 @@ export type RunEvent =
   | { type: "run.result"; result: string }
   | { type: "run.error"; message: string }
   | { type: "tool_confirm_request"; confirmId: string; tool: string; args: unknown }
+  | { type: "auth.kicked"; message: string }
   | { type: "heartbeat" };
 
 /** Client → Server */

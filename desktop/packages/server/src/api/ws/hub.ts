@@ -114,6 +114,19 @@ export class WsHub {
         const token = url.searchParams.get("token");
         const user = token ? this.resolveUser(token) : undefined;
         if (user) {
+          // 异地登录：踢下线旧连接（对齐 box-im/V-IM）
+          const existingSockets = this.userSockets.get(user.id);
+          if (existingSockets && existingSockets.size > 0) {
+            const kickEnvelope = JSON.stringify({
+              v: 1, ts: Date.now(), runId: "", seq: 0,
+              event: { type: "auth.kicked", message: "您的账号在其他设备登录" },
+            });
+            for (const oldWs of existingSockets) {
+              try { oldWs.send(kickEnvelope); } catch {}
+              try { oldWs.close(4001, "kicked"); } catch {}
+            }
+            existingSockets.clear();
+          }
           this.wsUsers.set(ws, user);
           let set = this.userSockets.get(user.id);
           if (!set) { set = new Set(); this.userSockets.set(user.id, set); }

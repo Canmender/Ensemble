@@ -8,6 +8,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { connectionService } from "./services/connection";
 import { initNotifications } from "./services/notifications";
+import { wsLink } from "./services/wslink";
 import { api } from "./services/api";
 import { useAuthGate } from "./store/authGateStore";
 import { useUnreadStore } from "./store/unreadStore";
@@ -245,6 +246,13 @@ export default function App() {
   // 启动：初始化通知 → 连接云端 → 读取登录态 → 进登录页或主界面
   useEffect(() => {
     initNotifications();
+    // 异地登录：被踢下线时跳转登录页
+    wsLink.on({
+      onKicked: () => {
+        setGate("out");
+        void api.logout();
+      },
+    });
     (async () => {
       try {
         await connectionService.init();

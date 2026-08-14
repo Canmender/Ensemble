@@ -36,6 +36,7 @@ export interface WsLinkCallbacks {
   onDeviceStatus?: (msg: { deviceId: string; name: string; kind: string; online: boolean }) => void;
   onConnectionState?: (state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error") => void;
   onRunStatus?: (runId: string, status: string) => void;
+  onKicked?: (message: string) => void;
 }
 
 /** 桌面端 WsEnvelope 事件帧（与 server/src/api/ws/protocol.ts 对应） */
@@ -310,6 +311,9 @@ export class WsLink {
             online: !!ev.online,
           });
         }
+        break;
+      case "auth.kicked":
+        this.callbacks.onKicked?.(ev.message ?? "您的账号在其他设备登录");
         break;
       case "run.result":
         if (typeof ev.result === "string") {
