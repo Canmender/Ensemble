@@ -132,8 +132,10 @@ export default function ChatPage() {
   }, [loadConversations]);
 
   // WS 收到新消息 → 本地立即更新对应会话最后消息预览（无延迟），节流整表刷新兜底（未读等）
+  // 页面获得焦点时刷新会话列表（创建群后返回时能看到新群）
   useFocusEffect(
     useCallback(() => {
+      void loadConversations();
       wsLink.on({
         onChatMessage: (msg) => {
           const preview =
