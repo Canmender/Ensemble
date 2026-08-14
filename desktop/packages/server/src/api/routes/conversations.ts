@@ -210,8 +210,9 @@ export function conversationsRouter(ctx: AppContext): Router {
         const senderId = req.user?.id ?? "user";
         // 解析 @提及：@昵称 或 @用户名 → 参与者 ID
         const mentions = parseMentions(content, conv.participantIds, senderId, ctx.store);
+        const msgId = newId("msg");
         ctx.store.createChatMessage({
-          id: newId("msg"),
+          id: msgId,
           runId: conv.runId,
           jobId: undefined,
           agentId: senderId,
@@ -252,7 +253,7 @@ export function conversationsRouter(ctx: AppContext): Router {
             });
           }
         }
-        ok(res, { sent: true });
+        ok(res, { sent: true, msgId });
         return;
       }
 
@@ -267,7 +268,7 @@ export function conversationsRouter(ctx: AppContext): Router {
 
       ctx.engine.addSteering(conv.runId, content);
       ctx.engine.broadcastChatMessage(conv.runId, undefined, "user", "user", content);
-      ok(res, { sent: true });
+      ok(res, { sent: true, msgId: undefined });
     }),
   );
 

@@ -376,49 +376,63 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     return () => clearTimeout(t);
   }, [sendError]);
 
-  // 发送文本 / 附件
+  // 发送文本 / 附件（带重试：最多 3 次）
   const handleSend = useCallback(async () => {
     const text = inputText.trim();
     if ((!text && !draftAttachment) || !isConnected || isSending || uploading) return;
     setIsSending(true);
     setSendError(null);
-    try {
-      const mentions = parseMentions(text);
-      const res = await api.sendConversationMessage(
-        convId,
-        text,
-        draftAttachment ?? undefined,
-        quoting ?? undefined,
-        mentions.length > 0 ? mentions : undefined,
-      );
-      if (res.error) {
-        setSendError(res.error);
+    const tempId = `u-${Date.now()}`;
+    const mentions = parseMentions(text);
+    // 乐观追加（临时 ID）
+    setMessages((prev) =>
+      appendMessage(prev, {
+        id: tempId,
+        role: "user",
+        content: text,
+        attachment: draftAttachment ?? undefined,
+        replyTo: quoting ?? undefined,
+        mentions: mentions.length > 0 ? mentions : undefined,
+        ts: new Date().toISOString(),
+      }),
+    );
+    setInputText("");
+    setDraftAttachment(null);
+    setQuoting(null);
+    setShowMentionPicker(false);
+    setTimeout(() => inputRef.current?.focus(), 80);
+
+    // 重试逻辑：最多 3 次，间隔递增
+    let lastError: string | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const res = await api.sendConversationMessage(
+          convId,
+          text,
+          draftAttachment ?? undefined,
+          quoting ?? undefined,
+          mentions.length > 0 ? mentions : undefined,
+        );
+        if (res.error) {
+          lastError = res.error;
+          if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        // 发送成功：用真实 msgId 替换乐观消息
+        if (res.data?.msgId) {
+          setMessages((prev) => prev.map((m) => m.id === tempId ? { ...m, id: res.data!.msgId! } : m));
+        }
+        setIsSending(false);
+        void loadMessages();
         return;
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : "发送失败";
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
       }
-      setMessages((prev) =>
-        appendMessage(prev, {
-          id: `u-${Date.now()}`,
-          role: "user",
-          content: text,
-          attachment: draftAttachment ?? undefined,
-          replyTo: quoting ?? undefined,
-          mentions: mentions.length > 0 ? mentions : undefined,
-          ts: new Date().toISOString(),
-        }),
-      );
-      setInputText("");
-      setDraftAttachment(null);
-      setQuoting(null);
-      setShowMentionPicker(false);
-      // 刷新历史拿到真实 msgId（撤回可用）
-      void loadMessages();
-      // 保持输入框聚焦，键盘不收起，方便连续发送
-      setTimeout(() => inputRef.current?.focus(), 80);
-    } catch (err) {
-      setSendError(err instanceof Error ? err.message : "发送失败");
-    } finally {
-      setIsSending(false);
     }
+    // 3 次都失败
+    setSendError(lastError || "发送失败，请重试");
+    setIsSending(false);
   }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages, parseMentions]);
 
   // 撤回消息（长按自己的消息触发）
