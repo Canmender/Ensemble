@@ -28,6 +28,7 @@ import UserProfilePage from "./pages/UserProfilePage";
 import GroupSettingsPage from "./pages/GroupSettingsPage";
 import RunPage from "./pages/RunPage";
 import LoginPage from "./pages/LoginPage";
+import { AppHeader } from "./components/AppHeader";
 
 // Error boundary
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -110,12 +111,12 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardPage} options={{ title: "看板" }} />
-      <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务" }} />
-      <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天" }} />
-      <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人" }} />
-      <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent" }} />
-      <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我" }} />
+      <Tab.Screen name="Dashboard" component={DashboardPage} options={{ title: "看板", header: () => <AppHeader title="看板" /> }} />
+      <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务", header: () => <AppHeader title="任务" /> }} />
+      <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天", header: () => <AppHeader title="聊天" /> }} />
+      <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人", header: () => <AppHeader title="联系人" /> }} />
+      <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent", header: () => <AppHeader title="Agent" /> }} />
+      <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我", header: () => <AppHeader title="我" /> }} />
     </Tab.Navigator>
   );
 }
@@ -160,10 +161,9 @@ function MainApp() {
           component={ChatRoomPage}
           options={{
             headerShown: true,
-            title: "聊天",
-            headerStyle: { backgroundColor: colors.bg },
-            headerTintColor: colors.text,
-            headerBackTitle: "返回",
+            header: ({ route }) => (
+              <AppHeader title={route.params?.title || "聊天"} showBack showAvatar={false} />
+            ),
           }}
         />
         <Stack.Screen
@@ -171,10 +171,9 @@ function MainApp() {
           component={GroupSettingsPage}
           options={{
             headerShown: true,
-            title: "群设置",
-            headerStyle: { backgroundColor: colors.bg },
-            headerTintColor: colors.text,
-            headerBackTitle: "返回",
+            header: ({ route }) => (
+              <AppHeader title={route.params?.title || "群设置"} showBack showAvatar={false} />
+            ),
           }}
         />
         <Stack.Screen
@@ -182,10 +181,7 @@ function MainApp() {
           component={ProfilePage}
           options={{
             headerShown: true,
-            title: "个人信息",
-            headerStyle: { backgroundColor: colors.bg },
-            headerTintColor: colors.text,
-            headerBackTitle: "返回",
+            header: () => <AppHeader title="个人信息" showBack showAvatar={false} />,
           }}
         />
         <Stack.Screen
@@ -193,10 +189,7 @@ function MainApp() {
           component={NotificationSettingsPage}
           options={{
             headerShown: true,
-            title: "通知设置",
-            headerStyle: { backgroundColor: colors.bg },
-            headerTintColor: colors.text,
-            headerBackTitle: "返回",
+            header: () => <AppHeader title="通知设置" showBack showAvatar={false} />,
           }}
         />
         <Stack.Screen
@@ -204,10 +197,7 @@ function MainApp() {
           component={AboutPage}
           options={{
             headerShown: true,
-            title: "关于",
-            headerStyle: { backgroundColor: colors.bg },
-            headerTintColor: colors.text,
-            headerBackTitle: "返回",
+            header: () => <AppHeader title="关于" showBack showAvatar={false} />,
           }}
         />
         <Stack.Screen
@@ -215,9 +205,9 @@ function MainApp() {
           component={UserProfilePage}
           options={{
             headerShown: true,
-            title: "个人资料",
-            headerStyle: { backgroundColor: colors.bg },
-            headerTintColor: colors.text,
+            header: () => <AppHeader title="个人资料" showBack showAvatar={false} />,
+          }}
+        />
             headerBackTitle: "返回",
           }}
         />
