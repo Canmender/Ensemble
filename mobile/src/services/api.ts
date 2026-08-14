@@ -127,6 +127,18 @@ export interface Conversation {
   unread: number;
   createdAt: string;
   updatedAt: string;
+  /** 会话静音 */
+  muted?: boolean;
+  /** 会话置顶 */
+  pinned?: boolean;
+  /** 群公告 */
+  announcement?: string;
+  /** 群全员禁言 */
+  groupMuted?: boolean;
+  /** 群主（用户 ID） */
+  groupOwner?: string;
+  /** 群管理员（用户 ID 列表） */
+  groupAdmins?: string[];
 }
 
 /** 运行事件响应 */

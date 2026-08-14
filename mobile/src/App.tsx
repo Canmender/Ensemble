@@ -164,7 +164,7 @@ function MainApp() {
           options={{
             headerShown: true,
             header: ({ route }) => (
-              <AppHeader title={route.params?.title || "聊天"} showBack showAvatar={false} />
+              <AppHeader title={(route.params as { title?: string })?.title || "聊天"} showBack showAvatar={false} />
             ),
           }}
         />
@@ -174,7 +174,7 @@ function MainApp() {
           options={{
             headerShown: true,
             header: ({ route }) => (
-              <AppHeader title={route.params?.title || "群设置"} showBack showAvatar={false} />
+              <AppHeader title={(route.params as { title?: string })?.title || "群设置"} showBack showAvatar={false} />
             ),
           }}
         />
