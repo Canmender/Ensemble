@@ -26,6 +26,7 @@ import NotificationSettingsPage from "./pages/NotificationSettingsPage";
 import AboutPage from "./pages/AboutPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import GroupSettingsPage from "./pages/GroupSettingsPage";
+import PrivacySettingsPage from "./pages/PrivacySettingsPage";
 import RunPage from "./pages/RunPage";
 import LoginPage from "./pages/LoginPage";
 import { AppHeader } from "./components/AppHeader";
@@ -46,6 +47,7 @@ export type RootStackParamList = {
   NotificationSettings: undefined;
   About: undefined;
   UserProfile: { userId: string; name: string; username: string; displayName?: string };
+  PrivacySettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -206,6 +208,14 @@ function MainApp() {
           options={{
             headerShown: true,
             header: () => <AppHeader title="个人资料" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="PrivacySettings"
+          component={PrivacySettingsPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="隐私设置" showBack showAvatar={false} />,
           }}
         />
             headerBackTitle: "返回",

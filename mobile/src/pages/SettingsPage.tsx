@@ -92,6 +92,12 @@ export default function SettingsPage() {
       onPress: () => navigation.navigate("NotificationSettings"),
     },
     {
+      icon: "shield-checkmark-outline" as const,
+      title: "隐私设置",
+      desc: "好友验证、私聊权限、信息展示",
+      onPress: () => navigation.navigate("PrivacySettings"),
+    },
+    {
       icon: "information-circle-outline" as const,
       title: "关于",
       desc: `合鸣 v${APP_VERSION}`,

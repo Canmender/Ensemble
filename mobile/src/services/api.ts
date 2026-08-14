@@ -659,6 +659,31 @@ class ApiService {
     return this.request<{ updated: boolean }>("PATCH", "/api/conversations/" + convId, data);
   }
 
+  // ========== 隐私设置 ==========
+  async getPrivacy(): Promise<ApiResponse<any>> {
+    return this.request<any>("GET", "/api/privacy");
+  }
+
+  async updatePrivacy(settings: Record<string, boolean>): Promise<ApiResponse<{ updated: boolean }>> {
+    return this.request<{ updated: boolean }>("PATCH", "/api/privacy", settings);
+  }
+
+  async sendFriendRequest(targetId: string, message?: string): Promise<ApiResponse<{ sent: boolean }>> {
+    return this.request<{ sent: boolean }>("POST", "/api/privacy/friend-request", { targetId, message });
+  }
+
+  async getFriendRequests(): Promise<ApiResponse<{ requests: any[] }>> {
+    return this.request<{ requests: any[] }>("GET", "/api/privacy/friend-requests");
+  }
+
+  async acceptFriendRequest(requestId: string): Promise<ApiResponse<{ accepted: boolean; convId?: string }>> {
+    return this.request<{ accepted: boolean; convId?: string }>("POST", "/api/privacy/friend-requests/" + requestId + "/accept");
+  }
+
+  async rejectFriendRequest(requestId: string): Promise<ApiResponse<{ rejected: boolean }>> {
+    return this.request<{ rejected: boolean }>("POST", "/api/privacy/friend-requests/" + requestId + "/reject");
+  }
+
   /** 当前用户的所有设备（多端在线状态：在线 / 离线） */
   async getDevices(): Promise<
     ApiResponse<Array<{ id: string; name: string; type: string; online: boolean; lastSeenAt?: string }>>
