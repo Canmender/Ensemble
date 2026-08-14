@@ -1162,15 +1162,6 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             : []),
         ]}
       />
-              style={styles.actionItem}
-              onPress={() => setMenuMsg(null)}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.actionText, styles.actionCancel]}>取消</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* 转发目标会话选择 */}
       <Modal
