@@ -666,9 +666,24 @@ class ApiService {
     );
   }
 
-  /** 修改群信息（群名 / 成员列表） */
-  async updateConversation(convId: string, data: { title?: string; participantIds?: string[] }): Promise<ApiResponse<{ updated: boolean }>> {
+  /** 修改群信息（群名 / 成员 / 公告 / 禁言 / 管理员） */
+  async updateConversation(
+    convId: string,
+    data: {
+      title?: string;
+      participantIds?: string[];
+      announcement?: string;
+      groupMuted?: boolean;
+      groupOwner?: string;
+      groupAdmins?: string[];
+    },
+  ): Promise<ApiResponse<{ updated: boolean }>> {
     return this.request<{ updated: boolean }>("PATCH", "/api/conversations/" + convId, data);
+  }
+
+  /** 删除会话 */
+  async deleteConversation(convId: string): Promise<ApiResponse<{ deleted: boolean }>> {
+    return this.request<{ deleted: boolean }>("DELETE", "/api/conversations/" + convId);
   }
 
   // ========== 隐私设置 ==========

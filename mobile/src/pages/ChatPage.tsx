@@ -262,7 +262,7 @@ export default function ChatPage() {
       {
         text: "删除", style: "destructive",
         onPress: async () => {
-          const res = await api.request("DELETE", `/api/conversations/${conv.id}`);
+          const res = await api.deleteConversation(conv.id);
           if (!res.error) {
             setConversations((prev) => prev.filter((c) => c.id !== conv.id));
           } else {
