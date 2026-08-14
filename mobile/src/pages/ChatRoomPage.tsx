@@ -122,6 +122,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const flatListRef = useRef<FlatList>(null);
+  const scrollYRef = useRef(0);
   const inputRef = useRef<TextInput>(null);
   const activeRunIdRef = useRef<string | null>(null);
   // 防重复提交：记录最后一次发送内容和时间
@@ -339,12 +340,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     setLoadingMore(true);
     try {
       const oldest = messages[0];
-      // 记录当前滚动位置（加载后恢复）
-      const scrollOffset = flatListRef.current
-        ? await new Promise<number>((resolve) => {
-            flatListRef.current?.getScrollOffset()?.then((o) => resolve(o.y)).catch(() => resolve(0));
-          })
-        : 0;
+      // 记录当前滚动位置（加载后恢复）；FlatList 无 getScrollOffset，改用 onScroll 跟踪
+      const scrollOffset = scrollYRef.current;
       const res = await api.getConversationMessages(convId, oldest.ts, 20);
       if (res.data && res.data.messages.length > 0) {
         const older = res.data.messages.map((m) => ({
@@ -964,6 +961,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         removeClippedSubviews={true}
         initialNumToRender={20}
         inverted={false}
+        onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
+        scrollEventThrottle={16}
         onEndReached={loadMoreMessages}
         onEndReachedThreshold={0.3}
         ListFooterComponent={loadingMore ? (
