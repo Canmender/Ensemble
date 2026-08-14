@@ -29,6 +29,7 @@ import { useUnreadStore } from "../store/unreadStore";
 import { wsLink } from "../services/wslink";
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
+import { EmojiPicker } from "../components/EmojiPicker";
 import { timeAgo } from "../utils/timeAgo";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
@@ -91,6 +92,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 「+」扩展栏（相册/视频/文件）与全屏查看附件
   const [showExtend, setShowExtend] = useState(false);
   const [viewerAttachment, setViewerAttachment] = useState<MessageAttachment | null>(null);
+  // 表情面板
+  const [showEmoji, setShowEmoji] = useState(false);
   // 消息分页：首屏 20 条，滚动到顶部加载更多
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -918,8 +921,26 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         </View>
       )}
 
+      {/* 表情面板 */}
+      {showEmoji && (
+        <EmojiPicker
+          onSelect={(emoji) => {
+            setInputText((prev) => prev + emoji);
+            void saveDraft(convId, inputText + emoji);
+            inputRef.current?.focus();
+          }}
+        />
+      )}
+
       {/* 输入栏（键盘弹出时 paddingBottom 顶起，避免被输入法遮挡） */}
       <View style={[styles.inputBar, { paddingBottom: keyboardHeight + spacing.md }]}>
+        <TouchableOpacity
+          style={styles.emojiBtn}
+          onPress={() => { setShowEmoji((v) => !v); if (showExtend) setShowExtend(false); }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name={showEmoji ? "close-circle" : "happy-outline"} size={24} color={showEmoji ? colors.primary : colors.text} />
+        </TouchableOpacity>
         <TextInput
           ref={inputRef}
           style={styles.input}
@@ -1225,6 +1246,12 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { backgroundColor: colors.surfaceAlt },
   expandBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emojiBtn: {
     width: 40,
     height: 40,
     alignItems: "center",
