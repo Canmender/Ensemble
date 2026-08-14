@@ -29,22 +29,9 @@ import { Avatar } from "../components/Avatar";
 import { timeAgo } from "../utils/timeAgo";
 import { loadDrafts } from "../utils/draft";
 import { cacheConversations, getCachedConversations } from "../utils/convCache";
+import { convTitle } from "../utils/convTitle";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
-
-function convTitle(c: Conversation, usersById: Map<string, UserInfo>): string {
-  // 用户-用户会话（runId 以 conv_ 开头）：显示对方昵称（过滤自己）
-  if (c.runId.startsWith("conv_")) {
-    const meId = useDeviceStore.getState().connectedDevice?.id;
-    const otherIds = (c.participantIds ?? []).filter((pid) => pid !== meId);
-    const names = otherIds.map((pid) => {
-      const u = usersById.get(pid);
-      return u ? u.displayName || u.username || pid : pid;
-    });
-    return names.join(", ") || "会话";
-  }
-  return c.title || (c.participantIds ?? []).join(", ") || "会话";
-}
 
 function convIcon(c: Conversation): React.ComponentProps<typeof Ionicons>["name"] {
   if (c.runId.startsWith("conv_")) return "person";
