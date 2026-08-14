@@ -87,6 +87,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [quoting, setQuoting] = useState<MessageReply | null>(null);
   const [forwardMsg, setForwardMsg] = useState<MessageItem | null>(null);
   const [forwardConversations, setForwardConversations] = useState<Conversation[]>([]);
+  // 多选模式（合并转发）
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // 附件下载中（防重复点击）
   const [downloading, setDownloading] = useState(false);
   // 「+」扩展栏（相册/视频/文件）与全屏查看附件
@@ -548,6 +551,31 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     });
   }, [menuMsg, convId]);
 
+  /** 长按菜单 → 多选转发：进入多选模式 */
+  const startMultiSelect = useCallback(() => {
+    if (!menuMsg) return;
+    setMenuMsg(null);
+    setSelectMode(true);
+    setSelectedIds(new Set([menuMsg.id]));
+  }, [menuMsg]);
+
+  /** 多选模式：切换选中状态 */
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  /** 多选模式：合并转发选中消息 */
+  const forwardSelected = useCallback(() => {
+    if (selectedIds.size === 0) return;
+    void api.getConversations().then((res) => {
+      setForwardConversations((res.data ?? []).filter((c) => c.id !== convId));
+    });
+  }, [selectedIds, convId]);
+
   /** 转发目标会话显示名（用户会话用参与者昵称，避免显示 user id） */
   const targetTitle = useCallback(
     (c: Conversation): string => {
@@ -563,9 +591,23 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     [usersById],
   );
 
-  /** 转发消息到目标会话（文本 + 附件原样发送） */
+  /** 转发消息到目标会话（文本 + 附件原样发送；多选时合并文本） */
   const doForward = useCallback(
     async (target: Conversation) => {
+      if (selectMode && selectedIds.size > 0) {
+        // 合并转发：拼接多条消息文本
+        const selected = messages.filter((m) => selectedIds.has(m.id) && !m.deleted);
+        const merged = selected.map((m) => {
+          const name = m.agentName ? resolveSenderName(m.agentName) : "";
+          return `${name ? name + ": " : ""}${m.content || "[附件]"}`;
+        }).join("\n");
+        const res = await api.sendConversationMessage(target.id, merged);
+        setSelectMode(false);
+        setSelectedIds(new Set());
+        setForwardConversations([]);
+        if (res.error) { setSendError(res.error); } else { Alert.alert("已转发", `已转发到「${targetTitle(target)}」`); }
+        return;
+      }
       const fw = forwardMsg;
       if (!fw) return;
       const res = await api.sendConversationMessage(target.id, fw.content, fw.attachment);
@@ -577,7 +619,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         Alert.alert("已转发", `已转发到「${targetTitle(target)}」`);
       }
     },
-    [forwardMsg, targetTitle],
+    [forwardMsg, targetTitle, selectMode, selectedIds, messages, resolveSenderName],
   );
 
   // WS 撤回事件：对方撤回时实时标记
@@ -782,6 +824,16 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     const senderAvatar = item.agentName ? usersById.get(item.agentName)?.avatarUrl : undefined;
     return (
       <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
+        {/* 多选模式：点击选中/取消 */}
+        {selectMode && (
+          <TouchableOpacity onPress={() => toggleSelect(item.id)} style={styles.selectCheck} hitSlop={8}>
+            <Ionicons
+              name={selectedIds.has(item.id) ? "checkbox" : "square-outline"}
+              size={22}
+              color={selectedIds.has(item.id) ? colors.primary : colors.textMuted}
+            />
+          </TouchableOpacity>
+        )}
         {!isUser && (
           <Avatar name={senderName} avatarUrl={senderAvatar} size={32} />
         )}
@@ -1029,6 +1081,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               <Ionicons name="arrow-redo-outline" size={20} color={colors.text} />
               <Text style={styles.actionText}>转发</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.actionItem} onPress={startMultiSelect} activeOpacity={0.7}>
+              <Ionicons name="checkmark-circle-outline" size={20} color={colors.text} />
+              <Text style={styles.actionText}>多选转发</Text>
+            </TouchableOpacity>
             {menuMsg && isMyMessage(menuMsg) && !menuMsg.deleted && (
               <TouchableOpacity
                 style={styles.actionItem}
@@ -1085,7 +1141,25 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                 subtitle="先创建会话再转发"
               />
             ) : (
-              {/* 群公告提示 */}
+              {/* 多选模式工具栏 */}
+      {selectMode && (
+        <View style={styles.selectBar}>
+          <TouchableOpacity onPress={() => { setSelectMode(false); setSelectedIds(new Set()); }} hitSlop={8}>
+            <Ionicons name="close" size={22} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.selectCount}>已选 {selectedIds.size} 条</Text>
+          <TouchableOpacity
+            onPress={forwardSelected}
+            disabled={selectedIds.size === 0}
+            style={[styles.selectForwardBtn, selectedIds.size === 0 && { opacity: 0.4 }]}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.selectForwardText}>转发</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* 群公告提示 */}
         {conv?.announcement && !conv.runId.startsWith("conv_") && (
           <View style={styles.announcementBanner}>
             <Ionicons name="megaphone" size={14} color={colors.primary} />
@@ -1181,6 +1255,21 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   announcementText: { color: colors.text, fontSize: fontSize.xs, flex: 1 },
+  // 多选模式
+  selectBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  selectCount: { flex: 1, color: colors.text, fontSize: fontSize.md, fontWeight: "600" },
+  selectForwardBtn: { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: 6 },
+  selectForwardText: { color: "#fff", fontSize: fontSize.sm, fontWeight: "600" },
+  selectCheck: { marginRight: spacing.xs },
   msgRow: { flexDirection: "row", alignItems: "flex-end", marginBottom: spacing.md },
   msgRowUser: { justifyContent: "flex-end" },
   msgRowAgent: { justifyContent: "flex-start", gap: spacing.xs },
