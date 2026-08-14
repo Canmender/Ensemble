@@ -657,7 +657,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       }
       const up = res.data!;
       setDraftAttachment({
-        type: up.type === "image" ? "image" : "file",
+        type: up.type === "image" ? "image" : up.mime?.startsWith("audio/") ? "audio" as any : "file",
         name: up.name,
         size: up.size,
         mime: up.mime,
@@ -728,8 +728,23 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     await doUpload(asset.fileName ?? "video.mp4", asset.mimeType ?? "video/mp4", base64);
   }, [doUpload]);
 
-  // 下载附件到本地 downloads/ 目录，并调起系统分享/保存面板
-  const downloadAttachment = useCallback(
+  // 选择音频文件
+  const pickAudio = useCallback(async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: "audio/*",
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    if ((asset.size ?? 0) > 50 * 1024 * 1024) {
+      setSendError("音频过大（上限 50MB）");
+      return;
+    }
+    const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    await doUpload(asset.name ?? "audio.mp3", asset.mimeType ?? "audio/mpeg", base64);
+  }, [doUpload]);
     async (att: MessageAttachment) => {
       if (downloading) return;
       setDownloading(true);
@@ -776,7 +791,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         disabled={!!downloading}
       >
         <Ionicons
-          name={att.type === "video" ? "videocam" : "document-text"}
+          name={att.type === "video" ? "videocam" : att.type === "audio" ? "musical-notes" : "document-text"}
           size={20}
           color={isUser ? "#fff" : colors.primary}
         />
@@ -974,6 +989,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               <Ionicons name="document-outline" size={24} color={colors.primary} />
             </View>
             <Text style={styles.extendLabel}>文件</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.extendItem} onPress={pickAudio} disabled={uploading || isSending} activeOpacity={0.7}>
+            <View style={styles.extendIcon}>
+              <Ionicons name="musical-notes-outline" size={24} color={colors.primary} />
+            </View>
+            <Text style={styles.extendLabel}>音频</Text>
           </TouchableOpacity>
         </View>
       )}
