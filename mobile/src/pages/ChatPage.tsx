@@ -33,9 +33,11 @@ import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
 function convTitle(c: Conversation, usersById: Map<string, UserInfo>): string {
-  // 用户-用户会话（runId 以 conv_ 开头）：title 存的是对方 user id，改用参与者昵称
+  // 用户-用户会话（runId 以 conv_ 开头）：显示对方昵称（过滤自己）
   if (c.runId.startsWith("conv_")) {
-    const names = (c.participantIds ?? []).map((pid) => {
+    const meId = useDeviceStore.getState().connectedDevice?.id;
+    const otherIds = (c.participantIds ?? []).filter((pid) => pid !== meId);
+    const names = otherIds.map((pid) => {
       const u = usersById.get(pid);
       return u ? u.displayName || u.username || pid : pid;
     });
@@ -212,22 +214,28 @@ export default function ChatPage() {
     navigation.navigate("ChatRoom", { convId: c.id, runId: c.runId, title: convTitle(c, usersById) });
   };
 
-  // 会话内消息搜索
-  const doSearch = useCallback(async (q: string) => {
+  // 会话内消息搜索（加 debounce + 错误提示）
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const doSearch = useCallback((q: string) => {
     setSearchText(q);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
     if (!q.trim()) { setSearchResults([]); return; }
-    setSearching(true);
-    try {
-      // 搜索所有会话的消息，返回匹配的会话列表
-      const results: Conversation[] = [];
-      for (const c of conversations) {
-        const res = await api.searchMessages(c.id, q.trim());
-        if (res.data && res.data.total > 0 && !results.find((r) => r.id === c.id)) {
-          results.push(c);
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const results: Conversation[] = [];
+        for (const c of conversations) {
+          const res = await api.searchMessages(c.id, q.trim());
+          if (res.data && res.data.total > 0 && !results.find((r) => r.id === c.id)) {
+            results.push(c);
+          }
         }
-      }
-      setSearchResults(results);
-    } catch {} finally { setSearching(false); }
+        setSearchResults(results);
+      } catch (err) {
+        setError("搜索失败: " + (err instanceof Error ? err.message : "未知错误"));
+        setTimeout(() => setError(null), 3000);
+      } finally { setSearching(false); }
+    }, 400);
   }, [conversations]);
 
   // 静音 / 取消静音
