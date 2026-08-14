@@ -652,7 +652,7 @@ class ApiService {
   async searchMessages(convId: string, query: string): Promise<ApiResponse<{ messages: any[]; total: number }>> {
     return this.request<{ messages: any[]; total: number }>(
       "GET",
-      `/api/conversations/${convId}/messages/search?q=${encodeURIComponent(query)}`,
+      "/api/conversations/" + convId + "/messages/search?q=" + encodeURIComponent(query),
     );
   }
 
