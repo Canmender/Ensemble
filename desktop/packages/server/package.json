@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/server",
-  "version": "0.7.44",
+  "version": "0.7.45",
   "private": true,
   "type": "module",
   "main": "./dist/lib.js",
