@@ -2,13 +2,13 @@
  * 共享导航栏组件：左上角头像+昵称，标题居中
  * 参考 box-im/V-IM 的导航栏设计。
  */
-import React, { useState, useEffect } from "react";
+import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "./Avatar";
-import { api, type UserInfo } from "../services/api";
+import { useMeStore } from "../store/meStore";
 import { colors, spacing, fontSize } from "../theme";
 
 interface AppHeaderProps {
@@ -23,7 +23,8 @@ interface AppHeaderProps {
 export function AppHeader({ title, showBack = false, showAvatar = true, right, includeTopInset = true }: AppHeaderProps) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const [me, setMe] = useState<UserInfo | null>(null);
+  const me = useMeStore((s) => s.me);
+  const reloadMe = useMeStore((s) => s.reload);
   // 部分设备 safe-area-context 的 insets.top 与 StatusBar.currentHeight 都返回 0，
   // 加 24dp 下限保证内容始终在状态栏/摄像头下方
   const androidMin = Platform.OS === "android" ? 24 : 0;
@@ -31,13 +32,12 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
   // tab 走 elements Header 的 headerStatusBarHeight spacer（App.tsx 设置），此处为 0 不重复加
   const topPad = includeTopInset ? Math.max(insets.top, sbH, androidMin) : 0;
 
-  useEffect(() => {
-    if (showAvatar) {
-      void api.getMe().then((r) => {
-        if (r.data) setMe(r.data);
-      });
-    }
-  }, [showAvatar]);
+  // 页面获得焦点时刷新用户信息（昵称/头像更新后立即生效）
+  useFocusEffect(
+    React.useCallback(() => {
+      if (showAvatar) void reloadMe();
+    }, [showAvatar, reloadMe]),
+  );
 
   return (
     <View style={[styles.header, { paddingTop: topPad, height: 52 + topPad }]}>

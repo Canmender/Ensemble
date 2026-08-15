@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { api, type UserInfo } from "../services/api";
 import { Avatar } from "../components/Avatar";
+import { useMeStore } from "../store/meStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 
 export default function ProfilePage() {
@@ -54,6 +55,7 @@ export default function ProfilePage() {
       const res = await api.uploadAvatar(result.assets[0].base64, result.assets[0].mimeType ?? "image/jpeg");
       if (res.error) { setMsg(res.error); return; }
       setMe((prev) => prev ? { ...prev, avatarUrl: res.data!.url } : prev);
+      void useMeStore.getState().reload();
       setMsg("头像已更新");
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "上传失败");
@@ -76,6 +78,7 @@ export default function ProfilePage() {
       } else {
         setMsg("已保存");
         setMe((m) => (m ? { ...m, displayName: res.data?.displayName } : m));
+        void useMeStore.getState().reload();
       }
     } catch (err) {
       setMsg(err instanceof Error ? err.message : "保存失败");
