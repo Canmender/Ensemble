@@ -838,7 +838,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         disabled={!!downloading}
       >
         <Ionicons
-          name={att.type === "video" ? "videocam" : att.type === "audio" ? "musical-notes" : "document-text"}
+          name={att.type === "video" ? "videocam" : "document-text"}
           size={20}
           color={isUser ? "#fff" : colors.primary}
         />
