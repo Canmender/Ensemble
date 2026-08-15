@@ -59,7 +59,12 @@ export function LiquidGlass({
   return (
     <View style={[styles.outer, style]}>
       {/* 背景模糊 + 透白（材质主体，单层 blur 保证性能） */}
-      {Platform.OS !== "web" && <BlurView intensity={intensity} tint="light" style={StyleSheet.absoluteFill} />}
+      {Platform.OS === "ios" && (
+        <BlurView intensity={intensity} tint="light" style={StyleSheet.absoluteFill} />
+      )}
+      {/* Android 不用原生 BlurView（个别设备/厂商渲染会抛错导致整页报错），
+          用纯 View 的半透明分层玻璃同样有通透质感，且绝不崩溃。 */}
+      {Platform.OS !== "web" && <View style={styles.blurFallback} />}
       <View style={styles.tint} />
 
       {/* 环境辉光：两团低饱和色散光（青 + 品红）让玻璃"反射周围颜色" */}
@@ -101,6 +106,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.34)",
   },
   tint: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(255,255,255,0.30)" },
+  blurFallback: { position: "absolute", top: -40, left: -40, right: -40, bottom: -40, backgroundColor: "rgba(244,247,255,0.18)" },
   halo: { position: "absolute", width: 200, height: 200, borderRadius: 100 },
   edgeTop: {
     position: "absolute",

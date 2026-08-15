@@ -226,7 +226,7 @@ class ConnectionService {
       name: await this.getDeviceName(),
       type: "mobile",
       os: "React Native",
-      appVersion: "0.7.64",
+      appVersion: "0.7.65",
       wsPort: 0,
       httpPort: 0,
       ip: "0.0.0.0",
