@@ -8,7 +8,7 @@ import { View, Text, StyleSheet, Image } from "react-native";
 import { colors, spacing, radius, fontSize } from "../theme";
 import { CLOUD_SERVER } from "../services/connection";
 
-const APP_VERSION = "0.7.55";
+const APP_VERSION = "0.7.56";
 
 export default function AboutPage() {
   return (
