@@ -3,7 +3,7 @@
  * 参考 box-im/V-IM 的导航栏设计。
  */
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -24,7 +24,13 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [me, setMe] = useState<UserInfo | null>(null);
-  const topPad = includeTopInset ? insets.top : 0;
+  // 部分设备 safe-area-context 的 insets.top 返回 0，需用 StatusBar.currentHeight 兜底
+  const sbH = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
+  const topPad = includeTopInset
+    ? Math.max(insets.top, sbH)
+    : insets.top === 0
+      ? sbH
+      : 0;
 
   useEffect(() => {
     if (showAvatar) {

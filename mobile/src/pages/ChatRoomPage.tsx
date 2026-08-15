@@ -33,6 +33,7 @@ import { Avatar } from "../components/Avatar";
 import { EmojiPicker } from "../components/EmojiPicker";
 import { SmartMenu } from "../components/SmartMenu";
 import { VoiceRecorder } from "../components/VoiceRecorder";
+import { VoiceMessage } from "../components/VoiceMessage";
 import { timeAgo } from "../utils/timeAgo";
 import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
@@ -816,7 +817,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     [downloading],
   );
 
-  const renderAttachment = (att: MessageAttachment, isUser: boolean) => {
+  const renderAttachment = (att: MessageAttachment, isUser: boolean, content?: string) => {
     if (att.type === "image") {
       // 图片完整显示，点击全屏查看（全屏界面可下载）
       return (
@@ -824,6 +825,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           <Image source={{ uri: attachUrl(att.url) }} style={styles.msgImage} resizeMode="contain" />
         </TouchableOpacity>
       );
+    }
+    if (att.type === "audio") {
+      // 语音消息：点击播放/暂停
+      return <VoiceMessage url={attachUrl(att.url)} isUser={isUser} durationText={content} />;
     }
     return (
       <TouchableOpacity
@@ -915,7 +920,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               {!isUser && item.agentName && (
                 <Text style={styles.bubbleAgentName}>{resolveSenderName(item.agentName)}</Text>
               )}
-              {item.attachment && renderAttachment(item.attachment, isUser)}
+              {item.attachment && renderAttachment(item.attachment, isUser, item.content)}
               {!!item.content && (
                 <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
                   {item.content.split(/(@[\p{L}\p{N}_]{1,20})/gu).map((part, i) =>
