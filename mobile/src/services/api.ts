@@ -250,10 +250,13 @@ class ApiService {
     return this.getToken();
   }
 
-  /** 清除 token 缓存（桌面端重启 / 切换设备后旧 token 失效） */
+  /** 清除 token 缓存（桌面端重启 / 切换设备 / 服务端重置后旧 token 失效） */
   private resetToken(): void {
     this.apiToken = null;
     this.tokenPromise = null;
+    // 同时清除持久化 + 内存中的用户 session token，避免用失效 token 反复重连
+    this.authToken = null;
+    void AsyncStorage.removeItem(ApiService.AUTH_TOKEN_KEY).catch(() => {});
   }
 
   /** 将 HTTP 状态码映射为用户友好的错误消息 */

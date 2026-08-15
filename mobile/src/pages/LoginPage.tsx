@@ -41,10 +41,7 @@ export default function LoginPage() {
       setError("请输入用户名，密码至少 6 位");
       return;
     }
-    if (!connected) {
-      setError("未连接服务器，请点击上方「重连」");
-      return;
-    }
+    // 登录走 REST，不依赖 WS 连接状态（重置/换机后旧 token 失效，WS 会失败但不应阻止登录）
     setSubmitting(true);
     setError(null);
     try {
