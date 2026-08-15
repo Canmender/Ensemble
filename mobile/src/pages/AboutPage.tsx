@@ -4,8 +4,7 @@
  */
 
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, StyleSheet, Image } from "react-native";
 import { colors, spacing, radius, fontSize } from "../theme";
 import { CLOUD_SERVER } from "../services/connection";
 
@@ -14,9 +13,7 @@ const APP_VERSION = "0.7.54";
 export default function AboutPage() {
   return (
     <View style={styles.container}>
-      <View style={styles.logo}>
-        <Ionicons name="flash" size={36} color="#fff" />
-      </View>
+      <Image source={require("../../assets/icon.png")} style={styles.logo} resizeMode="contain" />
       <Text style={styles.name}>合鸣（Ensemble）</Text>
       <Text style={styles.version}>v{APP_VERSION}</Text>
       <Text style={styles.desc}>
@@ -40,9 +37,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 22,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: "hidden",
     marginTop: spacing.xl,
     marginBottom: spacing.md,
   },

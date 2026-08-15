@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../services/api";
@@ -77,9 +78,7 @@ export default function LoginPage() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {/* Logo / 品牌 */}
         <View style={styles.brand}>
-          <View style={styles.logo}>
-            <Ionicons name="flash" size={34} color="#fff" />
-          </View>
+          <Image source={require("../../assets/icon.png")} style={styles.logo} resizeMode="contain" />
           <Text style={styles.appName}>合鸣 Ensemble</Text>
           <Text style={styles.tagline}>多 Agent 协作平台 · 云端服务器</Text>
         </View>
@@ -183,9 +182,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 20,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
+    overflow: "hidden",
     marginBottom: spacing.md,
   },
   appName: { color: colors.text, fontSize: 24, fontWeight: "700" },
