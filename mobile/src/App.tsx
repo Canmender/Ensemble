@@ -1,8 +1,7 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, ActivityIndicator, Platform } from "react-native";
-import { StatusBar as RNStatusBar } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -96,13 +95,6 @@ function ChatTabBadge() {
 
 // 底部标签导航
 function MainTabs() {
-  const insets = useSafeAreaInsets();
-  // elements Header 对自定义 header 不自动加状态栏 inset（isParentHeaderShown=true），
-  // 需显式 headerStatusBarHeight 让 spacer 生效；部分设备 insets.top 为 0，用 StatusBar 兜底
-  const headerStatusBarHeight = Platform.OS === "android"
-    ? Math.max(insets.top, RNStatusBar.currentHeight ?? 0, 24)
-    : insets.top;
-
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -110,7 +102,6 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.textFaint,
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.text,
-        headerStatusBarHeight,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
         tabBarIcon: ({ color, focused }) => {
@@ -124,12 +115,12 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardPage} options={{ title: "看板", header: () => <AppHeader title="看板" includeTopInset={false} /> }} />
-      <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务", header: () => <AppHeader title="任务" includeTopInset={false} /> }} />
-      <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天", header: () => <AppHeader title="聊天" includeTopInset={false} /> }} />
-      <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人", header: () => <AppHeader title="联系人" includeTopInset={false} /> }} />
-      <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent", header: () => <AppHeader title="Agent" includeTopInset={false} /> }} />
-      <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我", header: () => <AppHeader title="我" includeTopInset={false} /> }} />
+      <Tab.Screen name="Dashboard" component={DashboardPage} options={{ title: "看板", header: () => <AppHeader title="看板" /> }} />
+      <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务", header: () => <AppHeader title="任务" /> }} />
+      <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天", header: () => <AppHeader title="聊天" /> }} />
+      <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人", header: () => <AppHeader title="联系人" /> }} />
+      <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent", header: () => <AppHeader title="Agent" /> }} />
+      <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我", header: () => <AppHeader title="我" /> }} />
     </Tab.Navigator>
   );
 }
