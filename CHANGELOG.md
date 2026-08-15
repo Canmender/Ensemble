@@ -15,6 +15,8 @@
 - 自检修复：录音重录失效（expo-audio 构造器不自动 prepare，重录时跳过 prepare → record 空操作）
 - 自检修复：分页加载崩溃（FlatList 无 `getScrollOffset` 方法抛 TypeError，改用 onScroll 跟踪滚动位置）
 - 补全 Conversation/ChatMessage/MessageAttachment 类型定义，tsc --noEmit 全绿
+- 修复消息/语音发送失败：`sendConversationMessage` 的 URL 被误写成字面量 `${convId}`（模板串转换时漏改），请求 404
+- 修复顶部被前置摄像头遮挡：native-stack 自定义 header 不自动加状态栏 inset，AppHeader 改用 `useSafeAreaInsets` 加 padding
 
 **版本**：0.7.47 → 0.7.48，APK versionCode 37
 
