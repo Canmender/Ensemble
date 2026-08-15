@@ -641,11 +641,11 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 
 ### 连接模式（仅云端）
 
-- 应用启动自动直连自用云端服务器（`http://SERVER_IP_REDACTED:8787`），无手动连接配置
+- 应用启动自动直连自用云端服务器（`http://<SERVER_IP>:8787`），无手动连接配置
 - 通信：REST API（Bearer 认证）+ 原生 WebSocket（`/ws`，实时事件流，连接时上报设备信息）
 - 登录门禁：未登录进登录页，登录后进主界面；登录 token 持久化（AsyncStorage）
 - 网络安全配置：config plugin 固化（`mobile/plugins/withNetworkSecurityConfig.js`），仅放行自用服务器明文 HTTP（Android 9+），再跑 prebuild 不丢
-- 注：域名 `DOMAIN_REDACTED` HTTPS 受阿里云备案拦截，待备案合规后切换
+- 注：域名 `<备案域名>` HTTPS 受阿里云备案拦截，待备案合规后切换
 
 ### 实时与 IM
 

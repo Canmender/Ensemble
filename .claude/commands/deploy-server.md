@@ -1,8 +1,8 @@
 ---
-description: 部署合鸣服务器到云端（SERVER_IP_REDACTED）
+description: 部署合鸣服务器到云端（<SERVER_IP>）
 ---
 
-部署合鸣（Ensemble）服务器到云端阿里云 SERVER_IP_REDACTED。
+部署合鸣（Ensemble）服务器到云端阿里云 <SERVER_IP>。
 
 ## 流程
 
@@ -25,7 +25,7 @@ git merge <worktree-branch> && git push origin main
 import paramiko
 c = paramiko.SSHClient()
 c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-c.connect("SERVER_IP_REDACTED", username="root", password="<密码>")
+c.connect("<SERVER_IP>", username="root", password="<密码>")
 ```
 
 密码从 `~/.claude/projects/D--MultiAgent/memory/` 里的记忆文件读取，或询问用户。

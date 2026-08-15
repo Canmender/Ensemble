@@ -25,6 +25,10 @@ services:
       - ENSEMBLE_API_KEY=${ENSEMBLE_API_KEY:-}
       - ENSEMBLE_LAN_HOST=0.0.0.0
       - ENSEMBLE_AUTO_SYNC_LOCAL=false
+      # 中继连接 / 云端地址由宿主 .env 提供（不硬编码真实 IP/密钥到仓库）
+      - RELAY_URL=${RELAY_URL:-}
+      - RELAY_AUTH_KEY=${RELAY_AUTH_KEY:-}
+      - CLOUD_HOST=${CLOUD_HOST:-}
     volumes:
       - ensemble-data:/data
     restart: unless-stopped

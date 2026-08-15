@@ -4,7 +4,7 @@
 
 | 项目 | 值 |
 |---|---|
-| 服务器 | SERVER_IP_REDACTED（阿里云） |
+| 服务器 | `<SERVER_IP>`（阿里云） |
 | 系统 | Docker Compose（server + relay） |
 | 仓库 | `/opt/ensemble`（git，原地部署） |
 | 端口 | 8787（server），8888（relay） |
@@ -18,7 +18,7 @@
 ### 1. SSH 连接
 
 ```bash
-ssh root@SERVER_IP_REDACTED
+ssh root@<SERVER_IP>
 ```
 
 或通过 Python paramiko 非交互式连接（Claude Code 自动化用）。
@@ -77,9 +77,9 @@ curl -s -o /dev/null -w '%{http_code}' -X PATCH http://localhost:8787/api/auth/m
 
 `/opt/ensemble/.env` 是 untracked 文件，`git reset --hard` 不会覆盖它。内容：
 ```
-ENSEMBLE_API_KEY=API_KEY_REDACTED
+ENSEMBLE_API_KEY=<API_KEY>
 ENSEMBLE_PORT=8787
-RELAY_AUTH_KEY=RELAY_AUTH_KEY_REDACTED
+RELAY_AUTH_KEY=<RELAY_AUTH_KEY>
 ```
 - `ENSEMBLE_API_KEY`：机器级 API key（Bearer token 替代，WS / HTTP 统一）
 - `RELAY_AUTH_KEY`：relay 连接鉴权
@@ -113,11 +113,11 @@ time="..." level=warning msg="/opt/ensemble/docker-compose.yml: `version` is obs
 
 ### 8. 网络安全配置（移动端）
 
-Android 9+ 默认禁止明文 HTTP。自用服务器用 `http://SERVER_IP_REDACTED:8787`，需要在移动端 APK 放行。
+Android 9+ 默认禁止明文 HTTP。自用服务器用 `http://<SERVER_IP>:8787`，需要在移动端 APK 放行。
 
 用 config plugin（`mobile/plugins/withNetworkSecurityConfig.js`）固化 `network_security_config.xml`，`expo prebuild` 时自动写入。放行清单：
-- `SERVER_IP_REDACTED`
-- `DOMAIN_REDACTED`
+- `<SERVER_IP>`
+- `<备案域名>`
 - `localhost`
 
 **踩坑**：手动加到 `android/` 构建目录的 xml 会在 `expo prebuild --clean` 时被清掉。必须用 config plugin 固化。
@@ -137,7 +137,7 @@ npx expo prebuild --platform android
 
 ### 10. 阿里云备案与 HTTPS
 
-- 域名 `DOMAIN_REDACTED` 的 80/443 端口被阿里云备案拦截
+- 域名 `<备案域名>` 的 80/443 端口被阿里云备案拦截
 - nginx 证书已就绪，待备案合规后切换 `https://`
 - 证书有效期至 **2026-08-15**，届时需续期
 
@@ -165,15 +165,15 @@ npx expo prebuild --platform android
 2. **上传 APK + 更新版本配置**（注意：`/data` 是 Docker 命名卷，必须 `docker cp` 进容器，不能直接写主机 `/data`）：
    ```bash
    # 1) 上传 APK 到主机临时位置，再 docker cp 进卷
-   scp ensemble-v0.7.50.apk root@SERVER_IP_REDACTED:/tmp/
-   ssh root@SERVER_IP_REDACTED "docker cp /tmp/ensemble-v0.7.50.apk ensemble-server:/data/apk/ && rm /tmp/ensemble-v0.7.50.apk"
+   scp ensemble-v0.7.50.apk root@<SERVER_IP>:/tmp/
+   ssh root@<SERVER_IP> "docker cp /tmp/ensemble-v0.7.50.apk ensemble-server:/data/apk/ && rm /tmp/ensemble-v0.7.50.apk"
 
    # 2) 更新 version.json（版本号 + versionCode 必须大于当前）
-   ssh root@SERVER_IP_REDACTED "docker exec ensemble-server sh -c 'cat > /data/apk/version.json' <<'EOF'
+   ssh root@<SERVER_IP> "docker exec ensemble-server sh -c 'cat > /data/apk/version.json' <<'EOF'
    {\"version\":\"0.7.50\",\"versionCode\":39,\"apkUrl\":\"/apk/ensemble-v0.7.50.apk\",\"note\":\"更新说明\",\"force\":false}
    EOF"
    ```
-3. **验证**：`curl http://SERVER_IP_REDACTED:8787/api/app-version` 应返回新版本号
+3. **验证**：`curl http://<SERVER_IP>:8787/api/app-version` 应返回新版本号
 4. 用户打开应用 → 自动弹更新 → 应用内下载安装
 
 > `force: true` 时用户无法跳过（用于必须升级的场景，如协议不兼容）。

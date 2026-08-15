@@ -484,9 +484,9 @@
 
 ## v0.7.6 (2026-08-13) — 修复：移动端明文连接被 Android 拦截（网络安全配置固化）
 
-**背景**：v0.7.4 起移动端新增 expo-image-picker 等原生依赖，打包需 `expo prebuild --clean` 重新生成 android 工程，把此前手动加到构建目录的 `network_security_config.xml` 清掉了 → Android 9+ 默认禁明文，手机端连不上 `http://SERVER_IP_REDACTED:8787`
+**背景**：v0.7.4 起移动端新增 expo-image-picker 等原生依赖，打包需 `expo prebuild --clean` 重新生成 android 工程，把此前手动加到构建目录的 `network_security_config.xml` 清掉了 → Android 9+ 默认禁明文，手机端连不上 `http://<SERVER_IP>:8787`
 
-**修复**：用 config plugin（`mobile/plugins/withNetworkSecurityConfig.js`）固化网络安全配置——prebuild 时自动写 xml + AndroidManifest 引用，后续再 prebuild 也不丢。放行 SERVER_IP_REDACTED / DOMAIN_REDACTED / localhost 明文，其余仍强制 HTTPS
+**修复**：用 config plugin（`mobile/plugins/withNetworkSecurityConfig.js`）固化网络安全配置——prebuild 时自动写 xml + AndroidManifest 引用，后续再 prebuild 也不丢。放行 <SERVER_IP> / <备案域名> / localhost 明文，其余仍强制 HTTPS
 
 **版本**：0.7.5 → 0.7.6，APK versionCode 15
 
@@ -541,8 +541,8 @@
 - 连接显示改「云端服务器」（原「桌面端」）；各页空态/报错文案同步
 
 **移动端网络安全配置**
-- 仅放行自用服务器（SERVER_IP_REDACTED / 域名 / localhost）明文 HTTP，其余强制 HTTPS（解决 Android 9+ cleartext 拦截）
-- 注：域名 HTTPS 被阿里云备案拦截（80/443 均拦），先用受限明文连 IP；备案合规后切 `https://DOMAIN_REDACTED`（服务器 nginx + 证书已就绪）
+- 仅放行自用服务器（<SERVER_IP> / 域名 / localhost）明文 HTTP，其余强制 HTTPS（解决 Android 9+ cleartext 拦截）
+- 注：域名 HTTPS 被阿里云备案拦截（80/443 均拦），先用受限明文连 IP；备案合规后切 `https://<备案域名>`（服务器 nginx + 证书已就绪）
 
 **数据层修复（登录/聊天/联系人进不去的真根因）**
 - `api.request()` 解包服务器 `{data:...}` 信封（原又包一层，`res.data.token` / 数组全 undefined，桌面端正确而移动端漏解包）
@@ -557,7 +557,7 @@
 - 已用真实旧库副本 + 构造旧库验证迁移，数据保留
 
 **移动端**
-- 移除「连接模式」设置（LAN 直连/云端中继/手动 IP/连接历史/设备发现），应用启动自动直连云服务器 `SERVER_IP_REDACTED:8787`
+- 移除「连接模式」设置（LAN 直连/云端中继/手动 IP/连接历史/设备发现），应用启动自动直连云服务器 `<SERVER_IP>:8787`
 - 新增账号登录/注册（用户 token AsyncStorage 持久化）；WS 携带用户会话 token（云服务器 ws-token 已禁用，登录鉴权）
 - 修复设置页版本号显示（原硬编码 0.6.0）
 

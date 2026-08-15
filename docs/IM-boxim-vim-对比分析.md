@@ -26,11 +26,11 @@
 ### 严重
 
 **1.1 生产环境明文提交真实凭据** — im-platform/src/main/resources/application-prod.yml
-- Redis 密码 REDACTED、MinIO secret REDACTED、DB 密码 REDACTED 直接入库；dev 用 minioadmin/minioadmin 默认凭据。
+- Redis 密码、MinIO secret、DB 密码 直接入库（已脱敏为占位符，原文见分析记录）；dev 用 minioadmin/minioadmin 默认凭据。
 - 建议：凭据环境变量/Vault 注入，移除仓库口令，轮换所有已暴露密钥。
 
 **1.2 JWT 签名密钥强度不足 / 疑似截断** — config/props/JwtProperties.java、application.yml
-- accessToken.secret=REDACTED（RSA PEM 公钥前缀，非高熵随机密钥）；refreshToken.secret=REDACTED（12 位弱口令）。
+- accessToken.secret 为 RSA PEM 公钥前缀（非高熵随机密钥）；refreshToken.secret 为 12 位弱口令（具体值已脱敏）。
 - AuthInterceptor 在验签(checkSign)之前就用未验证 token 反序列化(JSON.parseObject(strJson, UserSession.class))，若 getInfo 返回攻击者可控 JSON，存在喂给 fastjson 的反序列化风险面（历史上有 fastjson 漏洞）。
 - 建议：>=256bit 随机密钥；先验签后解析；关闭 fastjson autoType。
 

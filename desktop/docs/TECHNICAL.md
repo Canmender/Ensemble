@@ -12,7 +12,7 @@
 ## 1. 项目概述
 
 - **定位**：自用多 Agent 协作 + IM 即时通讯，全量自托管
-- **服务端**：阿里云 SERVER_IP_REDACTED，Docker Compose（server 8787 + relay 8888）
+- **服务端**：阿里云 <SERVER_IP>，Docker Compose（server 8787 + relay 8888）
 - **客户端**：Android 手机端（Expo/React Native）、桌面端（Electron，备用）、Web 前端
 - **实时**：原生 WebSocket `/ws`（消息/事件流）+ socket.io relay（设备在线广播）
 

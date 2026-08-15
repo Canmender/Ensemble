@@ -29,8 +29,22 @@ import { wsLink } from "./wslink";
 
 // ==================== 类型定义 ====================
 
-/** 自用云端服务器（默认直连；账号/会话/IM 走这里） */
-export const CLOUD_SERVER = { host: "SERVER_IP_REDACTED", port: 8787 } as const;
+/**
+ * 自用云端服务器（默认直连；账号/会话/IM 走这里）。
+ * 真实地址来自本地 gitignore 的 server.config.js（见 server.config.example.js 模板）；
+ * 缺省占位符仅供代码可编译，不会在 GitHub 暴露真实服务器。
+ */
+function loadServerHost(): string {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const cfg = require("../../server.config") as { cloud?: { host?: string; port?: number } };
+    if (cfg?.cloud?.host) return cfg.cloud.host;
+  } catch {
+    /* 本地无配置时用占位符 */
+  }
+  return "YOUR_SERVER_HOST";
+}
+export const CLOUD_SERVER = { host: loadServerHost(), port: 8787 } as const;
 
 /** 连接模式 */
 export type ConnectionMode = "lan" | "relay";

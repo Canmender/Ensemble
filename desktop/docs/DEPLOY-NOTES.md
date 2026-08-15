@@ -5,7 +5,7 @@
 
 ## 背景
 
-部署目标：把 ensemble-server（含账号系统/agent/会话）+ relay-server 通过 docker compose 部署到阿里云（SERVER_IP_REDACTED，Docker 26 + Compose 2.27，内存 1.8G）。
+部署目标：把 ensemble-server（含账号系统/agent/会话）+ relay-server 通过 docker compose 部署到阿里云（<SERVER_IP>，Docker 26 + Compose 2.27，内存 1.8G）。
 
 ## 踩坑清单
 

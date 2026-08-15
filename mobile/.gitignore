@@ -33,6 +33,9 @@ yarn-error.*
 # local env files
 .env*.local
 
+# 本地私有服务器配置（真实 IP/密钥，勿提交）
+server.config.js
+
 # typescript
 *.tsbuildinfo
 

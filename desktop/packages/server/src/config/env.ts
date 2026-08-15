@@ -54,6 +54,8 @@ export interface ServerEnv {
   relayUrl?: string;
   /** 中继服务器鉴权密钥（RELAY_AUTH_KEY） */
   relayKey?: string;
+  /** 云端服务器地址（移动端默认直连；真实值来自部署 .env，不在仓库内硬编码） */
+  cloudHost?: string;
 }
 
 export function getEnv(): ServerEnv {
@@ -69,8 +71,10 @@ export function getEnv(): ServerEnv {
     lanHost: process.env.ENSEMBLE_LAN_HOST || undefined,
     autoSyncLocal: process.env.ENSEMBLE_AUTO_SYNC_LOCAL !== "false",
     staticDir: process.env.ENSEMBLE_STATIC_DIR || undefined,
-    // 自用默认连接云端中继（服务器只作中介，桌面端为主办公、移动端 IM/遥控）
-    relayUrl: process.env.RELAY_URL || "http://SERVER_IP_REDACTED:8888",
-    relayKey: process.env.RELAY_AUTH_KEY || "RELAY_AUTH_KEY_REDACTED",
+    // 自用默认连接云端中继（真实地址/密钥来自部署环境 .env，不硬编码入库以防泄漏）
+    relayUrl: process.env.RELAY_URL || "",
+    relayKey: process.env.RELAY_AUTH_KEY || "",
+    // 云端服务器地址由部署 .env 提供（CLOUD_HOST），仓库内不写死真实 IP
+    cloudHost: process.env.CLOUD_HOST || undefined,
   };
 }
