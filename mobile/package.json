@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/mobile",
-  "version": "0.7.62",
+  "version": "0.7.63",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -21,6 +21,7 @@
     "expo": "~57.0.11",
     "expo-application": "~57.0.2",
     "expo-audio": "~57.0.3",
+    "expo-blur": "~57.0.2",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.2",
     "expo-image-picker": "~57.0.9",

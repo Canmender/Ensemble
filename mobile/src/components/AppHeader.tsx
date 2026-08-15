@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "./Avatar";
+import { Glass } from "./Glass";
 import { useMeStore } from "../store/meStore";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
@@ -40,7 +41,8 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
   );
 
   return (
-    <View style={[styles.header, { paddingTop: topPad, height: 52 + topPad }]}>
+    <Glass intensity={50} highlight style={[styles.header, { paddingTop: topPad, height: 52 + topPad }]}>
+      <View style={styles.headerRow}>
       {/* 左侧：返回按钮 或 头像+昵称 */}
       <View style={styles.left}>
         {showBack ? (
@@ -68,20 +70,23 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
       <View style={styles.right}>
         {right || <View style={styles.placeholder} />}
       </View>
-    </View>
+      </View>
+    </Glass>
   );
 }
 
 const styles = StyleSheet.create({
   header: {
+    backgroundColor: "transparent",
+    borderWidth: 0,
+    zIndex: 10,
+  },
+  headerRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     height: 52,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
-    ...elevation.sm,
-    zIndex: 10,
   },
   left: {
     width: 120,

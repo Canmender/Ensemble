@@ -1,10 +1,10 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, ActivityIndicator, Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { createBottomTabNavigator, BottomTabBar } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { connectionService } from "./services/connection";
 import { initNotifications } from "./services/notifications";
@@ -32,6 +32,7 @@ import PrivacySettingsPage from "./pages/PrivacySettingsPage";
 import RunPage from "./pages/RunPage";
 import LoginPage from "./pages/LoginPage";
 import { AppHeader } from "./components/AppHeader";
+import { Glass } from "./components/Glass";
 
 // Error boundary
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -93,35 +94,41 @@ function ChatTabBadge() {
   );
 }
 
+/** 悬浮玻璃 Tab 栏：毛玻璃容器包裹默认 BottomTabBar，浮于内容之上 */
+function GlassTabBar(props: React.ComponentProps<typeof BottomTabBar>) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: 14,
+        right: 14,
+        bottom: Math.max(insets.bottom, 8),
+      }}
+      pointerEvents="box-none"
+    >
+      <Glass intensity={55} style={{ borderRadius: radius.xxl }} highlight>
+        <BottomTabBar
+          {...props}
+          style={{ ...props.style, backgroundColor: "transparent", borderTopWidth: 0, height: 62, paddingTop: 4, paddingBottom: 6, elevation: 0, shadowOpacity: 0 }}
+        />
+      </Glass>
+    </View>
+  );
+}
+
 // 底部标签导航
 function MainTabs() {
   return (
     <Tab.Navigator
+      tabBar={GlassTabBar}
       screenOptions={({ route }) => ({
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textFaint,
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.text,
-        // iOS-18 悬浮玻璃 Dock：半透明白+超淡描边+柔和投影，浮在内容之上
-        tabBarStyle: {
-          position: "absolute",
-          left: 14,
-          right: 14,
-          bottom: 10,
-          height: 64,
-          paddingTop: 6,
-          paddingBottom: 8,
-          borderRadius: radius.xxl,
-          borderTopWidth: 0,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.6)",
-          backgroundColor: "rgba(248,249,253,0.92)",
-          shadowColor: "#0B1220",
-          shadowOpacity: 0.12,
-          shadowRadius: 22,
-          shadowOffset: { width: 0, height: 8 },
-          elevation: 10,
-        },
+        // 玻璃外观由 GlassTabBar 承担；底部自绘透明
+        tabBarStyle: { backgroundColor: "transparent", borderTopWidth: 0, elevation: 0 },
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600", marginTop: 2 },
         tabBarItemStyle: { backgroundColor: "transparent" },
         tabBarIconStyle: { marginTop: 2 },

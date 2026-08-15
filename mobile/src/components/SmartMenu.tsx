@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, fontSize } from "../theme";
+import { Glass } from "./Glass";
 
 const SCREEN_H = Dimensions.get("window").height;
 const MENU_HEIGHT = 200; // 估算菜单高度
@@ -66,13 +67,14 @@ export function SmartMenu({ visible, items, onClose, touchY }: SmartMenuProps) {
         activeOpacity={1}
         onPress={onClose}
       >
-        <View
+        <Glass
+          intensity={50}
           style={[
             styles.menu,
             isAbove ? styles.menuAbove : styles.menuBelow,
           ]}
-          {...panResponder.panHandlers}
         >
+          <View {...panResponder.panHandlers}>
           {items.map((item, i) => (
             <TouchableOpacity
               key={i}
@@ -87,7 +89,8 @@ export function SmartMenu({ visible, items, onClose, touchY }: SmartMenuProps) {
           <TouchableOpacity style={[styles.menuItem, styles.menuItemBorder]} onPress={onClose} activeOpacity={0.7}>
             <Text style={[styles.menuText, styles.menuCancel]}>取消</Text>
           </TouchableOpacity>
-        </View>
+          </View>
+        </Glass>
       </TouchableOpacity>
     </Modal>
   );
@@ -96,7 +99,7 @@ export function SmartMenu({ visible, items, onClose, touchY }: SmartMenuProps) {
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   menu: {
-    backgroundColor: colors.surface,
+    backgroundColor: "transparent",
     borderTopLeftRadius: radius.lg,
     borderTopRightRadius: radius.lg,
     paddingBottom: spacing.xl,
