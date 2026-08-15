@@ -2,7 +2,7 @@
   "expo": {
     "name": "合鸣",
     "slug": "ensemble-mobile",
-    "version": "0.7.48",
+    "version": "0.7.49",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.ensemble.mobile",
-      "versionCode": 37,
+      "versionCode": 38,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
