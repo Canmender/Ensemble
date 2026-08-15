@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, ActivityIndicator, Image } from "react-native";
+import { View, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
@@ -32,7 +32,7 @@ import PrivacySettingsPage from "./pages/PrivacySettingsPage";
 import RunPage from "./pages/RunPage";
 import LoginPage from "./pages/LoginPage";
 import { AppHeader } from "./components/AppHeader";
-import { Glass } from "./components/Glass";
+import { LiquidGlass } from "./components/Glass";
 
 // Error boundary
 import { ErrorBoundary } from "./components/ErrorBoundary";
@@ -95,24 +95,56 @@ function ChatTabBadge() {
 }
 
 /** 悬浮玻璃 Tab 栏：毛玻璃容器包裹默认 BottomTabBar，浮于内容之上 */
-function GlassTabBar(props: React.ComponentProps<typeof BottomTabBar>) {
+/** 自定义液态玻璃 Tab 栏：每条配色 + 活动项"玻璃胶囊"高亮（人类设计师的细节），避免默认 tab 的"贴纸感" */
+function GlassTabBar({ state, descriptors, navigation }: React.ComponentProps<typeof BottomTabBar>) {
   const insets = useSafeAreaInsets();
   return (
     <View
       style={{
         position: "absolute",
-        left: 14,
-        right: 14,
+        left: 12,
+        right: 12,
         bottom: Math.max(insets.bottom, 8),
       }}
       pointerEvents="box-none"
     >
-      <Glass intensity={55} style={{ borderRadius: radius.xxl }} highlight>
-        <BottomTabBar
-          {...props}
-          style={{ ...props.style, backgroundColor: "transparent", borderTopWidth: 0, height: 62, paddingTop: 4, paddingBottom: 6, elevation: 0, shadowOpacity: 0 }}
-        />
-      </Glass>
+      <LiquidGlass intensity={55} style={{ borderRadius: radius.xxl }}>
+        <View style={styles.tabRow}>
+          {state.routes.map((route, index) => {
+            const { options } = descriptors[route.key];
+            const label = (options.tabBarLabel !== undefined
+              ? options.tabBarLabel
+              : options.title !== undefined
+                ? options.title
+                : route.name) as string;
+            const focused = state.index === index;
+            const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
+            const onPress = () => {
+              const event = navigation.emit({
+                type: "tabPress",
+                target: route.key,
+                canPreventDefault: true,
+              });
+              if (!focused && !event.defaultPrevented) {
+                navigation.navigate(route.name, route.params);
+              }
+            };
+            return (
+              <View key={route.key} style={styles.tabItem}>
+                {route.name === "Chat" && <ChatTabBadge />}
+                <TouchableOpacity style={styles.tabBtn} onPress={onPress} activeOpacity={0.75}>
+                  {/* 活动项玻璃胶囊高亮 */}
+                  {focused && <View style={styles.tabPill} />}
+                  <View style={styles.tabIcon}>
+                    <Ionicons name={focused ? icon.active : icon.inactive} size={focused ? 24 : 22} color={focused ? colors.primary : colors.textFaint} />
+                  </View>
+                  <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })}
+        </View>
+      </LiquidGlass>
     </View>
   );
 }
@@ -263,6 +295,24 @@ function LoadingScreen() {
     </View>
   );
 }
+
+
+const styles = StyleSheet.create({
+  tabRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", height: 62, paddingTop: 4, paddingBottom: 4 },
+  tabItem: { flex: 1, alignItems: "center", justifyContent: "center" },
+  tabBtn: { alignItems: "center", justifyContent: "center", width: "100%", paddingTop: 4 },
+  tabPill: {
+    position: "absolute",
+    top: 2,
+    width: 46,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.primarySoft,
+  },
+  tabIcon: { alignItems: "center", justifyContent: "center", height: 26 },
+  tabLabel: { marginTop: 1, fontSize: 10, fontWeight: "600", color: colors.textFaint },
+  tabLabelActive: { color: colors.primary, fontWeight: "700" },
+});
 
 export default function App() {
   const gate = useAuthGate((s) => s.gate);

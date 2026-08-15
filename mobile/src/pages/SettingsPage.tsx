@@ -25,7 +25,7 @@ import { useMeStore } from "../store/meStore";
 import { useAuthGate } from "../store/authGateStore";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
-const APP_VERSION = "0.7.63";
+const APP_VERSION = "0.7.64";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();

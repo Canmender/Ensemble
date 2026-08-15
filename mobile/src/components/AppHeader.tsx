@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "./Avatar";
-import { Glass } from "./Glass";
+import { LiquidGlass } from "./Glass";
 import { useMeStore } from "../store/meStore";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
@@ -41,7 +41,7 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
   );
 
   return (
-    <Glass intensity={50} highlight style={[styles.header, { paddingTop: topPad, height: 52 + topPad }]}>
+    <LiquidGlass intensity={50} style={[styles.header, { paddingTop: topPad, height: 52 + topPad, borderRadius: 0 }]}>
       <View style={styles.headerRow}>
       {/* 左侧：返回按钮 或 头像+昵称 */}
       <View style={styles.left}>
@@ -71,7 +71,7 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
         {right || <View style={styles.placeholder} />}
       </View>
       </View>
-    </Glass>
+    </LiquidGlass>
   );
 }
 
