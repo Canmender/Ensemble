@@ -96,7 +96,8 @@ function ChatTabBadge() {
 
 /** 悬浮玻璃 Tab 栏：毛玻璃容器包裹默认 BottomTabBar，浮于内容之上 */
 /** 自定义液态玻璃 Tab 栏：每条配色 + 活动项"玻璃胶囊"高亮（人类设计师的细节），避免默认 tab 的"贴纸感" */
-function GlassTabBar({ state, descriptors, navigation }: React.ComponentProps<typeof BottomTabBar>) {
+/** 悬浮玻璃 Tab 栏：官方 BottomTabBar 包一层液态玻璃 Dock（渲染/交互交给 RN 官方实现，避免自绘 tab 引入崩溃） */
+function GlassTabBar(props: React.ComponentProps<typeof BottomTabBar>) {
   const insets = useSafeAreaInsets();
   return (
     <View
@@ -109,41 +110,16 @@ function GlassTabBar({ state, descriptors, navigation }: React.ComponentProps<ty
       pointerEvents="box-none"
     >
       <LiquidGlass intensity={55} style={{ borderRadius: radius.xxl }}>
-        <View style={styles.tabRow}>
-          {state.routes.map((route, index) => {
-            const { options } = descriptors[route.key];
-            const label = (options.tabBarLabel !== undefined
-              ? options.tabBarLabel
-              : options.title !== undefined
-                ? options.title
-                : route.name) as string;
-            const focused = state.index === index;
-            const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
-            const onPress = () => {
-              const event = navigation.emit({
-                type: "tabPress",
-                target: route.key,
-                canPreventDefault: true,
-              });
-              if (!focused && !event.defaultPrevented) {
-                navigation.navigate(route.name, route.params);
-              }
-            };
-            return (
-              <View key={route.key} style={styles.tabItem}>
-                {route.name === "Chat" && <ChatTabBadge />}
-                <TouchableOpacity style={styles.tabBtn} onPress={onPress} activeOpacity={0.75}>
-                  {/* 活动项玻璃胶囊高亮 */}
-                  {focused && <View style={styles.tabPill} />}
-                  <View style={styles.tabIcon}>
-                    <Ionicons name={focused ? icon.active : icon.inactive} size={focused ? 24 : 22} color={focused ? colors.primary : colors.textFaint} />
-                  </View>
-                  <Text style={[styles.tabLabel, focused && styles.tabLabelActive]}>{label}</Text>
-                </TouchableOpacity>
-              </View>
-            );
-          })}
-        </View>
+        <BottomTabBar
+          {...props}
+          style={{
+            ...props.style,
+            backgroundColor: "transparent",
+            borderTopWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
+          }}
+        />
       </LiquidGlass>
     </View>
   );

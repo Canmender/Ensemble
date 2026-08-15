@@ -67,7 +67,7 @@ export class ErrorBoundary extends Component<Props, State> {
               <Text style={styles.reloadButtonText}>重新加载</Text>
             </TouchableOpacity>
 
-            {__DEV__ && this.state.error && (
+            {this.state.error && (
               <ScrollView style={styles.debugContainer}>
                 <Text style={styles.debugTitle}>调试信息</Text>
                 <Text style={styles.debugText}>
