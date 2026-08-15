@@ -46,9 +46,11 @@ export async function checkAppUpdate(): Promise<AppUpdateInfo | null> {
 export async function downloadAndInstall(info: AppUpdateInfo, onProgress?: (p: number) => void): Promise<void> {
   const base = baseUrl();
   if (!base) throw new Error("未连接服务器");
-  const url = info.apkUrl.startsWith("http") ? info.apkUrl : base + info.apkUrl;
-  const dest = (FileSystem.cacheDirectory ?? "") + "ensemble-update.apk";
-  // 清理上次残留的下载文件，避免损坏/续传问题
+  const apkUrl = info.apkUrl.startsWith("http") ? info.apkUrl : base + info.apkUrl;
+  // 缓存破坏参数：避免网络/设备层缓存返回旧版 APK
+  const url = apkUrl + (apkUrl.includes("?") ? "&" : "?") + "v=" + info.versionCode + "&t=" + Date.now();
+  // 版本化文件名：不同版本下载到不同文件，杜绝复用旧版本残留
+  const dest = (FileSystem.cacheDirectory ?? "") + "ensemble-update-" + info.versionCode + ".apk";
   try {
     const existing = await FileSystem.getInfoAsync(dest);
     if (existing.exists) await FileSystem.deleteAsync(dest);
@@ -62,6 +64,11 @@ export async function downloadAndInstall(info: AppUpdateInfo, onProgress?: (p: n
   });
   const res = await download.downloadAsync();
   if (res?.status !== 200) throw new Error("下载失败");
+  // 大小校验：APK 应远大于 20MB，若过小说明下载到了错误内容（HTML 错误页/缓存残缺）
+  const infoFile = await FileSystem.getInfoAsync(dest);
+  if (!infoFile.exists || infoFile.size < 20 * 1024 * 1024) {
+    throw new Error("下载文件异常，请重试");
+  }
   // 转成 content:// URI（file:// 在 Android 7+ 触发 FileUriExposedException）
   const contentUri = await FileSystem.getContentUriAsync(dest);
   // FLAG_GRANT_READ_URI_PERMISSION(1) + FLAG_ACTIVITY_NEW_TASK(0x40000000)：
