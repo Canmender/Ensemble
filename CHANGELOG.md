@@ -4,7 +4,15 @@
 
 ---
 
-## v0.7.67 (2026-08-15) — 彻底移除玻璃渲染风险（登录后打不开治理）
+## v0.7.68 (2026-08-15) — 根治登录后 Invalid hook call 崩溃
+
+- **定位真实报错**：错误页显示 `Invalid hook call / more than one copy of React`，崩在登录后 BottomTabView/SafeAreaProviderCompat 渲染。
+- **移除进入主界面的全部玻璃渲染**：Tab 栏改回官方实现、导航头改回普通 View、移除导致依赖变化的 `expo-blur`。
+- 保留现代设计 Token 与卡片/按钮样式（纯样式无滤镜，无崩溃风险）。
+
+**版本**：0.7.67 → 0.7.68，APK versionCode 57
+
+
 
 - **LiquidGlass 改为安全通透容器**：彻底去掉 BlurView 与滤镜/光斑等所有可能引发渲染崩溃的代码（纯 View 半透明白），全 App 玻璃组件零滤镜渲染。
 - 继续保留诊断：发行版错误页显示错误文案，方便确认是否仍有其他崩溃点。

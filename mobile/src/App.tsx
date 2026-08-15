@@ -129,14 +129,12 @@ function GlassTabBar(props: React.ComponentProps<typeof BottomTabBar>) {
 function MainTabs() {
   return (
     <Tab.Navigator
-      tabBar={GlassTabBar}
       screenOptions={({ route }) => ({
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textFaint,
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.text,
-        // 玻璃外观由 GlassTabBar 承担；底部自绘透明
-        tabBarStyle: { backgroundColor: "transparent", borderTopWidth: 0, elevation: 0 },
+        tabBarStyle: { backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600", marginTop: 2 },
         tabBarItemStyle: { backgroundColor: "transparent" },
         tabBarIconStyle: { marginTop: 2 },
