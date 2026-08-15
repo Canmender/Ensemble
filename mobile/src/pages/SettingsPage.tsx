@@ -102,8 +102,11 @@ export default function SettingsPage() {
       icon: "refresh-outline" as const,
       title: "检查更新",
       desc: `当前 v${APP_VERSION}，检查新版本`,
-      onPress: () => {
-        void checkAndPromptUpdate();
+      onPress: async () => {
+        const hasUpdate = await checkAndPromptUpdate();
+        if (!hasUpdate) {
+          Alert.alert("已是最新版本", `当前版本 v${APP_VERSION}`);
+        }
       },
     },
     {
