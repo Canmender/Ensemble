@@ -16,7 +16,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useTaskStore } from "../store/taskStore";
 import { connectionService } from "../services/connection";
 import { api } from "../services/api";
-import { colors } from "../theme";
+import { colors, radius, elevation } from "../theme";
 
 type ConnectionQuality = "excellent" | "good" | "poor" | "unknown";
 
@@ -383,9 +383,10 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     backgroundColor: colors.surface,
-    borderRadius: 12,
+    borderRadius: radius.lg,
     padding: 16,
     marginBottom: 16,
+    ...elevation.sm,
   },
   statusHeader: {
     flexDirection: "row",
@@ -478,10 +479,11 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: radius.lg,
     padding: 16,
     marginHorizontal: 4,
     alignItems: "center",
+    ...elevation.sm,
   },
   statNumber: {
     color: colors.text,
@@ -499,7 +501,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: colors.text,
     fontSize: 18,
-    fontWeight: "600",
+    fontWeight: "700",
     marginBottom: 12,
   },
   emptyText: {
@@ -509,9 +511,10 @@ const styles = StyleSheet.create({
   },
   taskCard: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: radius.md,
     padding: 12,
     marginBottom: 8,
+    ...elevation.sm,
   },
   taskCardTouchable: {
     borderLeftWidth: 3,

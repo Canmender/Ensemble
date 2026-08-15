@@ -37,7 +37,7 @@ import { AppHeader } from "./components/AppHeader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Theme
-import { colors } from "./theme";
+import { colors, radius } from "./theme";
 
 /** 根导航栈参数表 */
 export type RootStackParamList = {
@@ -102,13 +102,34 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.textFaint,
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.text,
-        tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
+        // iOS-18 悬浮玻璃 Dock：半透明白+超淡描边+柔和投影，浮在内容之上
+        tabBarStyle: {
+          position: "absolute",
+          left: 14,
+          right: 14,
+          bottom: 10,
+          height: 64,
+          paddingTop: 6,
+          paddingBottom: 8,
+          borderRadius: radius.xxl,
+          borderTopWidth: 0,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.6)",
+          backgroundColor: "rgba(248,249,253,0.92)",
+          shadowColor: "#0B1220",
+          shadowOpacity: 0.12,
+          shadowRadius: 22,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 10,
+        },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "600", marginTop: 2 },
+        tabBarItemStyle: { backgroundColor: "transparent" },
+        tabBarIconStyle: { marginTop: 2 },
         tabBarIcon: ({ color, focused }) => {
           const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
           return (
-            <View style={{ width: 26, height: 26 }}>
-              <Ionicons name={focused ? icon.active : icon.inactive} size={22} color={color} />
+            <View style={{ width: 28, height: 26 }}>
+              <Ionicons name={focused ? icon.active : icon.inactive} size={23} color={color} />
               {route.name === "Chat" && <ChatTabBadge />}
             </View>
           );

@@ -17,7 +17,7 @@ import {
   type TextStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
 /* ── Screen ─────────────────────────────────────────────────────────── */
 
@@ -236,16 +236,16 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
+    ...elevation.sm,
   },
   button: {
-    height: 46,
-    borderRadius: radius.md,
+    height: 48,
+    borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    ...elevation.sm,
   },
   buttonGhost: { borderWidth: 1, borderColor: colors.border },
   buttonDisabled: { opacity: 0.4 },
@@ -258,19 +258,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: fontSize.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    minHeight: 46,
+    paddingVertical: 13,
+    minHeight: 48,
   },
   inputMultiline: { minHeight: 80, textAlignVertical: "top" },
   listItem: {
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.lg,
     padding: spacing.md,
     marginBottom: spacing.sm,
+    ...elevation.sm,
   },
   listItemIcon: {
     width: 40,

@@ -501,7 +501,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
     overflow: "hidden",
   },
-  sep: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 48 + spacing.lg + spacing.md },
+  sep: { height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginLeft: 64, marginRight: spacing.md },
   searchBar: {
     flexDirection: "row",
     alignItems: "center",

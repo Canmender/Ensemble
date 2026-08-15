@@ -9,7 +9,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "./Avatar";
 import { useMeStore } from "../store/meStore";
-import { colors, spacing, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
 interface AppHeaderProps {
   title: string;
@@ -80,8 +80,8 @@ const styles = StyleSheet.create({
     height: 52,
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    ...elevation.sm,
+    zIndex: 10,
   },
   left: {
     width: 120,
@@ -96,11 +96,17 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
     fontSize: fontSize.lg,
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.text,
+    letterSpacing: 0.2,
   },
   backBtn: {
-    padding: 4,
+    width: 34,
+    height: 34,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: "center",
+    justifyContent: "center",
   },
   avatarRow: {
     flexDirection: "row",

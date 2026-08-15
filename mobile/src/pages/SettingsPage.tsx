@@ -23,9 +23,9 @@ import { checkAndPromptUpdate } from "../services/appUpdate";
 import { Avatar } from "../components/Avatar";
 import { useMeStore } from "../store/meStore";
 import { useAuthGate } from "../store/authGateStore";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
-const APP_VERSION = "0.7.61";
+const APP_VERSION = "0.7.62";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
@@ -177,6 +177,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.md,
+    ...elevation.sm,
   },
   avatar: {
     width: 56,
@@ -200,6 +201,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
+    ...elevation.sm,
   },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: "600" },
@@ -211,6 +213,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     borderRadius: radius.lg,
     overflow: "hidden",
+    ...elevation.sm,
   },
   menuItem: {
     flexDirection: "row",
