@@ -813,14 +813,15 @@ export default function SettingsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label>搜索服务</Label>
-                <Select value={settings.searchApi?.provider ?? "duckduckgo"} onChange={(e) => saveSettings({ searchApi: { provider: e.target.value as "duckduckgo" | "serper", apiKey: settings.searchApi?.apiKey } })}>
+                <Select value={settings.searchApi?.provider ?? "duckduckgo"} onChange={(e) => saveSettings({ searchApi: { provider: e.target.value as "duckduckgo" | "serper" | "tavily", apiKey: settings.searchApi?.apiKey } })}>
                   <option value="duckduckgo">DuckDuckGo（免费）</option>
-                  <option value="serper">Serper.dev</option>
+                  <option value="serper">Serper.dev（需 key）</option>
+                  <option value="tavily">Tavily（需 key）</option>
                 </Select>
               </div>
               <div>
                 <Label>API Key</Label>
-                <Input type="password" value={settings.searchApi?.apiKey ?? ""} onChange={(e) => saveSettings({ searchApi: { provider: settings.searchApi?.provider ?? "duckduckgo", apiKey: e.target.value } })} placeholder="serper key" />
+                <Input type="password" value={settings.searchApi?.apiKey ?? ""} onChange={(e) => saveSettings({ searchApi: { provider: settings.searchApi?.provider ?? "duckduckgo", apiKey: e.target.value } })} placeholder="serper / tavily key" />
               </div>
             </div>
           </Card>

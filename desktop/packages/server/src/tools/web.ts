@@ -46,9 +46,12 @@ export const webSearchTool: AgentTool = {
     const denied = checkNetworkAllowed(ctx.appSettings?.security);
     if (denied) return denied;
     const { query } = input as { query: string };
-    const apiKey = ctx.appSettings?.searchApi?.apiKey;
-    if (apiKey && ctx.appSettings?.searchApi?.provider === "serper") {
-      return searchWithSerper(query, apiKey, ctx.signal);
+    const searchApi = ctx.appSettings?.searchApi;
+    if (searchApi?.apiKey && searchApi.provider === "serper") {
+      return searchWithSerper(query, searchApi.apiKey, ctx.signal);
+    }
+    if (searchApi?.apiKey && searchApi.provider === "tavily") {
+      return searchWithTavily(query, searchApi.apiKey, ctx.signal);
     }
     return searchDuckDuckGo(query, ctx.signal);
   },
@@ -80,6 +83,29 @@ async function searchWithSerper(query: string, apiKey: string, signal?: AbortSig
   return (data.organic ?? [])
     .map((r: any) => `- ${r.title}\n  ${r.link}\n  ${r.snippet ?? ""}`)
     .join("\n");
+}
+
+/** Tavily 搜索（AI 友好摘要，返回 answer + 结果列表） */
+async function searchWithTavily(query: string, apiKey: string, signal?: AbortSignal): Promise<string> {
+  const res = await fetch("https://api.tavily.com/search", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      api_key: apiKey,
+      query,
+      max_results: 8,
+      search_depth: "basic",
+      include_answer: true,
+    }),
+    signal,
+  });
+  if (!res.ok) return `search failed: HTTP ${res.status} ${await res.text().catch(() => "")}`;
+  const data = (await res.json()) as any;
+  const answer = data.answer ? `[Summary] ${data.answer}` : "";
+  const results = (data.results ?? [])
+    .map((r: any) => `- ${r.title}\n  ${r.url}\n  ${(r.content ?? "").slice(0, 500)}`)
+    .join("\n");
+  return [answer, results].filter(Boolean).join("\n") || "(no results)";
 }
 
 export const webFetchTool: AgentTool = {
