@@ -34,7 +34,7 @@
     "plugins": [
       "expo-audio",
       "expo-image-picker",
-      "expo-notifications",
+      ["expo-notifications", { "icon": "./assets/android-icon-monochrome.png", "color": "#4F6EF7" }],
       "./plugins/withNetworkSecurityConfig",
       "expo-sharing"
     ],
