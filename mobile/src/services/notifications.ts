@@ -62,8 +62,9 @@ export function initNotifications(): void {
     if (mutedRunIds.has(msg.runId)) return;
     addUnread();
     void Notifications.scheduleNotificationAsync({
-      content: { title: "新消息", body: previewOf(msg), sound: false, channelId: "messages" },
-      trigger: null,
+      content: { title: "新消息", body: previewOf(msg), sound: false },
+      // 显式指定 HIGH 重要度 channel（messages），保证 heads-up 横幅弹出
+      trigger: { channelId: "messages" },
     }).catch(() => {});
   });
 
@@ -78,9 +79,8 @@ export function initNotifications(): void {
         title: `${ev.senderName} 提到了你`,
         body: ev.content || "提到了你",
         sound: true,
-        channelId: "messages",
       },
-      trigger: null,
+      trigger: { channelId: "messages" },
     }).catch(() => {});
   });
 }
