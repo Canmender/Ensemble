@@ -23,7 +23,7 @@ import { checkAndPromptUpdate } from "../services/appUpdate";
 import { useAuthGate } from "../store/authGateStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 
-const APP_VERSION = "0.7.50";
+const APP_VERSION = "0.7.51";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();

@@ -4,6 +4,12 @@
 
 ---
 
+## v0.7.51 (2026-08-15) — 顶部遮挡修复（tab 自定义 header）
+
+**修复**：bottom-tabs 对自定义 header 直接渲染、不经过 elements Header，因此之前给 tab 设 `includeTopInset={false}` 导致 tab 头完全没有顶部安全区 padding。改为 tab 也由 AppHeader 自行加 padding（`useSafeAreaInsets` + `StatusBar` 兜底 + 24dp 下限），看板/任务/聊天等 tab 标题下移到摄像头下方。
+
+**版本**：0.7.50 → 0.7.51，APK versionCode 40
+
 ## v0.7.50 (2026-08-15) — 应用内更新首次可测
 
 **用途**：0.7.50 作为应用内更新的首个"新版"，用于验证流程：已装 0.7.49 的用户打开应用会收到更新提示，应用内下载并安装到 0.7.50。

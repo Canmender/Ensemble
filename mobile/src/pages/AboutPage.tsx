@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius, fontSize } from "../theme";
 import { CLOUD_SERVER } from "../services/connection";
 
-const APP_VERSION = "0.7.50";
+const APP_VERSION = "0.7.51";
 
 export default function AboutPage() {
   return (
