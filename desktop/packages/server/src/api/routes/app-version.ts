@@ -12,6 +12,8 @@ export function appVersionRouter(ctx: AppContext): Router {
   const r = Router();
 
   r.get("/", (_req, res) => {
+    // 禁止缓存：应用内更新检查必须每次拿到最新版本
+    res.set("Cache-Control", "no-store");
     const file = join(ctx.apkDir, "version.json");
     try {
       const data = JSON.parse(readFileSync(file, "utf8")) as {
