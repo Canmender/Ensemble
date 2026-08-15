@@ -48,6 +48,13 @@ export async function downloadAndInstall(info: AppUpdateInfo, onProgress?: (p: n
   if (!base) throw new Error("未连接服务器");
   const url = info.apkUrl.startsWith("http") ? info.apkUrl : base + info.apkUrl;
   const dest = (FileSystem.cacheDirectory ?? "") + "ensemble-update.apk";
+  // 清理上次残留的下载文件，避免损坏/续传问题
+  try {
+    const existing = await FileSystem.getInfoAsync(dest);
+    if (existing.exists) await FileSystem.deleteAsync(dest);
+  } catch {
+    /* 忽略清理异常 */
+  }
   const download = FileSystem.createDownloadResumable(url, dest, {}, (p) => {
     if (p.totalBytesExpectedToWrite > 0) {
       onProgress?.(p.totalBytesWritten / p.totalBytesExpectedToWrite);
@@ -57,10 +64,12 @@ export async function downloadAndInstall(info: AppUpdateInfo, onProgress?: (p: n
   if (res?.status !== 200) throw new Error("下载失败");
   // 转成 content:// URI（file:// 在 Android 7+ 触发 FileUriExposedException）
   const contentUri = await FileSystem.getContentUriAsync(dest);
+  // FLAG_GRANT_READ_URI_PERMISSION(1) + FLAG_ACTIVITY_NEW_TASK(0x40000000)：
+  // 下载完成时应用可能在后台，NEW_TASK 保证安装器能正常启动
   await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
     data: contentUri,
     type: "application/vnd.android.package-archive",
-    flags: 1, // FLAG_GRANT_READ_URI_PERMISSION
+    flags: 0x40000001,
   });
 }
 
