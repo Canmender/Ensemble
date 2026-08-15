@@ -11,7 +11,12 @@
 - [开发指南](#开发指南)
 - [部署与发布](#部署与发布)
 - [故障排查](#故障排查)
+- [版本号规则](#版本号规则)
 - [变更日志](#变更日志)
+- [移动端](#移动端)
+- [参考项目](#参考项目)
+
+> 配套文档：全局技术参考 [TECHNICAL.md](TECHNICAL.md) ｜ 踩坑记录 [PITFALLS.md](PITFALLS.md) ｜ 云端部署 [../../docs/DEPLOY.md](../../docs/DEPLOY.md)
 
 ---
 
@@ -652,8 +657,36 @@ A: 检查 LLM Provider 是否支持摘要调用，查看错误日志
 - **多设备在线**：联系人「设备」组显示真实设备（手机端 / 电脑端·web），在线绿点 / 离线灰点 / 当前设备标「本机」，实时刷新
 - **联系人分组**：设备 / 用户为系统固定组，用户可自定义分组（组名 + 成员，本机持久化），均可折叠
 - **创建群聊**：联系人页顶部「+」→ 群名 + 成员多选（用户 / Agent 可混合）
+- **群聊管理**：联系人页「群聊」区列出服务器端群会话，点击进群聊、齿轮图标进群设置（改名/成员/公告/禁言/管理员）
+- **语音消息**：输入框右侧麦克风按钮 → 录音（暂停/继续/重录/发送，expo-audio）；点语音气泡播放/暂停（进度条 + 时长）
 - **聊天输入**：输入框最右「+」弹出扩展栏（相册 / 视频 / 文件）
 - 聊天页顶部连接状态条（已连接云端/未连接/重连中）
+
+### 应用内更新（方案A：应用内下载安装 APK）
+
+- **服务器**：`GET /api/app-version`（公开端点，读 `apkDir/version.json`）+ `/apk/` 静态托管 APK
+- **移动端**：登录后自动检查 + 「我」→「检查更新」→ 检测到新版弹窗 → 应用内下载（进度条）→ 调系统安装器
+- **发布新版**：更新 version.json（versionCode 严格递增）+ 上传 APK 到 `/data/apk/`（`docker cp` 进命名卷）
+- **下载加固**：版本化文件名 + 缓存破坏参数（`?v=版本&t=时间戳`）+ 下载后大小校验（>20MB），避免装到旧版/缓存文件
+- **版本比较**：`expo-application.nativeBuildVersion`（Android versionCode）
+
+### 设备去重
+
+设备 ID 优先用 **Android ID**（`expo-application.getAndroidId()`，设备级稳定，重装/更新不变），避免每次重装产生新的"我的手机"；服务器端 `cleanupDuplicateDevices` 清理同类型同名称的离线旧设备。
+
+### 全局用户信息（meStore）
+
+昵称/头像改动后全局即时刷新：`store/meStore.ts` 保存当前用户，AppHeader / 设置页在页面获得焦点时 `reload`，个人信息页更新后触发 reload。
+
+### 隐私设置 / 好友请求
+
+- 「我」→「隐私设置」：7 项隐私开关（好友验证、私聊权限、信息展示等）
+- 好友请求：发请求 → 对方收到 → 接受/拒绝（`/api/privacy/friend-request*`）
+
+### 顶部安全区（摄像头遮挡）
+
+- 部分设备 safe-area-context `insets.top` 与 `StatusBar.currentHeight` 都返回 0 → AppHeader padding 用 `max(insets.top, StatusBar.currentHeight, 24)` 兜底
+- 注意：**bottom-tabs 自定义 header 不经 elements Header，无自动 inset**，AppHeader 需自行加 padding
 
 ### 构建 APK
 
