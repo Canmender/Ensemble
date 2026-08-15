@@ -52,3 +52,7 @@ coverage/
 .cache/
 *.apk
 TencentDB-Agent-Memory/
+
+# reference IM codebases and scratch
+IM/
+image/

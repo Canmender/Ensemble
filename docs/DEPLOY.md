@@ -157,6 +157,30 @@ npx expo prebuild --platform android
 
 ---
 
+## 发布移动端新版本（应用内更新）
+
+应用支持应用内自动更新（`/api/app-version` + `/apk/` 托管）。发布新版本步骤：
+
+1. **构建新 APK**（本地）：`cd mobile/android && ./gradlew assembleRelease`
+2. **上传 APK + 更新版本配置**（注意：`/data` 是 Docker 命名卷，必须 `docker cp` 进容器，不能直接写主机 `/data`）：
+   ```bash
+   # 1) 上传 APK 到主机临时位置，再 docker cp 进卷
+   scp ensemble-v0.7.50.apk root@SERVER_IP_REDACTED:/tmp/
+   ssh root@SERVER_IP_REDACTED "docker cp /tmp/ensemble-v0.7.50.apk ensemble-server:/data/apk/ && rm /tmp/ensemble-v0.7.50.apk"
+
+   # 2) 更新 version.json（版本号 + versionCode 必须大于当前）
+   ssh root@SERVER_IP_REDACTED "docker exec ensemble-server sh -c 'cat > /data/apk/version.json' <<'EOF'
+   {\"version\":\"0.7.50\",\"versionCode\":39,\"apkUrl\":\"/apk/ensemble-v0.7.50.apk\",\"note\":\"更新说明\",\"force\":false}
+   EOF"
+   ```
+3. **验证**：`curl http://SERVER_IP_REDACTED:8787/api/app-version` 应返回新版本号
+4. 用户打开应用 → 自动弹更新 → 应用内下载安装
+
+> `force: true` 时用户无法跳过（用于必须升级的场景，如协议不兼容）。
+> versionCode 必须严格递增（Android 安装校验）；versionName 建议同步更新。
+
+---
+
 ## 数据与备份
 
 | 数据 | 位置 | 备份策略 |

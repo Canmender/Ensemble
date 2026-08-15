@@ -10,8 +10,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive, User as UserIcon,
-  Image as ImageIcon, Paperclip, File as FileIcon, X
+  Image as ImageIcon, Paperclip, File as FileIcon, X, Menu, Info, Settings2
 } from "lucide-react";
+import { GroupSettingsDialog } from "../components/GroupSettingsDialog";
+import { ContactInfoDialog } from "../components/ContactInfoDialog";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
@@ -58,6 +60,39 @@ function userName(usersById: Map<string, UserInfo>, id?: string): string | undef
   if (!id) return undefined;
   const u = usersById.get(id);
   return u ? (u.displayName || u.username) : undefined;
+}
+
+/** 为联系人信息弹窗构建展示数据（按联系人类型） */
+function contactInfoFor(contact: Contact, usersById: Map<string, UserInfo>) {
+  if (contact.type === "user") {
+    const u = usersById.get((contact.participantIds ?? [])[0] ?? "");
+    return {
+      id: contact.id,
+      type: "user" as const,
+      name: contact.name || u?.displayName || u?.username || "用户",
+      status: contact.status,
+      username: u?.username,
+      displayName: u?.displayName,
+      role: u?.role,
+    };
+  }
+  if (contact.type === "agent") {
+    return {
+      id: contact.id,
+      type: "agent" as const,
+      name: contact.name,
+      status: contact.status,
+    };
+  }
+  if (contact.type === "group") {
+    return {
+      id: contact.id,
+      type: "group" as const,
+      name: contact.name,
+      participantCount: contact.participantIds?.length ?? 0,
+    };
+  }
+  return { id: contact.id, type: "device" as const, name: contact.name, status: contact.status };
 }
 
 /** 联系人 */
@@ -287,12 +322,28 @@ export default function ChatPage() {
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false);
+  const [showContactInfo, setShowContactInfo] = useState(false);
   const [draftAttachment, setDraftAttachment] = useState<MessageAttachment | null>(null);
   const [uploading, setUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastContactsReload = useRef(0);
+  const headerMenuRef = useRef<HTMLDivElement>(null);
+
+  // 点击菜单外部关闭（≡ 下拉）
+  useEffect(() => {
+    if (!showHeaderMenu) return;
+    function onDocClick(e: MouseEvent) {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+        setShowHeaderMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [showHeaderMenu]);
 
   // 用户 id → 用户信息（渲染发送者昵称）
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
@@ -868,6 +919,44 @@ export default function ChatPage() {
                   )}
                 </div>
               </div>
+              {/* 右上角 ≡ 菜单 */}
+              <div ref={headerMenuRef} className="relative ml-auto">
+                <button
+                  onClick={() => setShowHeaderMenu((v) => !v)}
+                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg"
+                  title="更多"
+                  aria-label="更多"
+                  aria-haspopup="menu"
+                  aria-expanded={showHeaderMenu}
+                >
+                  <Menu className="h-5 w-5" />
+                </button>
+                {showHeaderMenu && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full z-30 mt-1 w-48 rounded-xl border border-border bg-surface p-1 shadow-lg"
+                  >
+                    <button
+                      role="menuitem"
+                      onClick={() => { setShowHeaderMenu(false); setShowContactInfo(true); }}
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg transition-colors hover:bg-muted/10"
+                    >
+                      <Info className="h-4 w-4 text-muted" />
+                      {activeContact.type === "user" ? "查看用户信息" : activeContact.type === "group" ? "查看群聊信息" : "查看信息"}
+                    </button>
+                    {activeContact.type === "group" && activeContact.convId && (
+                      <button
+                        role="menuitem"
+                        onClick={() => { setShowHeaderMenu(false); setShowGroupSettings(true); }}
+                        className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg transition-colors hover:bg-muted/10"
+                      >
+                        <Settings2 className="h-4 w-4 text-muted" />
+                        群聊管理
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 消息列表 */}
@@ -1039,6 +1128,28 @@ export default function ChatPage() {
           }}
         />
       </Modal>
+
+      {/* 联系人信息对话框 */}
+      {showContactInfo && activeContact && (
+        <ContactInfoDialog
+          contact={contactInfoFor(activeContact, usersById)}
+          onClose={() => setShowContactInfo(false)}
+          onSendMessage={() => { setShowContactInfo(false); }}
+        />
+      )}
+
+      {/* 群聊设置对话框 */}
+      {showGroupSettings && activeContact?.convId && (
+        <GroupSettingsDialog
+          convId={activeContact.convId}
+          onClose={() => setShowGroupSettings(false)}
+          onChanged={() => {
+            // 群信息/成员/解散变更后刷新会话列表与当前会话
+            void loadContacts();
+            if (activeContactRef.current) setActiveContact({ ...activeContactRef.current });
+          }}
+        />
+      )}
     </div>
   );
 }

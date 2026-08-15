@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
+import { useMeStore } from "../store/meStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
@@ -34,8 +35,16 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
   const [saving, setSaving] = useState(false);
   const [showAddMember, setShowAddMember] = useState(false);
   const [allUsers, setAllUsers] = useState<UserInfo[]>([]);
+  const [showAdminMgr, setShowAdminMgr] = useState(false);
+  const [dissolving, setDissolving] = useState(false);
 
   const usersById = new Map(users.map((u) => [u.id, u]));
+
+  // 权限：群主 / 管理员（与后端一致）
+  const meId = useMeStore.getState().me?.id;
+  const isOwner = !!meId && conv?.groupOwner === meId;
+  const isAdmin = isOwner || !!meId && !!conv?.groupAdmins?.includes(meId);
+  const canModerate = isOwner || isAdmin;
 
   useEffect(() => {
     void api.getConversations().then((res) => {
@@ -145,6 +154,7 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
             placeholder="输入群名称"
             placeholderTextColor={colors.textFaint}
             maxLength={30}
+            editable={canModerate}
           />
           {saving ? (
             <ActivityIndicator size="small" color={colors.primary} />
@@ -169,8 +179,9 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
           placeholderTextColor={colors.textFaint}
           multiline
           maxLength={500}
+          editable={canModerate}
         />
-        {announcement !== (conv?.announcement || "") && (
+        {canModerate && announcement !== (conv?.announcement || "") && (
           <TouchableOpacity style={styles.saveSmallBtn} onPress={saveAnnouncement} disabled={saving}>
             <Text style={styles.saveSmallBtnText}>{saving ? "保存中…" : "保存公告"}</Text>
           </TouchableOpacity>
@@ -184,7 +195,7 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
             <Text style={styles.sectionTitle}>全体禁言</Text>
             <Text style={styles.toggleDesc}>开启后普通成员不能发言</Text>
           </View>
-          <TouchableOpacity onPress={toggleGroupMute} activeOpacity={0.7}>
+          <TouchableOpacity onPress={canModerate ? toggleGroupMute : undefined} activeOpacity={0.7}>
             <Ionicons
               name={conv?.groupMuted ? "checkbox" : "square-outline"}
               size={24}
@@ -198,9 +209,11 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>成员（{users.length}）</Text>
-          <TouchableOpacity onPress={() => setShowAddMember(true)} hitSlop={8}>
-            <Ionicons name="person-add" size={20} color={colors.primary} />
-          </TouchableOpacity>
+          {canModerate && (
+            <TouchableOpacity onPress={() => setShowAddMember(true)} hitSlop={8}>
+              <Ionicons name="person-add" size={20} color={colors.primary} />
+            </TouchableOpacity>
+          )}
         </View>
         <FlatList
           data={users}
@@ -219,9 +232,11 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
               {conv?.groupAdmins?.includes(u.id) && conv?.groupOwner !== u.id && (
                 <Text style={[styles.roleTag, styles.roleTagAdmin]}>管理员</Text>
               )}
-              <TouchableOpacity onPress={() => removeMember(u.id)} hitSlop={8}>
-                <Ionicons name="close-circle" size={20} color={colors.danger} />
-              </TouchableOpacity>
+              {canModerate && !(conv?.groupOwner === u.id) && !(isAdmin && meId === u.id) && (
+                <TouchableOpacity onPress={() => removeMember(u.id)} hitSlop={8}>
+                  <Ionicons name="close-circle" size={20} color={colors.danger} />
+                </TouchableOpacity>
+              )}
             </View>
           )}
           scrollEnabled={false}
@@ -269,6 +284,79 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
           </View>
         </View>
       </Modal>
+
+      {/* 管理员管理（仅群主） */}
+      {isOwner && (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>管理员</Text>
+            <TouchableOpacity onPress={() => setShowAdminMgr((v) => !v)} hitSlop={8}>
+              <Ionicons name={showAdminMgr ? "chevron-up" : "chevron-down"} size={20} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+          {showAdminMgr && (
+            <FlatList
+              data={users.filter((u) => u.id !== conv?.groupOwner)}
+              keyExtractor={(u) => u.id}
+              renderItem={({ item: u }) => {
+                const isAdminNow = !!conv?.groupAdmins?.includes(u.id);
+                return (
+                  <TouchableOpacity
+                    style={styles.memberRow}
+                    onPress={async () => {
+                      const cur = conv?.groupAdmins ? [...conv.groupAdmins] : [];
+                      const next = isAdminNow ? cur.filter((x) => x !== u.id) : [...cur, u.id];
+                      const res = await api.updateConversation(convId, { groupAdmins: next });
+                      if (!res.error) {
+                        setConv((prev) => prev ? { ...prev, groupAdmins: next } : prev);
+                        Alert.alert("已更新", isAdminNow ? `已取消「${u.displayName || u.username}」管理员` : `已设「${u.displayName || u.username}」为管理员`);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.memberAvatar}>
+                      <Text style={styles.memberAvatarText}>{(u.displayName || u.username || "?")[0]}</Text>
+                    </View>
+                    <Text style={styles.memberName}>{u.displayName || u.username}</Text>
+                    {isAdminNow && <Text style={[styles.roleTag, styles.roleTagAdmin]}>管理员</Text>}
+                    <Ionicons name={isAdminNow ? "checkbox" : "checkbox-outline"} size={22} color={isAdminNow ? colors.success : colors.textMuted} />
+                  </TouchableOpacity>
+                );
+              }}
+              scrollEnabled={false}
+            />
+          )}
+        </View>
+      )}
+
+      {/* 解散群聊（仅群主） */}
+      {isOwner && (
+        <View style={styles.section}>
+          <TouchableOpacity
+            style={[styles.dissolveBtn, dissolving && { opacity: 0.6 }]}
+            onPress={() =>
+              Alert.alert("解散群聊", "解散后所有成员将无法访问该群聊及历史消息，且不可恢复。确定解散？", [
+                { text: "取消", style: "cancel" },
+                {
+                  text: "解散",
+                  style: "destructive",
+                  onPress: async () => {
+                    setDissolving(true);
+                    const res = await api.deleteConversation(convId);
+                    setDissolving(false);
+                    if (res.error) { Alert.alert("解散失败", res.error); return; }
+                    navigation.goBack();
+                  },
+                },
+              ])
+            }
+            disabled={dissolving}
+          >
+            <Ionicons name="trash-outline" size={18} color="#fff" />
+            <Text style={styles.dissolveBtnText}>{dissolving ? "解散中…" : "解散群聊"}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -360,4 +448,15 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: "600" },
   emptyText: { color: colors.textMuted, textAlign: "center", paddingVertical: spacing.xl },
+  dissolveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.danger,
+    borderRadius: radius.md,
+    paddingVertical: 12,
+    marginTop: spacing.sm,
+  },
+  dissolveBtnText: { color: "#fff", fontSize: fontSize.md, fontWeight: "600" },
 });

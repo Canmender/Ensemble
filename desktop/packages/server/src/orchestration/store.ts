@@ -64,6 +64,8 @@ export class Store {
     touchRead: ReturnType<DatabaseSync["prepare"]>;
     listConversationReads: ReturnType<DatabaseSync["prepare"]>;
     setConversationArchived: ReturnType<DatabaseSync["prepare"]>;
+    setConversationMuted: ReturnType<DatabaseSync["prepare"]>;
+    setConversationPinned: ReturnType<DatabaseSync["prepare"]>;
     upsertDevice: ReturnType<DatabaseSync["prepare"]>;
     deleteDevice: ReturnType<DatabaseSync["prepare"]>;
     listDevices: ReturnType<DatabaseSync["prepare"]>;

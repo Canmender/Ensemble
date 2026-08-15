@@ -108,6 +108,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [showVoiceRecorder, setShowVoiceRecorder] = useState(false);
   // 联系人资料面板（左滑触发）
   const [showProfile, setShowProfile] = useState(false);
+  // 右上角 ≡ 菜单
+  const [showMenu, setShowMenu] = useState(false);
   // 消息分页：首屏 20 条，滚动到顶部加载更多
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -170,11 +172,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           navigation.setOptions({
             headerRight: () => (
               <TouchableOpacity
-                onPress={() => navigation.navigate("GroupSettings", { convId: c.id, title: c.title || "" })}
+                onPress={() => setShowMenu(true)}
                 hitSlop={8}
                 style={{ marginRight: 4 }}
               >
-                <Ionicons name="settings-outline" size={22} color={colors.primary} />
+                <Ionicons name="menu" size={24} color={colors.primary} />
               </TouchableOpacity>
             ),
           });
@@ -1293,6 +1295,42 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           )}
         </View>
       </Modal>
+      {/* 右上角 ≡ 菜单 */}
+      <Modal
+        transparent
+        visible={showMenu}
+        animationType="fade"
+        onRequestClose={() => setShowMenu(false)}
+      >
+        <TouchableOpacity
+          style={styles.menuOverlay}
+          activeOpacity={1}
+          onPress={() => setShowMenu(false)}
+        >
+          <View style={styles.menuContainer}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => { setShowMenu(false); setShowProfile(true); }}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="person-outline" size={22} color={colors.primary} />
+              <Text style={styles.menuItemText}>
+                {conv && !conv.runId.startsWith("conv_") ? "查看群聊信息" : "查看用户信息"}
+              </Text>
+            </TouchableOpacity>
+            {conv && !conv.runId.startsWith("conv_") && (
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => { setShowMenu(false); navigation.navigate("GroupSettings", { convId: conv.id, title: conv.title || "" }); }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="people-outline" size={22} color={colors.primary} />
+                <Text style={styles.menuItemText}>群聊管理</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </TouchableOpacity>
+      </Modal>
       {/* 联系人资料面板（左滑触发） */}
       <Modal
         transparent
@@ -1388,6 +1426,11 @@ const styles = StyleSheet.create({
   selectCheck: { marginRight: spacing.xs },
   // 联系人资料面板
   profileOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  // menu styles
+  menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "flex-start", alignItems: "flex-end", paddingTop: 12, paddingRight: 8 },
+  menuContainer: { backgroundColor: colors.surface, borderRadius: radius.lg, minWidth: 200, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 6 },
+  menuItem: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 14 },
+  menuItemText: { color: colors.text, fontSize: fontSize.md },
   profilePanel: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,

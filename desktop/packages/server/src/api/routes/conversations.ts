@@ -50,16 +50,28 @@ const isUserConv = (conv: Conversation): boolean => conv.runId.startsWith("conv_
  * - Agent 会话：归属用户或共享会话（user_id 为空）可访问
  */
 function canAccessConv(conv: Conversation, userId?: string): boolean {
-  if (isUserConv(conv)) {
-    return !!userId && (conv.userId === userId || conv.participantIds.includes(userId));
-  }
-  if (conv.type === "group") {
-    // 群聊：归属用户或参与者可访问（人+Agent 混合群的其他用户也能进）
-    return !conv.userId || conv.userId === userId || (!!userId && conv.participantIds.includes(userId));
-  }
-  return !conv.userId || conv.userId === userId;
+  // 本地单机（无认证）模式放行
+  if (!userId) return true;
+  // 归属用户或参与者可访问（用户-用户会话、群聊、Agent 会话统一按此隔离）
+  return conv.userId === userId || conv.participantIds.includes(userId);
 }
 
+/**
+ * 群聊管理权限：
+ * - 群主（groupOwner）：可改群名/公告/禁言、增删成员、设置管理员、解散群
+ * - 管理员（groupAdmins）：可改群名/公告/禁言、增删成员（但不能踢群主、不能改管理员）
+ * - 普通成员：无群管理权限
+ */
+function isGroupOwner(conv: Conversation, userId?: string): boolean {
+  return conv.type === "group" && !!userId && !!conv.groupOwner && conv.groupOwner === userId;
+}
+
+/** 当前用户是否为群主或群管理员（调用前需先通过 canAccessConv 校验成员身份） */
+function isGroupAdmin(conv: Conversation, userId?: string): boolean {
+  if (!conv.type || conv.type !== "group") return false;
+  if (isGroupOwner(conv, userId)) return true;
+  return !!userId && Array.isArray(conv.groupAdmins) && conv.groupAdmins.includes(userId);
+}
 /**
  * 企业级会话 API（conversations）：
  * - direct：用户与单个 agent 的 1:1 对话（chat run + 1 participant）
@@ -202,8 +214,8 @@ export function conversationsRouter(ctx: AppContext): Router {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
-      // 群禁言检查（非用户-用户会话）
-      if (!conv.runId.startsWith("conv_") && conv.groupMuted) {
+      // 群禁言检查：群聊开启全体禁言时，仅群主/管理员可发言
+      if (conv.type === "group" && conv.groupMuted && !isGroupAdmin(conv, req.user?.id)) {
         return fail(res, new Error("群已开启全体禁言"), 403);
       }
       const body = (req.body ?? {}) as { content?: unknown; attachment?: unknown; replyTo?: unknown };
@@ -300,9 +312,8 @@ export function conversationsRouter(ctx: AppContext): Router {
       const msg = all.find((m) => m.id === msgId);
       if (!msg) return fail(res, new Error("消息不存在"), 404);
       if (msg.deleted) return ok(res, { recalled: msgId });
-      // 仅发送者可撤回自己的消息（用户消息 agentId = 发送者 id 或 "user"）
-      const mine = msg.agentId === req.user?.id || msg.agentId === "user";
-      if (!mine) return fail(res, new Error("只能撤回自己发送的消息"), 403);
+      // 仅发送者可撤回自己的消息：以落库的 userId 作为归属判定（agentId 语义不含发送者）
+      if (msg.userId !== req.user?.id) return fail(res, new Error("只能撤回自己发送的消息"), 403);
       ctx.store.deleteChatMessage(msgId);
       // 实时广播撤回事件（用户-用户：推参与者；agent 会话：run 订阅者）
       const recipients = new Set<string>([conv.userId, ...conv.participantIds].filter((x): x is string => !!x));
@@ -386,6 +397,33 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
       if (conv.runId.startsWith("conv_")) return fail(res, new Error("用户会话不支持修改"), 400);
       const body = (req.body ?? {}) as { title?: string; participantIds?: string[]; announcement?: string; groupMuted?: boolean; groupAdmins?: string[] };
+
+      // 群聊管理权限校验：
+      // - 任何群管理字段（标题/公告/禁言/成员/管理员）都需要群主或管理员身份
+      // - 管理员列表（groupAdmins）变更仅限群主
+      // - 成员变更不可移除群主
+      // - 非 group 类型（direct agent 会话）沿用原有行为（仅需会话访问权限）
+      if (conv.type === "group") {
+        // 管理员列表仅群主可改
+        if (body.groupAdmins !== undefined && !isGroupOwner(conv, req.user?.id)) {
+          return fail(res, new Error("只有群主可以设置群管理员"), 403);
+        }
+        // 其余群管理字段（标题/公告/禁言/成员）需要群主或管理员
+        const needsModeration =
+          body.title !== undefined ||
+          body.announcement !== undefined ||
+          body.groupMuted !== undefined ||
+          (body.participantIds !== undefined && Array.isArray(body.participantIds));
+        if (needsModeration && !isGroupAdmin(conv, req.user?.id)) {
+          return fail(res, new Error("只有群主或管理员可以执行此操作"), 403);
+        }
+        // 成员变更：不可移除群主（除非是群主自己操作）
+        if (Array.isArray(body.participantIds) && conv.groupOwner &&
+            !body.participantIds.includes(conv.groupOwner) && !isGroupOwner(conv, req.user?.id)) {
+          return fail(res, new Error("不可移除群主"), 403);
+        }
+      }
+
       if (body.title !== undefined) {
         ctx.store.updateConversationTitle(conv.id, body.title);
       }
@@ -458,13 +496,25 @@ export function conversationsRouter(ctx: AppContext): Router {
     }),
   );
 
-  /** 删除会话 */
+  /** 会话详情（群设置用：含群主/管理员/公告/禁言；仅参与者可查） */
+  r.get("/:id", asyncH(async (req, res) => {
+    const conv = ctx.store.getConversation(String(req.params.id));
+    if (!conv) return fail(res, new Error("conversation not found"), 404);
+    if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+    ok(res, conv);
+  }));
+
+  /** 删除会话（群聊：仅群主可解散） */
   r.delete(
     "/:id",
     asyncH(async (req, res) => {
       const conv = ctx.store.getConversation(String(req.params.id));
       if (!conv) return fail(res, new Error("conversation not found"), 404);
       if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      // 群聊解散仅限群主
+      if (conv.type === "group" && !isGroupOwner(conv, req.user?.id)) {
+        return fail(res, new Error("只有群主可以解散群聊"), 403);
+      }
       ctx.store.deleteConversation(conv.id);
       ok(res, { deleted: conv.id });
     }),
