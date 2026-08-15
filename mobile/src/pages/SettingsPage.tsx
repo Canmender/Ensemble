@@ -24,7 +24,7 @@ import { Avatar } from "../components/Avatar";
 import { useAuthGate } from "../store/authGateStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 
-const APP_VERSION = "0.7.53";
+const APP_VERSION = "0.7.54";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
