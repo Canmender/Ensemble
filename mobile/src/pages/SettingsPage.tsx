@@ -4,7 +4,7 @@
  * 连接状态以小条展示。启动自动连云端（见 App.tsx / connection.ts）。
  */
 
-import React, { useState, useEffect, useCallback } from "react";
+import React from "react";
 import {
   View,
   Text,
@@ -15,12 +15,13 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useDeviceStore } from "../store/deviceStore";
 import { CLOUD_SERVER } from "../services/connection";
-import { api, type UserInfo } from "../services/api";
+import { api } from "../services/api";
 import { checkAndPromptUpdate } from "../services/appUpdate";
 import { Avatar } from "../components/Avatar";
+import { useMeStore } from "../store/meStore";
 import { useAuthGate } from "../store/authGateStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 
@@ -31,32 +32,21 @@ export default function SettingsPage() {
   const { currentDevice, connectionState, lastError } = useDeviceStore();
   const setGate = useAuthGate((s) => s.setGate);
 
-  const [me, setMe] = useState<UserInfo | null>(null);
-  const [loadingMe, setLoadingMe] = useState(true);
+  const me = useMeStore((s) => s.me);
+  const loadingMe = useMeStore((s) => s.loading);
+  const reloadMe = useMeStore((s) => s.reload);
 
-  const loadMe = useCallback(async () => {
-    setLoadingMe(true);
-    try {
-      const res = await api.getMe();
-      if (res.data) setMe(res.data);
-      else setMe(null);
-    } catch {
-      setMe(null);
-    } finally {
-      setLoadingMe(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadMe();
-    if (connectionState === "connected") void loadMe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connectionState]);
+  // 页面获得焦点时刷新用户信息（改昵称/头像后返回立即生效）
+  useFocusEffect(
+    React.useCallback(() => {
+      void reloadMe();
+    }, [reloadMe]),
+  );
 
   /** 登出：清 token + 回到登录页 */
   const handleLogout = async () => {
     await api.logout();
-    setMe(null);
+    useMeStore.setState({ me: null });
     Alert.alert("已退出", "已退出登录");
     setGate("out");
   };
