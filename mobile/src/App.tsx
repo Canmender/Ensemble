@@ -113,12 +113,12 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Dashboard" component={DashboardPage} options={{ title: "看板", header: () => <AppHeader title="看板" /> }} />
-      <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务", header: () => <AppHeader title="任务" /> }} />
-      <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天", header: () => <AppHeader title="聊天" /> }} />
-      <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人", header: () => <AppHeader title="联系人" /> }} />
-      <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent", header: () => <AppHeader title="Agent" /> }} />
-      <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我", header: () => <AppHeader title="我" /> }} />
+      <Tab.Screen name="Dashboard" component={DashboardPage} options={{ title: "看板", header: () => <AppHeader title="看板" includeTopInset={false} /> }} />
+      <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务", header: () => <AppHeader title="任务" includeTopInset={false} /> }} />
+      <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天", header: () => <AppHeader title="聊天" includeTopInset={false} /> }} />
+      <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人", header: () => <AppHeader title="联系人" includeTopInset={false} /> }} />
+      <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent", header: () => <AppHeader title="Agent" includeTopInset={false} /> }} />
+      <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我", header: () => <AppHeader title="我" includeTopInset={false} /> }} />
     </Tab.Navigator>
   );
 }

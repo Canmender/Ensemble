@@ -639,7 +639,7 @@ class ApiService {
     if (replyTo) body.replyTo = replyTo;
     if (mentions && mentions.length > 0) body.mentions = mentions;
     return this.request<{ sent: boolean; msgId?: string }>(
-      "POST", "/api/conversations/${convId}/messages", body,
+      "POST", "/api/conversations/" + convId + "/messages", body,
     );
   }
 
