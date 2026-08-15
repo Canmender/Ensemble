@@ -4,6 +4,12 @@
 
 ---
 
+## v0.7.52 (2026-08-15) — 应用内更新下载加固
+
+**修复**：更新下载可能拿到旧版/缓存 APK。下载改为：版本化文件名 + 缓存破坏参数（`?v=版本&t=时间戳`）+ 下载后大小校验（<20MB 判为异常），确保装到的就是弹窗显示的版本。
+
+**版本**：0.7.51 → 0.7.52，APK versionCode 41
+
 ## v0.7.51 (2026-08-15) — 顶部遮挡修复（tab 自定义 header）
 
 **修复**：bottom-tabs 对自定义 header 直接渲染、不经过 elements Header，因此之前给 tab 设 `includeTopInset={false}` 导致 tab 头完全没有顶部安全区 padding。改为 tab 也由 AppHeader 自行加 padding（`useSafeAreaInsets` + `StatusBar` 兜底 + 24dp 下限），看板/任务/聊天等 tab 标题下移到摄像头下方。
