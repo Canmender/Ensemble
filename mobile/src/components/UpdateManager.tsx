@@ -53,11 +53,13 @@ export function UpdateManager() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.cancelBtn} onPress={reset} disabled={downloading}>
-              <Text style={styles.cancelText}>{downloading ? "下载中…" : "暂不更新"}</Text>
-            </TouchableOpacity>
+            {!updateInfo?.force && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={reset} disabled={downloading}>
+                <Text style={styles.cancelText}>{downloading ? "下载中…" : "暂不更新"}</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
-              style={[styles.updateBtn, downloading && { opacity: 0.6 }]}
+              style={[styles.updateBtn, (downloading || !!updateInfo?.force) && styles.updateBtnFull]}
               onPress={handleUpdate}
               disabled={downloading}
               activeOpacity={0.8}
@@ -65,7 +67,7 @@ export function UpdateManager() {
               {downloading ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <Text style={styles.updateText}>立即更新</Text>
+                <Text style={styles.updateText}>{updateInfo?.force ? "立即更新（强制）" : "立即更新"}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -117,5 +119,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     alignItems: "center",
   },
+  updateBtnFull: { flex: 1 },
   updateText: { color: "#fff", fontSize: fontSize.md, fontWeight: "600" },
 });
