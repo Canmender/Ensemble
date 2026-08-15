@@ -156,12 +156,12 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { width: "100%" },
-  holdArea: { paddingHorizontal: spacing.lg },
+  wrap: { flex: 1 },
+  holdArea: { flex: 1, position: "relative", paddingHorizontal: spacing.xs },
   bigBtn: {
     width: "100%",
-    height: 44,
-    borderRadius: 22,
+    height: 40,
+    borderRadius: 20,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -174,5 +174,14 @@ const styles = StyleSheet.create({
   bigBtnCancel: { backgroundColor: colors.danger, borderColor: colors.danger },
   bigBtnText: { color: colors.primary, fontSize: fontSize.md, fontWeight: "600" },
   bigBtnTextCancel: { color: "#fff" },
-  hintText: { color: colors.textMuted, fontSize: fontSize.xs, textAlign: "center", marginTop: spacing.sm },
+  hintText: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    textAlign: "center",
+    marginTop: 2,
+  },
 });

@@ -12,7 +12,7 @@ const now = () => new Date().toISOString();
 function parseAttachment(raw: unknown): MessageAttachment | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const a = raw as Record<string, unknown>;
-  const type = a.type === "image" || a.type === "video" || a.type === "file" ? a.type : null;
+  const type = a.type === "image" || a.type === "video" || a.type === "file" || a.type === "audio" ? a.type : null;
   if (!type || typeof a.url !== "string" || !a.url) return undefined;
   return {
     type,
@@ -37,8 +37,11 @@ function parseReply(raw: unknown): MessageReply | undefined {
 
 /** 会话列表最后一条消息的预览文案（附件消息用占位符，纯文本用原文） */
 function previewText(content: string, attachment?: MessageAttachment): string {
-  if (attachment) return attachment.type === "image" ? "[图片]" : `[文件] ${attachment.name}`;
-  return content;
+  if (!attachment) return content;
+  if (attachment.type === "image") return "[图片]";
+  if (attachment.type === "audio") return "[语音]";
+  if (attachment.type === "video") return "[视频]";
+  return `[文件] ${attachment.name}`;
 }
 
 /** 用户-用户会话（runId = conv id，无 agent run） */

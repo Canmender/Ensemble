@@ -103,7 +103,7 @@ export interface WorkflowEdge {
 
 /** 聊天附件（图片/视频/文件） */
 export interface MessageAttachment {
-  type: "image" | "video" | "file";
+  type: "image" | "video" | "file" | "audio";
   name: string;
   size: number;
   mime?: string;

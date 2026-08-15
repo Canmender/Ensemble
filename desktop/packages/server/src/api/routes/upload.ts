@@ -79,7 +79,7 @@ export function uploadRouter(ctx: AppContext): Router {
       const url = `/uploads/${dir}/${filename}`;
       writeFileSync(join(uploadDir, filename), buf);
 
-      const type = mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : "file";
+      const type = mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : mime.startsWith("audio/") ? "audio" : "file";
 
       // 记录文件信息（MD5 去重用）
       try {
