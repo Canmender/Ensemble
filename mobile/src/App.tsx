@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator, Platform } from "react-native";
+import { StatusBar as RNStatusBar } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -95,6 +96,13 @@ function ChatTabBadge() {
 
 // 底部标签导航
 function MainTabs() {
+  const insets = useSafeAreaInsets();
+  // elements Header 对自定义 header 不自动加状态栏 inset（isParentHeaderShown=true），
+  // 需显式 headerStatusBarHeight 让 spacer 生效；部分设备 insets.top 为 0，用 StatusBar 兜底
+  const headerStatusBarHeight = Platform.OS === "android"
+    ? Math.max(insets.top, RNStatusBar.currentHeight ?? 0, 24)
+    : insets.top;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -102,6 +110,7 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.textFaint,
         headerStyle: { backgroundColor: colors.bg },
         headerTintColor: colors.text,
+        headerStatusBarHeight,
         tabBarStyle: { backgroundColor: colors.surface, borderTopColor: colors.border },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
         tabBarIcon: ({ color, focused }) => {

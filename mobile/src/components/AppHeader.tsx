@@ -24,13 +24,12 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const [me, setMe] = useState<UserInfo | null>(null);
-  // 部分设备 safe-area-context 的 insets.top 返回 0，需用 StatusBar.currentHeight 兜底
+  // 部分设备 safe-area-context 的 insets.top 与 StatusBar.currentHeight 都返回 0，
+  // 加 24dp 下限保证内容始终在状态栏/摄像头下方
+  const androidMin = Platform.OS === "android" ? 24 : 0;
   const sbH = Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) : 0;
-  const topPad = includeTopInset
-    ? Math.max(insets.top, sbH)
-    : insets.top === 0
-      ? sbH
-      : 0;
+  // tab 走 elements Header 的 headerStatusBarHeight spacer（App.tsx 设置），此处为 0 不重复加
+  const topPad = includeTopInset ? Math.max(insets.top, sbH, androidMin) : 0;
 
   useEffect(() => {
     if (showAvatar) {
