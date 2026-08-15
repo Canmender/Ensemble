@@ -1,9 +1,9 @@
 /**
- * 语音消息录制组件（参考 box-im ChatRecord.vue）
- * 使用 expo-audio 录音（expo-av 已从 SDK 57 移除），支持开始/暂停/继续/重录/发送
+ * 语音发送（按住说话）：按住录音、松手发送、上滑取消
+ * 使用 expo-audio 录音；时长下限 1s、上限 60s（到时自动停发）
  */
-import React, { useState, useRef, useEffect } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, Animated } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Text, StyleSheet, PanResponder, Animated, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   useAudioRecorder,
@@ -14,201 +14,165 @@ import {
 } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { api } from "../services/api";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, fontSize } from "../theme";
 
 interface VoiceRecorderProps {
   onSend: (url: string, duration: number) => void;
   onCancel: () => void;
 }
 
+const MIN_SECONDS = 1;
+const MAX_SECONDS = 60;
+const CANCEL_OFFSET = -72; // 上滑超过此距离松手=取消
+
 export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
-  const [status, setStatus] = useState<"idle" | "recording" | "paused">("idle");
-  const [sending, setSending] = useState(false);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  const recState = useAudioRecorderState(recorder, 500);
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const recState = useAudioRecorderState(recorder, 200);
+  const [recording, setRecording] = useState(false);
+  const [cancelArmed, setCancelArmed] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [slideY] = useState(() => new Animated.Value(0));
+  const cancelRef = useRef(false);
+  const activeRef = useRef(false); // 当前是否在录制
+  const finishedRef = useRef(false); // 本次会话是否已完成（防重入）
 
-  const duration = Math.floor(recState.durationMillis / 1000);
+  const duration = Math.round(recState.durationMillis / 1000);
 
-  // 脉冲动画
   useEffect(() => {
-    if (status === "recording") {
-      const pulse = Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.3, duration: 600, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
-        ]),
-      );
-      pulse.start();
-      return () => pulse.stop();
+    // 到时自动停止并发送
+    if (recording && duration >= MAX_SECONDS) {
+      void finishRecording(true);
     }
-  }, [status, pulseAnim]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, recording]);
 
   const startRecording = async () => {
+    if (sending) return;
     try {
       await requestRecordingPermissionsAsync();
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      // 构造器不自动 prepare，stop 后也会 reset，故每次 start 前都需要 prepare
       await recorder.prepareToRecordAsync();
       recorder.record();
-      setStatus("recording");
+      activeRef.current = true;
+      finishedRef.current = false;
+      cancelRef.current = false;
+      setRecording(true);
+      setCancelArmed(false);
     } catch (err) {
       console.error("录音启动失败:", err);
+      setRecording(false);
     }
   };
 
-  const pauseRecording = () => {
-    recorder.pause();
-    setStatus("paused");
-  };
-
-  const resumeRecording = () => {
-    recorder.record();
-    setStatus("recording");
-  };
-
-  const stopRecording = async () => {
+  const finishRecording = async (doSend: boolean) => {
+    if (finishedRef.current) return;
+    if (!activeRef.current && !doSend) return;
+    finishedRef.current = true;
+    activeRef.current = false;
+    setRecording(false);
+    setCancelArmed(false);
+    slideY.setValue(0);
+    const dur = Math.max(1, Math.round(recState.durationMillis / 1000));
+    const cancelled = cancelRef.current;
     try {
       await recorder.stop();
       await setAudioModeAsync({ allowsRecording: false });
-    } catch (err) {
-      console.error("停止录音失败:", err);
+    } catch {
+      /* 幂等 */
     }
-    setStatus("idle");
-  };
-
-  const handleSend = async () => {
+    if (!doSend || cancelled || dur < MIN_SECONDS) {
+      onCancel();
+      return;
+    }
     setSending(true);
     try {
-      // 时长需在 stop 前捕获（stop 后 reset，getStatus 归零）
-      const dur = Math.max(1, Math.round(recState.durationMillis / 1000));
-      await stopRecording();
       const uri = recorder.uri;
-      if (!uri) return;
-      // 读取文件为 base64
+      if (!uri) { onCancel(); setSending(false); return; }
       const base64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
       const res = await api.uploadAttachment({ name: "voice.m4a", mime: "audio/m4a", data: base64 });
       if (!res.error && res.data) {
         onSend(res.data.url, dur);
+      } else {
+        onCancel();
       }
     } catch (err) {
       console.error("发送语音失败:", err);
+      onCancel();
     } finally {
       setSending(false);
     }
   };
 
-  const handleCancel = async () => {
-    await stopRecording();
-    onCancel();
-  };
-
-  const handleReset = async () => {
-    await stopRecording();
-    startRecording();
-  };
-
-  const formatDuration = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, "0")}`;
-  };
-
-  // 自动开始录音
-  useEffect(() => {
-    void startRecording();
-    return () => {
-      // 卸载时释放 MediaRecorder（stop 对未启动/已 stop 的 recorder 是幂等安全的）
-      try {
-        void recorder.stop();
-      } catch (err) {
-        console.error("卸载清理失败:", err);
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => activeRef.current,
+      onPanResponderGrant: () => {
+        void startRecording();
+      },
+      onPanResponderMove: (_, g) => {
+        if (!activeRef.current) return;
+        const delta = Math.max(0, -g.dy);
+        slideY.setValue(delta);
+        setCancelArmed(delta >= -CANCEL_OFFSET);
+      },
+      onPanResponderRelease: (_, g) => {
+        if (!activeRef.current) return;
+        cancelRef.current = g.dy < CANCEL_OFFSET;
+        void finishRecording(!cancelRef.current);
+      },
+      onPanResponderTerminate: () => {
+        if (!activeRef.current) return;
+        cancelRef.current = true;
+        void finishRecording(false);
+      },
+    }),
+  ).current;
 
   return (
-    <View style={styles.container}>
-      {/* 取消按钮 */}
-      <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.7}>
-        <Text style={styles.cancelText}>取消</Text>
-      </TouchableOpacity>
-
-      {/* 录音状态指示 */}
-      <View style={styles.center}>
-        <Animated.View style={[styles.pulse, { transform: [{ scale: pulseAnim }] }]}>
-          <View style={[styles.dot, status === "recording" ? styles.dotActive : styles.dotPaused]} />
-        </Animated.View>
-        <Text style={styles.duration}>{formatDuration(duration)}</Text>
-        <Text style={styles.statusText}>{status === "recording" ? "录音中…" : status === "paused" ? "已暂停" : "准备中"}</Text>
-      </View>
-
-      {/* 操作按钮 */}
-      <View style={styles.actions}>
-        {status === "recording" ? (
-          <TouchableOpacity style={styles.actionBtn} onPress={pauseRecording} activeOpacity={0.7}>
-            <Ionicons name="pause" size={28} color={colors.primary} />
-          </TouchableOpacity>
-        ) : status === "paused" ? (
-          <TouchableOpacity style={styles.actionBtn} onPress={resumeRecording} activeOpacity={0.7}>
-            <Ionicons name="play" size={28} color={colors.primary} />
-          </TouchableOpacity>
-        ) : null}
-        {status !== "idle" && (
-          <TouchableOpacity style={styles.actionBtn} onPress={handleReset} activeOpacity={0.7}>
-            <Ionicons name="refresh" size={24} color={colors.textMuted} />
-          </TouchableOpacity>
-        )}
-        {status !== "idle" && (
-          <TouchableOpacity
-            style={[styles.sendBtn, sending && { opacity: 0.6 }]}
-            onPress={handleSend}
-            disabled={sending}
-            activeOpacity={0.7}
+    <View style={styles.wrap}>
+      {sending ? (
+        <View style={styles.bigBtn}><ActivityIndicator color={colors.primary} /></View>
+      ) : (
+        <View style={styles.holdArea}>
+          <Animated.View
+            style={{ transform: [{ translateY: slideY }], alignSelf: "stretch" }}
+            {...panResponder.panHandlers}
           >
-            <Ionicons name="arrow-up" size={20} color="#fff" />
-          </TouchableOpacity>
-        )}
-      </View>
+            <View style={[styles.bigBtn, recording && styles.bigBtnActive, cancelArmed && styles.bigBtnCancel]}>
+              <Ionicons name="mic" size={30} color={cancelArmed ? "#fff" : colors.primary} />
+              <Text style={[styles.bigBtnText, cancelArmed && styles.bigBtnTextCancel]}>
+                {cancelArmed ? "松开取消" : recording ? `正在录音… ${duration}s` : "按住 说话"}
+              </Text>
+            </View>
+          </Animated.View>
+          <Text style={styles.hintText}>
+            {recording ? (cancelArmed ? "上滑松手取消" : "松手发送，上滑取消") : "按住录音 · 松手发送 · 上滑取消"}
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  wrap: { width: "100%" },
+  holdArea: { paddingHorizontal: spacing.lg },
+  bigBtn: {
+    width: "100%",
+    height: 44,
+    borderRadius: 22,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: spacing.lg,
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  cancelBtn: { padding: spacing.sm },
-  cancelText: { color: colors.textMuted, fontSize: fontSize.md },
-  center: { alignItems: "center", flex: 1 },
-  pulse: { marginBottom: spacing.sm },
-  dot: { width: 12, height: 12, borderRadius: 6 },
-  dotActive: { backgroundColor: colors.danger },
-  dotPaused: { backgroundColor: colors.warning },
-  duration: { color: colors.text, fontSize: fontSize.xl, fontWeight: "700" },
-  statusText: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: 2 },
-  actions: { flexDirection: "row", gap: spacing.md },
-  actionBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    justifyContent: "center",
+    gap: 8,
     backgroundColor: colors.surfaceAlt,
-    alignItems: "center",
-    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.primary,
   },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  bigBtnActive: { backgroundColor: colors.primarySoft },
+  bigBtnCancel: { backgroundColor: colors.danger, borderColor: colors.danger },
+  bigBtnText: { color: colors.primary, fontSize: fontSize.md, fontWeight: "600" },
+  bigBtnTextCancel: { color: "#fff" },
+  hintText: { color: colors.textMuted, fontSize: fontSize.xs, textAlign: "center", marginTop: spacing.sm },
 });

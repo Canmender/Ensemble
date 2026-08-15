@@ -1067,17 +1067,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         />
       )}
 
-      {/* 语音录制模式 */}
-      {showVoiceRecorder ? (
-        <VoiceRecorder
-          onSend={(url, dur) => {
-            setShowVoiceRecorder(false);
-            void api.sendConversationMessage(convId, `[语音 ${dur}s]`, { type: "audio", name: "voice.m4a", size: 0, mime: "audio/m4a", url });
-          }}
-          onCancel={() => setShowVoiceRecorder(false)}
-        />
-      ) : (
-      /* 输入栏 */
+      {/* 输入栏 */}
       <View style={[styles.inputBar, { paddingBottom: keyboardHeight + spacing.md }]}>
         <TouchableOpacity
           style={styles.emojiBtn}
@@ -1086,19 +1076,31 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         >
           <Ionicons name={showEmoji ? "close-circle" : "happy-outline"} size={24} color={showEmoji ? colors.primary : colors.text} />
         </TouchableOpacity>
-        <TextInput
-          ref={inputRef}
-          style={styles.input}
-          placeholder="输入消息…"
-          placeholderTextColor={colors.textFaint}
-          value={inputText}
-          onChangeText={onInputChange}
-          multiline
-          maxLength={2000}
-          // editable 不随 isSending 切换（editable 变 false 会让输入框失焦收起键盘）
-          editable={isConnected && !uploading}
-        />
-        {isSending || uploading ? (
+        {showVoiceRecorder ? (
+          /* 按住说话 */
+          <VoiceRecorder
+            onSend={(url, dur) => {
+              setShowVoiceRecorder(false);
+              void api.sendConversationMessage(convId, `[语音 ${dur}s]`, { type: "audio", name: "voice.m4a", size: 0, mime: "audio/m4a", url });
+              void loadMessages();
+            }}
+            onCancel={() => {}}
+          />
+        ) : (
+          <TextInput
+            ref={inputRef}
+            style={styles.input}
+            placeholder="输入消息…"
+            placeholderTextColor={colors.textFaint}
+            value={inputText}
+            onChangeText={onInputChange}
+            multiline
+            maxLength={2000}
+            // editable 不随 isSending 切换（editable 变 false 会让输入框失焦收起键盘）
+            editable={isConnected && !uploading}
+          />
+        )}
+        {!showVoiceRecorder && (isSending || uploading ? (
           <View style={styles.sendBtn}>
             <ActivityIndicator size="small" color={colors.primary} />
           </View>
@@ -1111,10 +1113,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           >
             <Ionicons name="arrow-up" size={20} color={canSend ? "#fff" : colors.textFaint} />
           </TouchableOpacity>
-        )}
+        ))}
         <TouchableOpacity
           style={styles.expandBtn}
-          onPress={() => setShowExtend((v) => !v)}
+          onPress={() => { setShowExtend((v) => !v); if (showVoiceRecorder) setShowVoiceRecorder(false); }}
           disabled={!canSendAttachment || uploading || isSending}
           activeOpacity={0.7}
         >
@@ -1126,13 +1128,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.expandBtn}
-          onPress={() => setShowVoiceRecorder(true)}
+          onPress={() => { setShowVoiceRecorder((v) => !v); if (showExtend) setShowExtend(false); }}
           activeOpacity={0.7}
         >
-          <Ionicons name="mic" size={24} color={colors.text} />
+          <Ionicons name={showVoiceRecorder ? "keypad" : "mic"} size={24} color={showVoiceRecorder ? colors.primary : colors.text} />
         </TouchableOpacity>
       </View>
-      )}
 
       {/* @提及选择列表（输入框上方弹出） */}
       {showMentionPicker && mentionableParticipants.length > 0 && (
