@@ -6,6 +6,7 @@ import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "./Avatar";
 import { api, type UserInfo } from "../services/api";
 import { colors, spacing, fontSize } from "../theme";
@@ -15,11 +16,15 @@ interface AppHeaderProps {
   showBack?: boolean;
   showAvatar?: boolean;
   right?: React.ReactNode;
+  /** 是否自行加上部安全区 padding。native-stack 自定义 header 不会自动 inset，需为 true；tab 走 elements Header 已 inset，传 false */
+  includeTopInset?: boolean;
 }
 
-export function AppHeader({ title, showBack = false, showAvatar = true, right }: AppHeaderProps) {
+export function AppHeader({ title, showBack = false, showAvatar = true, right, includeTopInset = true }: AppHeaderProps) {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const [me, setMe] = useState<UserInfo | null>(null);
+  const topPad = includeTopInset ? insets.top : 0;
 
   useEffect(() => {
     if (showAvatar) {
@@ -30,7 +35,7 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right }:
   }, [showAvatar]);
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: topPad, height: 52 + topPad }]}>
       {/* 左侧：返回按钮 或 头像+昵称 */}
       <View style={styles.left}>
         {showBack ? (
