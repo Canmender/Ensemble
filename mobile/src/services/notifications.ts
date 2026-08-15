@@ -42,8 +42,17 @@ export function initNotifications(): void {
     sound: null,
   }).catch(() => {});
 
-  // Android 13+ 运行时通知权限
-  void Notifications.requestPermissionsAsync().catch(() => {});
+  // Android 13+ 运行时通知权限：先查状态再请求（已拒绝时系统不再弹窗，需手动开启）
+  void (async () => {
+    try {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== "granted") {
+        await Notifications.requestPermissionsAsync();
+      }
+    } catch {
+      /* 权限请求失败不影响 WS 连接 */
+    }
+  })();
 
   wsLink.onGlobalChatMessage((msg) => {
     const { lastActiveConvId, mutedRunIds, addUnread } = useUnreadStore.getState();
@@ -53,7 +62,7 @@ export function initNotifications(): void {
     if (mutedRunIds.has(msg.runId)) return;
     addUnread();
     void Notifications.scheduleNotificationAsync({
-      content: { title: "新消息", body: previewOf(msg), sound: false },
+      content: { title: "新消息", body: previewOf(msg), sound: false, channelId: "messages" },
       trigger: null,
     }).catch(() => {});
   });
@@ -69,6 +78,7 @@ export function initNotifications(): void {
         title: `${ev.senderName} 提到了你`,
         body: ev.content || "提到了你",
         sound: true,
+        channelId: "messages",
       },
       trigger: null,
     }).catch(() => {});
