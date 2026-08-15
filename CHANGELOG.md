@@ -11,9 +11,10 @@
 **已包含的全部修复（0.7.48 累计）**：
 - 启动崩溃：expo-av → expo-audio 迁移（expo-av 已从 SDK 57 移除，ABI 不兼容）
 - 消息/语音发送：`sendConversationMessage` URL 变量丢失（404）修复
-- 顶部遮挡：AppHeader 加状态栏安全区
+- 顶部遮挡：AppHeader 加状态栏安全区 + `StatusBar.currentHeight` 兜底（部分设备 safe-area insets.top 为 0）
 - 消息通知：通知图标 + 显式 channel + Android 13 权限
 - 语音录制重录、分页加载、convTitle 崩溃、类型补全
+- **新增语音消息播放**：点击语音气泡播放/暂停（expo-audio），进度条 + 时长显示
 
 **版本**：0.7.48 → 0.7.49，APK versionCode 38
 
