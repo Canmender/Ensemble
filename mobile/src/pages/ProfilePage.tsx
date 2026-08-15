@@ -87,16 +87,18 @@ export default function ProfilePage() {
   return (
     <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.avatarWrap}>
-        <TouchableOpacity onPress={() => setShowAvatarViewer(true)} disabled={uploadingAvatar} activeOpacity={0.8}>
-          <Avatar name={me?.displayName || me?.username || "?"} avatarUrl={me?.avatarUrl} size={84} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={pickAndUploadAvatar} disabled={uploadingAvatar} activeOpacity={0.8} style={styles.avatarEditBadge}>
-          {uploadingAvatar ? (
-            <ActivityIndicator size="small" color="#fff" />
-          ) : (
-            <Ionicons name="camera" size={14} color="#fff" />
-          )}
-        </TouchableOpacity>
+        <View style={styles.avatarBox}>
+          <TouchableOpacity onPress={() => setShowAvatarViewer(true)} disabled={uploadingAvatar} activeOpacity={0.8}>
+            <Avatar name={me?.displayName || me?.username || "?"} avatarUrl={me?.avatarUrl} size={84} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={pickAndUploadAvatar} disabled={uploadingAvatar} activeOpacity={0.8} style={styles.avatarEditBadge}>
+            {uploadingAvatar ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Ionicons name="camera" size={14} color="#fff" />
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.infoCard}>
@@ -157,6 +159,7 @@ export default function ProfilePage() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   avatarWrap: { alignItems: "center", marginTop: spacing.xl },
+  avatarBox: { position: "relative" },
   avatarEditBadge: {
     position: "absolute",
     bottom: 0,

@@ -111,7 +111,13 @@ export function createAppContext(
   if (env.apiKey) hub.overrideToken(env.apiKey);
   // 设备多端在线：WS 上线注册设备表，下线/上线广播给同用户其他设备
   hub.onDeviceStatus = (userId, device, online) => {
-    if (online) store.upsertDevice({ id: device.id, userId, name: device.name, type: device.type });
+    if (online) {
+      store.upsertDevice({ id: device.id, userId, name: device.name, type: device.type });
+      // 去重：清理同类型同名称的离线旧设备（重装后设备 ID 变化产生的"我的手机"残留）
+      if (device.type === "mobile") {
+        store.cleanupDuplicateDevices(userId, device.id, device.name, device.type, hub.getOnlineDeviceIds(userId));
+      }
+    }
     const event: RunEvent = { type: "device.status", deviceId: device.id, name: device.name, kind: device.type, online };
     hub.broadcastToUser(userId, event);
   };

@@ -20,6 +20,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { CLOUD_SERVER } from "../services/connection";
 import { api, type UserInfo } from "../services/api";
 import { checkAndPromptUpdate } from "../services/appUpdate";
+import { Avatar } from "../components/Avatar";
 import { useAuthGate } from "../store/authGateStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 
@@ -125,9 +126,7 @@ export default function SettingsPage() {
           {loadingMe ? (
             <ActivityIndicator color={colors.primary} />
           ) : (
-            <Text style={styles.avatarText}>
-              {me?.displayName?.[0] || me?.username?.[0]?.toUpperCase() || "?"}
-            </Text>
+            <Avatar name={me?.displayName || me?.username || "?"} avatarUrl={me?.avatarUrl} size={56} />
           )}
         </View>
         <View style={styles.profileInfo}>
