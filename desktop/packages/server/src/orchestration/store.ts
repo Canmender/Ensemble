@@ -65,6 +65,7 @@ export class Store {
     listConversationReads: ReturnType<DatabaseSync["prepare"]>;
     setConversationArchived: ReturnType<DatabaseSync["prepare"]>;
     upsertDevice: ReturnType<DatabaseSync["prepare"]>;
+    deleteDevice: ReturnType<DatabaseSync["prepare"]>;
     listDevices: ReturnType<DatabaseSync["prepare"]>;
   };
 
@@ -113,6 +114,7 @@ export class Store {
       touchRead: db.prepare("INSERT INTO conversation_reads (conv_id, user_id, unread, read_ts) VALUES (?, ?, 0, ?) ON CONFLICT(conv_id, user_id) DO UPDATE SET unread = 0, read_ts = excluded.read_ts"),
       listConversationReads: db.prepare("SELECT user_id, read_ts FROM conversation_reads WHERE conv_id = ? AND read_ts IS NOT NULL"),
       upsertDevice: db.prepare("INSERT INTO devices (id, user_id, name, type, last_seen_at, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, last_seen_at = excluded.last_seen_at"),
+      deleteDevice: db.prepare("DELETE FROM devices WHERE user_id = ? AND id = ?"),
       listDevices: db.prepare("SELECT * FROM devices WHERE user_id = ? ORDER BY created_at ASC"),
     };
   }
@@ -539,6 +541,16 @@ export class Store {
       type: String(r.type),
       lastSeenAt: r.last_seen_at ? String(r.last_seen_at) : undefined,
     }));
+  }
+
+  /** 清理同类型同名称的离线旧设备（重装后设备 ID 变化产生的"我的手机"残留） */
+  cleanupDuplicateDevices(userId: string, keepDeviceId: string, name: string, type: string, onlineIds: Set<string>): void {
+    for (const d of this.listDevices(userId)) {
+      if (d.id === keepDeviceId) continue;
+      if (d.type !== type || d.name !== name) continue;
+      if (onlineIds.has(d.id)) continue; // 在线设备保留
+      this.stmts.deleteDevice.run(userId, d.id);
+    }
   }
 }
 

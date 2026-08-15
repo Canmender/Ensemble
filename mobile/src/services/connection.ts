@@ -8,6 +8,8 @@
  */
 
 import { io, Socket } from "socket.io-client";
+import { Platform } from "react-native";
+import * as Application from "expo-application";
 import type {
   DeviceInfo,
   EnsembleMessage,
@@ -952,8 +954,16 @@ class ConnectionService {
 
   // ==================== 设备 ID 持久化 ====================
 
-  /** 获取或创建设备 ID（持久化到 AsyncStorage） */
+  /** 获取或创建设备 ID（优先 Android ID，设备级稳定，重装/更新后不变，避免重复"我的手机"） */
   private async getOrCreateDeviceId(): Promise<string> {
+    if (Platform.OS === "android") {
+      try {
+        const androidId = Application.getAndroidId();
+        if (androidId) return "mobile-" + androidId;
+      } catch (err) {
+        console.warn("获取 Android ID 失败:", err);
+      }
+    }
     try {
       const stored = await this.storage.getItem(DEVICE_ID_KEY);
       if (stored) {

@@ -20,9 +20,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useFocusEffect } from "@react-navigation/native";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
-import { api, type UserInfo } from "../services/api";
+import { api, type UserInfo, type Conversation } from "../services/api";
 import { useChatTarget } from "../store/chatTargetStore";
 import { wsLink } from "../services/wslink";
 import { colors, spacing, radius, fontSize } from "../theme";
@@ -40,13 +41,14 @@ interface ContactGroup {
 
 type Row =
   | { type: "header"; key: string; title: string; count: number; system: boolean; collapsed: boolean }
-  | { type: "item"; key: string; kind: "user" | "agent" | "device"; id: string; name: string; subtitle: string; user?: UserInfo; agent?: AgentConfig; deviceIcon?: keyof typeof Ionicons.glyphMap };
+  | { type: "item"; key: string; kind: "user" | "agent" | "device" | "group"; id: string; name: string; subtitle: string; user?: UserInfo; agent?: AgentConfig; deviceIcon?: keyof typeof Ionicons.glyphMap; conv?: Conversation };
 
 export default function ContactsPage({ navigation }: { navigation: any }) {
   const { agents } = useTaskStore();
   const { currentDevice } = useDeviceStore();
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [devices, setDevices] = useState<Array<{ id: string; name: string; type: string; online: boolean }>>([]);
+  const [groupConvs, setGroupConvs] = useState<Conversation[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState<ContactGroup[]>([]);
@@ -100,14 +102,32 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     }
   }, []);
 
+  // 群聊（服务器端群会话，用于群聊管理）
+  const loadGroupConvs = useCallback(async () => {
+    try {
+      const res = await api.getConversations();
+      if (res.data) setGroupConvs(res.data.filter((c) => c.type === "group"));
+    } catch {
+      /* 忽略 */
+    }
+  }, []);
+
   useEffect(() => {
     void loadUsers();
     void loadGroups();
     void loadDevices();
+    void loadGroupConvs();
     // 设备在线状态变化实时刷新
     const unsub = wsLink.on({ onDeviceStatus: () => void loadDevices() });
     return unsub;
-  }, [loadUsers, loadGroups, loadDevices]);
+  }, [loadUsers, loadGroups, loadDevices, loadGroupConvs]);
+
+  // 返回本页时刷新群聊（创建/管理群后能看到最新）
+  useFocusEffect(
+    useCallback(() => {
+      void loadGroupConvs();
+    }, [loadGroupConvs]),
+  );
 
   const q = query.trim().toLowerCase();
   const matchUser = (u: UserInfo) =>
@@ -201,11 +221,33 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     } else if (row.kind === "agent") {
       setTarget({ kind: "agent", id: row.id, name: row.name });
       navigation.navigate("Chat");
+    } else if (row.kind === "group" && row.conv) {
+      // 打开群聊
+      navigation.navigate("ChatRoom", { convId: row.conv.id, runId: row.conv.runId, title: row.conv.title || "群聊" });
     }
+  };
+
+  // 群聊管理（群设置：改名/成员/公告/管理员等）
+  const manageGroup = (conv: Conversation) => {
+    navigation.navigate("GroupSettings", { convId: conv.id, title: conv.title || "群设置" });
   };
 
   // 构建分组列表（系统组 + 自定义组）
   const sections: Array<{ key: string; title: string; system: boolean; rows: Row[] }> = [
+    {
+      key: "groups",
+      title: "群聊",
+      system: true,
+      rows: groupConvs.map((c) => ({
+        type: "item" as const,
+        key: `grp-${c.id}`,
+        kind: "group" as const,
+        id: c.id,
+        name: c.title || "未命名群",
+        subtitle: `${(c.participantIds ?? []).length} 人`,
+        conv: c,
+      })),
+    },
     {
       key: "devices",
       title: "设备",
@@ -272,6 +314,22 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
   const renderItem = ({ item }: { item: Row }) => {
     if (item.type === "header") return renderHeader(item);
     const row = item;
+    if (row.kind === "group") {
+      return (
+        <TouchableOpacity style={styles.row} onPress={() => openContact(row)} activeOpacity={0.7}>
+          <View style={[styles.avatar, { backgroundColor: colors.primarySoft }]}>
+            <Ionicons name="people" size={20} color={colors.primary} />
+          </View>
+          <View style={styles.rowInfo}>
+            <Text style={styles.rowName}>{row.name}</Text>
+            <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
+          </View>
+          <TouchableOpacity onPress={(e) => { e.stopPropagation(); if (row.conv) manageGroup(row.conv); }} hitSlop={8}>
+            <Ionicons name="settings-outline" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      );
+    }
     if (row.kind === "device") {
       const online = row.subtitle.includes("在线");
       return (
