@@ -297,20 +297,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
           user: u,
         })),
     },
-    {
-      key: "users",
-      title: "全部用户",
-      system: true,
-      rows: allUsers.map((u) => ({
-        type: "item" as const,
-        key: `user-${u.id}`,
-        kind: "user" as const,
-        id: u.id,
-        name: u.displayName || u.username,
-        subtitle: "用户",
-        user: u,
-      })),
-    },
+
     ...groups.map((g) => ({
       key: g.id,
       title: g.name,

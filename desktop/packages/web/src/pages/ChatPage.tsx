@@ -352,13 +352,15 @@ export default function ChatPage() {
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
 
   const loadContacts = useCallback(async () => {
-    const [agents, conversations, allUsers] = await Promise.all([
+    const [agents, conversations, allUsers, friendsRes] = await Promise.all([
       api.get<Agent[]>("/agents"),
       api.get<any[]>("/conversations").catch(() => []),
       api.get<UserInfo[]>("/auth/users").catch(() => []),
+      api.get<{ friends: Array<{ id: string }> }>("/privacy/friends").catch(() => ({ friends: [] })),
     ]);
     setUsers(allUsers ?? []);
     const usersByIdMap = new Map((allUsers ?? []).map((u) => [u.id, u]));
+    const friendIds = new Set((friendsRes?.friends ?? []).map((f0) => f0.id));
 
     const agentContacts: Contact[] = (agents ?? []).map((a) => ({
       id: a.id,
@@ -406,13 +408,17 @@ export default function ChatPage() {
       }
     }
 
-    // 用户列表（未建会话的也列出，首次发送时创建会话）
+    // 用户列表：仅显示有会话的好友，或已是好友的注册用户（不再自动罗列所有注册用户）
     const userContacts: Contact[] = [];
     if (me) {
       for (const u of (allUsers ?? [])) {
         if (u.id === me.id) continue;
+        // 只纳入「已有会话」或「已互为好友」的用户
+        const existing = userContactByUser.get(u.id);
+        const isFriend = friendIds.has(u.id);
+        if (!existing && !isFriend) continue;
         userContacts.push(
-          userContactByUser.get(u.id) ?? {
+          existing ?? {
             id: `user-${u.id}`,
             type: "user" as const,
             name: u.displayName || u.username,
