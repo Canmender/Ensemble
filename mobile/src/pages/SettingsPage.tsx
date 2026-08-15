@@ -19,6 +19,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useDeviceStore } from "../store/deviceStore";
 import { CLOUD_SERVER } from "../services/connection";
 import { api, type UserInfo } from "../services/api";
+import { checkAndPromptUpdate } from "../services/appUpdate";
 import { useAuthGate } from "../store/authGateStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 
@@ -96,6 +97,14 @@ export default function SettingsPage() {
       title: "隐私设置",
       desc: "好友验证、私聊权限、信息展示",
       onPress: () => navigation.navigate("PrivacySettings"),
+    },
+    {
+      icon: "refresh-outline" as const,
+      title: "检查更新",
+      desc: `当前 v${APP_VERSION}，检查新版本`,
+      onPress: () => {
+        void checkAndPromptUpdate();
+      },
     },
     {
       icon: "information-circle-outline" as const,

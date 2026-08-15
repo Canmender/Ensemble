@@ -72,6 +72,8 @@ export interface AppContext {
   db: DatabaseSync;
   /** 聊天附件（图片/文件）存储目录 */
   uploadsDir: string;
+  /** 移动端应用包托管目录（APK + version.json） */
+  apkDir: string;
   config: ConfigManager;
   store: Store;
   userStore: UserStore;
@@ -132,6 +134,9 @@ export function createAppContext(
   // 聊天附件存储目录（图片/文件上传）
   const uploadsDir = join(dataDir, "uploads");
   mkdirSync(uploadsDir, { recursive: true });
+  // 移动端应用包托管目录（app-version 接口 + APK 文件）
+  const apkDir = join(dataDir, "apk");
+  mkdirSync(apkDir, { recursive: true });
   // 外部记忆后端：默认本地 SQL（SQLite + FTS5，免服务）；配置 Mem0 时切换到 Mem0
   const mem0Cfg = config.getSettings().mem0;
   const externalBackend: MemoryBackend | undefined =
@@ -257,6 +262,7 @@ export function createAppContext(
     env,
     db,
     uploadsDir,
+    apkDir,
     config,
     store,
     userStore,

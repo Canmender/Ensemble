@@ -19,6 +19,7 @@ import { conversationsRouter } from "./api/routes/conversations";
 import { privacyRouter } from "./api/routes/privacy";
 import { devicesRouter } from "./api/routes/devices";
 import { uploadRouter } from "./api/routes/upload";
+import { appVersionRouter } from "./api/routes/app-version";
 import { initRelayClient } from "./api/routes/relay";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
@@ -80,6 +81,9 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   // 聊天附件静态服务（图片/文件；URL 直接内嵌在消息里，由消息 API 权限控制内容，静态文件本身公开）
   app.use("/uploads", express.static(ctx.uploadsDir));
 
+  // 移动端应用包托管（APK 文件，供应用内更新下载）
+  app.use("/apk", express.static(ctx.apkDir));
+
   // 用户认证路由（注册/登录/会话）—— 挂在 apiAuth 之前，登录无需已有 token
   app.use("/api/auth", authRouter(ctx));
 
@@ -91,7 +95,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
       getToken: () => ctx.hub.sessionToken,
       resolveUser: (token) => ctx.userStore.getUserBySessionToken(token),
       apiKey: ctx.env.apiKey,
-      publicPaths: ["/health"],
+      publicPaths: ["/health", "/app-version"],
       originGuardPaths: ["/ws-token"],
     }),
   );
@@ -120,6 +124,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/privacy", privacyRouter(ctx));
   app.use("/api/devices", devicesRouter(ctx));
   app.use("/api/upload", uploadRouter(ctx));
+  app.use("/api/app-version", appVersionRouter(ctx));
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）
   initRelayClient(ctx);
