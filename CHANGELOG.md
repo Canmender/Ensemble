@@ -4,7 +4,15 @@
 
 ---
 
-## v0.7.68 (2026-08-15) — 根治登录后 Invalid hook call 崩溃
+## v0.7.69 (2026-08-15) — 修复会话标题应显示对方名字
+
+- **修复会话标题方向错误**：用户-用户会话此前用设备 id 当「自己」，过滤失效，导致对方先发起的会话里显示成自己的名字且定型。
+- 现在用**当前登录用户 id（me.id）**过滤，并同时考虑 `userId`（发起方）与 `participantIds`（被邀请方）——无论谁先发起，本端都显示**对方**的名字。
+- 登录后在 App 启动时全局加载当前用户（me），保证标题立即正确。
+
+**版本**：0.7.68 → 0.7.69，APK versionCode 58
+
+
 
 - **定位真实报错**：错误页显示 `Invalid hook call / more than one copy of React`，崩在登录后 BottomTabView/SafeAreaProviderCompat 渲染。
 - **移除进入主界面的全部玻璃渲染**：Tab 栏改回官方实现、导航头改回普通 View、移除导致依赖变化的 `expo-blur`。

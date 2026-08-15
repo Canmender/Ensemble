@@ -14,6 +14,7 @@ import { wsLink } from "./services/wslink";
 import { api } from "./services/api";
 import { useAuthGate } from "./store/authGateStore";
 import { useUnreadStore } from "./store/unreadStore";
+import { useMeStore } from "./store/meStore";
 
 // Pages
 import DashboardPage from "./pages/DashboardPage";
@@ -308,6 +309,7 @@ export default function App() {
         await connectionService.connectToCloud();
         const me = await api.getMe();
         setGate(me.data ? "in" : "out");
+        if (me.data) void useMeStore.getState().reload();
       } catch {
         setGate("out");
       }

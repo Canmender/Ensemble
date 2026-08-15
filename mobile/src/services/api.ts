@@ -118,6 +118,8 @@ export interface UserInfo {
 /** 会话（企业级 IM） */
 export interface Conversation {
   id: string;
+  /** 会话创建者（发起方）的用户 id；direct 会话中即对方或自己，取决谁发起 */
+  userId?: string;
   type: "direct" | "group";
   title?: string;
   participantIds: string[];
