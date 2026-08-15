@@ -28,6 +28,7 @@ import { useChatTarget } from "../store/chatTargetStore";
 import { wsLink } from "../services/wslink";
 import { colors, spacing, radius, fontSize } from "../theme";
 import { Avatar } from "../components/Avatar";
+import { AddFriendSheet } from "../components/AddFriendSheet";
 import type { AgentConfig } from "@ensemble/shared-protocol";
 
 const GROUPS_KEY = "@ensemble/contact-groups";
@@ -56,6 +57,9 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
   const [manageOpen, setManageOpen] = useState(false);
   // 创建群聊（用户 + Agent 可混合，三类群）
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showAddFriend, setShowAddFriend] = useState(false);
+  const [friendIds, setFriendIds] = useState<Set<string>>(new Set());
+  const [reloadFriends, setReloadFriends] = useState(0);
   const [groupName, setGroupName] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<Set<string>>(new Set());
   // 编辑态：null=列表视图；{mode:'new'}=新建；{mode:'edit',group}=编辑
@@ -112,11 +116,20 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     }
   }, []);
 
+  // 加载好友列表
+  const loadFriends = useCallback(async () => {
+    try {
+      const res = await api.getFriends();
+      if (res.data?.friends) setFriendIds(new Set(res.data.friends.map((f) => f.id)));
+    } catch { /* 忽略 */ }
+  }, []);
+
   useEffect(() => {
     void loadUsers();
     void loadGroups();
     void loadDevices();
     void loadGroupConvs();
+    void loadFriends();
     // 设备在线状态变化实时刷新
     const unsub = wsLink.on({ onDeviceStatus: () => void loadDevices() });
     return unsub;
@@ -126,8 +139,14 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
   useFocusEffect(
     useCallback(() => {
       void loadGroupConvs();
-    }, [loadGroupConvs]),
+      void loadFriends();
+    }, [loadGroupConvs, loadFriends]),
   );
+
+  // 加好友/同意好友后刷新好友列表（reloadFriends 触发）
+  useEffect(() => {
+    if (reloadFriends > 0) void loadFriends();
+  }, [reloadFriends, loadFriends]);
 
   const q = query.trim().toLowerCase();
   const matchUser = (u: UserInfo) =>
@@ -263,8 +282,24 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
       })),
     },
     {
+      key: "friends",
+      title: `好友${friendIds.size > 0 ? " · " + friendIds.size : ""}`,
+      system: true,
+      rows: allUsers
+        .filter((u) => friendIds.has(u.id))
+        .map((u) => ({
+          type: "item" as const,
+          key: `friend-${u.id}`,
+          kind: "user" as const,
+          id: u.id,
+          name: u.displayName || u.username,
+          subtitle: "好友",
+          user: u,
+        })),
+    },
+    {
       key: "users",
-      title: "用户",
+      title: "全部用户",
       system: true,
       rows: allUsers.map((u) => ({
         type: "item" as const,
@@ -382,8 +417,14 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
         )}
       </View>
 
-      {/* 操作栏：新建分组 + 创建群聊 */}
+      {/* 操作栏：加好友 + 创建群聊 + 分组管理 */}
       <View style={styles.actionBar}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => setShowAddFriend(true)} activeOpacity={0.7}>
+          <View style={styles.actionIcon}>
+            <Ionicons name="person-add-outline" size={18} color={colors.primary} />
+          </View>
+          <Text style={styles.actionLabel}>加好友</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => setShowCreateGroup(true)} activeOpacity={0.7}>
           <View style={styles.actionIcon}>
             <Ionicons name="chatbubbles-outline" size={18} color={colors.primary} />
@@ -591,6 +632,12 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
           </View>
         </View>
       </Modal>
+      {/* 加好友面板 */}
+      <AddFriendSheet
+        visible={showAddFriend}
+        onClose={() => setShowAddFriend(false)}
+        onChanged={() => setReloadFriends((n) => n + 1)}
+      />
     </View>
   );
 }

@@ -706,6 +706,10 @@ class ApiService {
     return this.request<{ requests: any[] }>("GET", "/api/privacy/friend-requests");
   }
 
+  async getFriends(): Promise<ApiResponse<{ friends: UserInfo[] }>> {
+    return this.request<{ friends: UserInfo[] }>("GET", "/api/privacy/friends");
+  }
+
   async acceptFriendRequest(requestId: string): Promise<ApiResponse<{ accepted: boolean; convId?: string }>> {
     return this.request<{ accepted: boolean; convId?: string }>("POST", "/api/privacy/friend-requests/" + requestId + "/accept");
   }

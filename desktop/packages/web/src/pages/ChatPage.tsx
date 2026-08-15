@@ -10,10 +10,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive, User as UserIcon,
-  Image as ImageIcon, Paperclip, File as FileIcon, X, Menu, Info, Settings2
+  Image as ImageIcon, Paperclip, File as FileIcon, X, Menu, Info, Settings2, UserPlus
 } from "lucide-react";
 import { GroupSettingsDialog } from "../components/GroupSettingsDialog";
 import { ContactInfoDialog } from "../components/ContactInfoDialog";
+import { FriendsDialog } from "../components/FriendsDialog";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
@@ -325,6 +326,8 @@ export default function ChatPage() {
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [showContactInfo, setShowContactInfo] = useState(false);
+  const [showFriends, setShowFriends] = useState(false);
+  const [friendsVersion, setFriendsVersion] = useState(0);
   const [draftAttachment, setDraftAttachment] = useState<MessageAttachment | null>(null);
   const [uploading, setUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -807,14 +810,24 @@ export default function ChatPage() {
       <aside className="flex w-72 flex-col border-r border-border bg-surface">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <h2 className="text-sm font-semibold text-fg">消息</h2>
-          <button
-            onClick={() => setShowCreateGroup(true)}
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:bg-muted/10 hover:text-fg"
-            aria-label="创建群聊"
-            title="创建群聊（头脑风暴）"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setShowFriends(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:bg-muted/10 hover:text-fg"
+              aria-label="加好友"
+              title="加好友 / 好友请求"
+            >
+              <UserPlus className="h-4 w-4" />
+            </button>
+            <button
+              onClick={() => setShowCreateGroup(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted hover:bg-muted/10 hover:text-fg"
+              aria-label="创建群聊"
+              title="创建群聊（头脑风暴）"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-4">
@@ -1138,6 +1151,10 @@ export default function ChatPage() {
         />
       )}
 
+      {/* 加好友对话框 */}
+      {showFriends && (
+        <FriendsDialog onClose={() => setShowFriends(false)} onChanged={() => { setFriendsVersion((n) => n + 1); void loadContacts(); }} />
+      )}
       {/* 群聊设置对话框 */}
       {showGroupSettings && activeContact?.convId && (
         <GroupSettingsDialog

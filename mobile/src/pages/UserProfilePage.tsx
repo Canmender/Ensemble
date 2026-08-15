@@ -4,10 +4,11 @@
  */
 
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api } from "../services/api";
+import { useMeStore } from "../store/meStore";
 import { colors, spacing, radius, fontSize } from "../theme";
 import type { RootStackParamList } from "../App";
 
@@ -17,6 +18,9 @@ export default function UserProfilePage({ route, navigation }: Props) {
   const { userId, name, username, displayName } = route.params;
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [requesting, setRequesting] = useState(false);
+  const me = useMeStore((s) => s.me);
+  const isMe = me?.id === userId;
 
   const title = displayName || username || name;
 
@@ -82,6 +86,31 @@ export default function UserProfilePage({ route, navigation }: Props) {
       {error && <Text style={styles.error}>{error}</Text>}
 
       <View style={styles.footer}>
+        {!isMe && (
+          <TouchableOpacity
+            style={[styles.friendBtn, requesting && { opacity: 0.7 }]}
+            onPress={async () => {
+              setRequesting(true);
+              setError(null);
+              const res = await api.sendFriendRequest(userId);
+              setRequesting(false);
+              if (res.error) {
+                setError(res.error);
+              } else {
+                Alert.alert("已发送", "好友请求已发送，等待对方确认。");
+              }
+            }}
+            disabled={requesting}
+            activeOpacity={0.8}
+          >
+            {requesting ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <Ionicons name="person-add-outline" size={18} color={colors.primary} />
+            )}
+            <Text style={styles.friendBtnText}>{requesting ? "发送中…" : "加好友"}</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity
           style={[styles.sendBtn, sending && { opacity: 0.7 }]}
           onPress={() => void handleSendMessage()}
@@ -150,4 +179,17 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   sendBtnText: { color: "#fff", fontSize: fontSize.md, fontWeight: "600" },
+  friendBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    borderRadius: radius.full,
+    paddingVertical: 13,
+    marginBottom: spacing.sm,
+  },
+  friendBtnText: { color: colors.primary, fontSize: fontSize.md, fontWeight: "600" },
 });

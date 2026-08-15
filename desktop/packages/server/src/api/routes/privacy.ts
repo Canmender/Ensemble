@@ -178,16 +178,57 @@ export function privacyRouter(ctx: AppContext): Router {
         "SELECT * FROM friend_requests WHERE (from_user = ? OR to_user = ?) AND status = 'pending' ORDER BY created_at DESC"
       ).all(userId, userId) as any[];
       ok(res, {
-        requests: rows.map((r) => ({
-          id: r.id,
-          fromUser: r.from_user,
-          toUser: r.to_user,
-          message: r.message,
-          createdAt: r.created_at,
-        })),
+        requests: rows.map((r) => {
+          const from = r.from_user === userId ? r.to_user : r.from_user;
+          const u = ctx.store.getUser(from);
+          return {
+            id: r.id,
+            fromUser: r.from_user,
+            toUser: r.to_user,
+            direction: r.from_user === userId ? "outgoing" : "incoming",
+            message: r.message,
+            createdAt: r.created_at,
+            peerName: u?.displayName ?? u?.username ?? from,
+          };
+        }),
       });
     } catch {
       ok(res, { requests: [] });
+    }
+  });
+
+  /** 好友列表（已确认的好友关系：accept 过的请求双方；不含自己） */
+  r.get("/friends", (req, res) => {
+    const userId = req.user?.id;
+    if (!userId) return fail(res, new Error("未认证"), 401);
+    try {
+      ctx.db.exec(`CREATE TABLE IF NOT EXISTS friend_requests (
+        id TEXT PRIMARY KEY,
+        from_user TEXT NOT NULL,
+        to_user TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        message TEXT,
+        created_at TEXT NOT NULL
+      )`);
+      const rows = ctx.db.prepare(
+        "SELECT from_user AS a, to_user AS b FROM friend_requests WHERE status = 'accepted' AND (from_user = ? OR to_user = ?)"
+      ).all(userId, userId) as Array<{ a: string; b: string }>;
+      const friendIds = new Set<string>();
+      for (const r of rows) {
+        if (r.a === userId) friendIds.add(r.b);
+        else friendIds.add(r.a);
+      }
+      const friends = Array.from(friendIds).map((id) => {
+        const u = ctx.store.getUser(id);
+        return {
+          id,
+          username: u?.username ?? id,
+          displayName: u?.displayName,
+        };
+      });
+      ok(res, { friends });
+    } catch {
+      ok(res, { friends: [] });
     }
   });
 
