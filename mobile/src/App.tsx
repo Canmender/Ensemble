@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -8,6 +8,8 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { connectionService } from "./services/connection";
 import { initNotifications } from "./services/notifications";
+import { checkAndPromptUpdate } from "./services/appUpdate";
+import { UpdateManager } from "./components/UpdateManager";
 import { wsLink } from "./services/wslink";
 import { api } from "./services/api";
 import { useAuthGate } from "./store/authGateStore";
@@ -262,12 +264,25 @@ export default function App() {
     })();
   }, [setGate]);
 
+  // 登录后自动检查应用更新（每次会话一次）
+  const checkedUpdateRef = useRef(false);
+  useEffect(() => {
+    if (gate === "in" && !checkedUpdateRef.current) {
+      checkedUpdateRef.current = true;
+      const t = setTimeout(() => {
+        void checkAndPromptUpdate();
+      }, 4000);
+      return () => clearTimeout(t);
+    }
+  }, [gate]);
+
   return (
     <ErrorBoundary>
       <SafeAreaProvider>
         {gate === "loading" && <LoadingScreen />}
         {gate === "out" && <LoginPage />}
         {gate === "in" && <MainApp />}
+        <UpdateManager />
       </SafeAreaProvider>
     </ErrorBoundary>
   );
