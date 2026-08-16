@@ -111,7 +111,6 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 联系人资料面板（左滑触发）
   const [showProfile, setShowProfile] = useState(false);
   // 右上角 ≡ 菜单
-  const [showMenu, setShowMenu] = useState(false);
   // 消息分页：首屏 20 条，滚动到顶部加载更多
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -169,37 +168,33 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         }
         // 标题优先用进入时传入的（ChatPage 已解析为昵称）；缺省回退会话 title
         if (!title) navigation.setOptions({ title: c.title || "聊天" });
-        // 群聊：header 右侧加设置按钮
-        if (!c.runId.startsWith("conv_")) {
-          navigation.setOptions({
-            headerRight: () => (
-              <TouchableOpacity
-                onPress={() => setShowMenu(true)}
-                hitSlop={8}
-                style={{ marginRight: 4 }}
-              >
-                <Ionicons name="menu" size={24} color={colors.primary} />
-              </TouchableOpacity>
-            ),
-          });
-        } else {
-          // 1:1 用户会话：header 右侧加「语音通话」按钮
-          navigation.setOptions({
-            headerRight: () => {
-              const peer = callPeer(c);
-              if (!peer) return null;
-              return (
-                <TouchableOpacity
-                  onPress={() => void startCall(peer)}
-                  hitSlop={8}
-                  style={{ marginRight: 12 }}
-                >
-                  <Ionicons name="call" size={24} color={colors.success} />
-                </TouchableOpacity>
-              );
-            },
-          });
-        }
+        // header 右侧：横三杠「≡」按钮 → 用户/群聊详情页
+        navigation.setOptions({
+          headerRight: () => (
+            <TouchableOpacity
+              onPress={() => {
+                if (!c.runId.startsWith("conv_")) {
+                  // 群聊 → 群聊详情页
+                  navigation.navigate("GroupSettings", { convId: c.id, title: c.title || title });
+                } else {
+                  // 1:1 用户会话 → 用户详情页
+                  const peer = callPeer(c);
+                  const u = peer ? usersById.get(peer.userId) : undefined;
+                  navigation.navigate("UserProfile", {
+                    userId: peer?.userId ?? "",
+                    name: u?.displayName || u?.username || peer?.name || "",
+                    username: u?.username ?? "",
+                    displayName: u?.displayName ?? "",
+                  });
+                }
+              }}
+              hitSlop={8}
+              style={{ marginRight: 4 }}
+            >
+              <Ionicons name="menu" size={24} color={colors.primary} />
+            </TouchableOpacity>
+          ),
+        });
       }
     });
   }, [convId, runId, title, navigation]);
@@ -1060,9 +1055,24 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         </View>
       )}
 
-      {/* 「+」扩展栏：相册 / 视频 / 文件 */}
+      {/* 「+」扩展栏：语音通话 / 相册 / 视频 / 文件 */}
       {showExtend && (
         <View style={styles.extendBar}>
+          {canSendAttachment && (
+            <TouchableOpacity
+              style={styles.extendItem}
+              onPress={() => {
+                const peer = callPeer(conv);
+                if (peer) void startCall(peer);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.extendIcon}>
+                <Ionicons name="call" size={24} color={colors.success} />
+              </View>
+              <Text style={styles.extendLabel}>语音通话</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.extendItem} onPress={pickImage} disabled={!canSendAttachment || uploading || isSending} activeOpacity={0.7}>
             <View style={styles.extendIcon}>
               <Ionicons name="image-outline" size={24} color={colors.primary} />
@@ -1330,42 +1340,6 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           )}
         </View>
       </Modal>
-      {/* 右上角 ≡ 菜单 */}
-      <Modal
-        transparent
-        visible={showMenu}
-        animationType="fade"
-        onRequestClose={() => setShowMenu(false)}
-      >
-        <TouchableOpacity
-          style={styles.menuOverlay}
-          activeOpacity={1}
-          onPress={() => setShowMenu(false)}
-        >
-          <View style={styles.menuContainer}>
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={() => { setShowMenu(false); setShowProfile(true); }}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="person-outline" size={22} color={colors.primary} />
-              <Text style={styles.menuItemText}>
-                {conv && !conv.runId.startsWith("conv_") ? "查看群聊信息" : "查看用户信息"}
-              </Text>
-            </TouchableOpacity>
-            {conv && !conv.runId.startsWith("conv_") && (
-              <TouchableOpacity
-                style={styles.menuItem}
-                onPress={() => { setShowMenu(false); navigation.navigate("GroupSettings", { convId: conv.id, title: conv.title || "" }); }}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="people-outline" size={22} color={colors.primary} />
-                <Text style={styles.menuItemText}>群聊管理</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </TouchableOpacity>
-      </Modal>
       {/* 联系人资料面板（左滑触发） */}
       <Modal
         transparent
@@ -1461,11 +1435,6 @@ const styles = StyleSheet.create({
   selectCheck: { marginRight: spacing.xs },
   // 联系人资料面板
   profileOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  // menu styles
-  menuOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.3)", justifyContent: "flex-start", alignItems: "flex-end", paddingTop: 12, paddingRight: 8 },
-  menuContainer: { backgroundColor: colors.surface, borderRadius: radius.lg, minWidth: 200, overflow: "hidden", shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 6 },
-  menuItem: { flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 14 },
-  menuItemText: { color: colors.text, fontSize: fontSize.md },
   profilePanel: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,
