@@ -115,7 +115,8 @@ function GlassTabBar(props: React.ComponentProps<typeof BottomTabBar>) {
       }}
       pointerEvents="box-none"
     >
-      <LiquidGlass intensity={55} style={{ borderRadius: radius.xxl }}>
+      <View style={{ position: "absolute", left: 0, right: 0, bottom: 0, height: 54, borderRadius: radius.xxl, backgroundColor: "#2E323C", opacity: 0.18, transform: [{ translateY: 10 }, { scaleY: 0.9 }] }} />
+      <LiquidGlass intensity={55} glow="tl" style={{ borderRadius: radius.xxl }}>
         <BottomTabBar
           {...props}
           style={{
