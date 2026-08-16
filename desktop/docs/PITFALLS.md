@@ -131,3 +131,38 @@
 - **症状**：消息分页加载静默失败
 - **根因**：`FlatList.getScrollOffset()` 不存在（TS 报错 + 运行时 TypeError）
 - **解决**：用 `onScroll` 跟踪 `scrollYRef` 恢复滚动位置
+
+---
+
+## 本轮 IM 迭代新增（0.7.7x，供快速定位）
+
+### 23. 通话信令 runId 空值导致「收不到来电」
+- **症状**：A 拨打 B，B 永远没响铃、无法接听
+- **根因**：服务器 `sendToUser(target, {type:"call.signal", ...})` 缺省 runId=\"\"；移动端 WS 分发入口 `if (!env.v || !env.runId || !env.event) return` 把空 runId 事件直接丢弃 → call.signal 永不触发
+- **解决**：移动端 `wslink.ts` 入口放宽为 `!env.event`；服务器 call.signal 传占位 runId=\"call\"
+
+### 24. 后台完成的下载拉不起系统安装器
+- **症状**：v0.7.76 改后台下载后，下载完「没有跳转安装页」
+- **根因**：`expo-intent-launcher.startActivityAsync` 依赖当前 Activity（`appContext.throwingActivity.startActivityForResult`）；后台/App 失活时 Activity 丢失 → 抛异常
+- **解决**：拉起前等 `AppState` 回 active + 重试 5 次；提供 `installReadyApk()` 失败后直接重装已下载包（不重下）
+
+### 25. 个推 <queries> 结构错误 → manifest 合并失败
+- **症状**：accessGuide 接入个推后 `processReleaseMainManifest FAILED`：`Missing key attributes 'action#name' on element intent`
+- **根因**：config plugin 把 `android:name` 直接放 `<intent>` 上，应放 `<action>`
+- **解决**：`<intent><action android:name=\"com.getui.sdk.action\"/></intent>`
+
+### 26. 个推 GT_INSTALL_CHANNEL placeholder 缺值 → manifest 合并失败
+- **症状**：`requires a placeholder substitution but no value for <GT_INSTALL_CHANNEL>`
+- **根因**：个推 gtsdk 的 AndroidManifest 引用 `GT_INSTALL_CHANNEL`，需在 build.gradle `manifestPlaceholders` 提供
+- **解决**：`manifestPlaceholders = [ GETUI_APPID: ..., GT_INSTALL_CHANNEL: \"ensemble\" ]`
+
+### 27. 个推依赖不在默认 Maven 仓库
+- **症状**：`Could not find com.getui:gtc / gsido`
+- **根因**：默认仓库（google/mavenCentral/jitpack）没有个推 SDK
+- **解决**：根 build.gradle 的 allprojects.repositories 加 `https://mvn.getui.com/nexus/content/repositories/releases/`
+
+### 28. node --check 对含中文/特殊字符文件静默返回 1（无错误信息）
+- **症状**：`node --check plugin.js` 返回 1 但无输出，难定位
+- **根因**：命令行/编码问题导致解析器异常静默
+- **解决**：改用 `node -e "new (require('vm').Script)(fs.readFileSync(path,'utf8')); console.log('OK')"` 拿真实错误位置；或用 `node -e "require(path)"` 捕获异常
+
