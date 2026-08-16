@@ -40,6 +40,10 @@ export interface AppSettings {
     storagePath?: string;
   };
   /** 安全围栏：约束 Agent 的工具执行边界 */
+  /** 中继连接配置（多端协作模式） */
+  relay?: { url?: string; key?: string };
+  /** 云端服务器地址（多端协作登录用，如 your-server:8787） */
+  cloudHost?: string;
   security?: {
     /** 是否允许联网（web_search/web_fetch） */
     allowNetwork?: boolean;

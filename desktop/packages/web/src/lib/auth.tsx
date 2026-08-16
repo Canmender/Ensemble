@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { clearSessionToken, hasUserToken, setSessionToken } from "./token";
+import { getMode } from "./mode";
 
 export interface AuthUser {
   id: string;
@@ -56,14 +57,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       // ② 本地桌面模式：/api/ws-token 可达（无 apiKey 的本地 server）
-      try {
-        const res = await fetch("/api/ws-token");
-        if (res.ok && !cancelled) {
-          setState({ status: "local" });
-          return;
+      //    多端协作模式跳过 → 走云端登录（guest 需登录）
+      if (getMode() !== "multi") {
+        try {
+          const res = await fetch("/api/ws-token");
+          if (res.ok && !cancelled) {
+            setState({ status: "local" });
+            return;
+          }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
       }
 
       // ③ 未登录（服务器模式）

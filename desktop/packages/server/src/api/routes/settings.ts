@@ -36,6 +36,8 @@ export function settingsRouter(ctx: AppContext): Router {
       if (body.defaultProviderId !== undefined) patch.defaultProviderId = body.defaultProviderId;
       if (body.mem0 !== undefined) patch.mem0 = body.mem0;
       if (body.security !== undefined) patch.security = body.security;
+      if (body.relay !== undefined) patch.relay = body.relay;
+      if (body.cloudHost !== undefined) patch.cloudHost = body.cloudHost;
 
       const settings = await ctx.config.saveSettings(patch);
       ok(res, maskSettings(settings));

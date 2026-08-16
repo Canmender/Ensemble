@@ -31,23 +31,32 @@ export function relayRouter(ctx: AppContext): Router {
   // 连接到中继服务器
   router.post("/connect", async (req, res) => {
     const { url, token } = req.body;
+    const address = typeof url === "string" && url ? url : ctx.config.getSettings().relay?.url;
+    const key = typeof token === "string" && token ? token : ctx.config.getSettings().relay?.key;
 
-    if (!url || typeof url !== "string") {
+    if (!address || typeof address !== "string") {
       return res.status(400).json({ error: "请提供中继服务器地址" });
     }
 
+    // 持久化中继配置（多端协作模式下启动后自动连接）
+    if (address || key) {
+      const cur = ctx.config.getSettings();
+      if (address !== cur.relay?.url || key !== cur.relay?.key) {
+        void ctx.config.saveSettings({ relay: { url: address, key } }).catch((e) =>
+          logger.warn(`[Relay] 保存中继配置失败: ${String(e)}`),
+        );
+      }
+    }
+
     relayClient.configure({
-      url,
+      url: address,
       deviceId: getDeviceId(),
       deviceName: hostname() || "我的电脑",
-      token,
+      token: key,
     });
 
-    // 注册消息处理器
-    relayClient.onMessage((message) => {
-      logger.info(`[Relay] 收到消息: ${message.type} from ${message.fromName}`);
-      void handleRelayMessage(ctx, message);
-    });
+    // 消息处理器只注册一次，避免重复连接叠加
+    ensureMessageHandler(ctx);
 
     const success = await relayClient.connect();
 
@@ -88,20 +97,37 @@ export function relayRouter(ctx: AppContext): Router {
  * 启动时初始化中继客户端（自用：桌面端默认连接云端中继）。
  * 配置了 RELAY_URL 即自动连接并注册消息处理。
  */
-export function initRelayClient(ctx: AppContext): void {
-  if (!ctx.env.relayUrl) return;
-  relayClient.configure({
-    url: ctx.env.relayUrl,
-    deviceId: getDeviceId(),
-    deviceName: hostname() || "我的电脑",
-    token: ctx.env.relayKey,
-  });
+// 消息处理器只注册一次（防止重复连接时叠加多个 handler）
+let messageHandlerBound = false;
+function ensureMessageHandler(ctx: AppContext): void {
+  if (messageHandlerBound) return;
+  messageHandlerBound = true;
   relayClient.onMessage((message) => {
     logger.info(`[Relay] 收到消息: ${message.type} from ${message.fromName}`);
     void handleRelayMessage(ctx, message);
   });
+}
+
+/**
+ * 启动时初始化中继客户端（多端协作模式自动连接）：
+ * - 优先取持久化 settings.relay（桌面 EXE 通过 Settings 保存）
+ * - 其次取环境变量 RELAY_URL / RELAY_AUTH_KEY
+ */
+export function initRelayClient(ctx: AppContext): void {
+  const settings = ctx.config.getSettings();
+  const url = settings.relay?.url || ctx.env.relayUrl || "";
+  const key = settings.relay?.key || ctx.env.relayKey || "";
+  if (!url) return;
+
+  relayClient.configure({
+    url,
+    deviceId: getDeviceId(),
+    deviceName: hostname() || "我的电脑",
+    token: key,
+  });
+  ensureMessageHandler(ctx);
   void relayClient.connect().then((ok) => {
-    logger.info(`[Relay] ${ok ? "已连接中继" : "中继连接失败"}: ${ctx.env.relayUrl}`);
+    logger.info(`[Relay] ${ok ? "已连接中继" : "中继连接失败"}: ${url}`);
   });
 }
 

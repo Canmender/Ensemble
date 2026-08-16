@@ -46,6 +46,13 @@ export const appSettingsSchema = z.object({
       allowDangerousCommands: z.boolean().optional(),
     })
     .optional(),
+  relay: z
+    .object({
+      url: z.string().optional(),
+      key: z.string().optional(),
+    })
+    .optional(),
+  cloudHost: z.string().optional(),
 });
 
 export type AppSettingsInput = z.input<typeof appSettingsSchema>;

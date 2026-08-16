@@ -144,6 +144,8 @@ export interface AppSettings {
     blockedCommands?: string[];
     allowDangerousCommands?: boolean;
   };
+  relay?: { url?: string; key?: string };
+  cloudHost?: string;
 }
 
 export type TaskMode = "single" | "workflow" | "chat";

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { BookOpen, Cloud, Download, Globe, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { BookOpen, Cloud, Download, Globe, MapPin, Radio, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
 import { api } from "../lib/api";
+import { getMode, setMode } from "../lib/mode";
 import type { AppSettings, DetectedAgent, McpServerConfig, ProviderConfig, SkillDef, SyncResult } from "../types";
 import {
   Badge, Button, Card, Input, Label, Modal, Select, Spinner, Textarea, cls, showToast,
@@ -599,6 +601,47 @@ function DiscoverySection() {
   );
 }
 
+/** 运行模式切换（本地 / 多端协作） */
+function ModeSwitch() {
+  const navigate = useNavigate();
+  const [mode, setModeState] = useState<"local" | "multi" | null>(getMode());
+
+  function switchTo(next: "local" | "multi") {
+    setMode(next);
+    setModeState(next);
+    window.location.href = next === "multi" ? "/login" : "/";
+  }
+
+  return (
+    <div className="flex gap-3">
+      <button
+        onClick={() => switchTo("local")}
+        className={cls(
+          "flex flex-1 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          mode === "local" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+        )}
+      >
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+          <MapPin className="h-4 w-4 text-primary" /> 本地模式
+        </span>
+        <span className="text-xs text-muted">单机离线使用，不连接中继</span>
+      </button>
+      <button
+        onClick={() => switchTo("multi")}
+        className={cls(
+          "flex flex-1 flex-col items-start gap-1 rounded-lg border p-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
+          mode === "multi" ? "border-primary bg-primary/5" : "border-border hover:border-primary/40",
+        )}
+      >
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-fg">
+          <Radio className="h-4 w-4 text-accent" /> 多端协作
+        </span>
+        <span className="text-xs text-muted">登录云端 + 连接中继，手机可遥控本机</span>
+      </button>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "skills" | "local" | "relay" | "general">("providers");
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
@@ -611,13 +654,18 @@ export default function SettingsPage() {
 
   // 中继服务器状态
   const [relayUrl, setRelayUrl] = useState("");
+  const [relayKey, setRelayKey] = useState("");
   const [relayStatus, setRelayStatus] = useState<{ connected: boolean; status: string }>({ connected: false, status: "disconnected" });
   const [relayConnecting, setRelayConnecting] = useState(false);
+  const [cloudHost, setCloudHost] = useState("");
 
   async function refresh() {
     const [p, s] = await Promise.all([api.get<ProviderConfig[]>("/providers"), api.get<AppSettings>("/settings")]);
     setProviders(p ?? []);
     setSettings(s);
+    if (s?.relay?.url) setRelayUrl(s.relay.url);
+    if (s?.relay?.key) setRelayKey(s.relay.key);
+    if (s?.cloudHost) setCloudHost(s.cloudHost);
 
     // 获取中继状态
     try {
@@ -662,7 +710,7 @@ export default function SettingsPage() {
     if (!relayUrl.trim()) return;
     setRelayConnecting(true);
     try {
-      const result = await api.post<{ success: boolean; message?: string; error?: string }>("/relay/connect", { url: relayUrl });
+      const result = await api.post<{ success: boolean; message?: string; error?: string }>("/relay/connect", { url: relayUrl, key: relayKey });
       if (result?.success) {
         showToast(result.message || "连接成功", "success");
       } else {
@@ -942,11 +990,29 @@ export default function SettingsPage() {
 
             <div className="mt-4 space-y-3">
               <div>
-                <Label>服务器地址</Label>
+                <Label>云端服务器地址（多端协作登录用）</Label>
+                <Input
+                  value={cloudHost}
+                  onBlur={(e) => { setCloudHost(e.target.value); void saveSettings({ cloudHost: e.target.value }); }}
+                  onChange={(e) => setCloudHost(e.target.value)}
+                  placeholder="your-server:8787"
+                />
+              </div>
+              <div>
+                <Label>中继服务器地址</Label>
                 <Input
                   value={relayUrl}
                   onChange={(e) => setRelayUrl(e.target.value)}
                   placeholder="http://your-server:8888"
+                />
+              </div>
+              <div>
+                <Label>中继密钥（可选）</Label>
+                <Input
+                  type="password"
+                  value={relayKey}
+                  onChange={(e) => setRelayKey(e.target.value)}
+                  placeholder="RELAY_AUTH_KEY，与服务器一致"
                 />
               </div>
 
@@ -996,6 +1062,12 @@ pm2 save && pm2 startup`}
 
       {tab === "general" && (
         <div className="space-y-4">
+          <Card className="p-5">
+            <h3 className="mb-1 text-sm font-semibold text-fg">运行模式</h3>
+            <p className="mb-3 text-xs text-muted">本地模式单机离线；多端协作登录云端并连接中继，手机可远程操控本机</p>
+            <ModeSwitch />
+          </Card>
+
           <Card className="p-5">
             <h3 className="mb-1 text-sm font-semibold text-fg">配置目录</h3>
             <p className="mb-3 text-xs text-muted">Agent 配置、Provider 配置、数据库等存储位置</p>

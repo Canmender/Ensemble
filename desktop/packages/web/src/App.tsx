@@ -8,6 +8,7 @@ import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
 import { useTheme, type Theme } from "./lib/theme";
 import { useAuth } from "./lib/auth";
+import { getMode, type RunMode } from "./lib/mode";
 import { cls } from "./components/ui";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
@@ -22,6 +23,7 @@ const WorkflowsPage = lazy(() => import("./pages/WorkflowsPage"));
 const ChatPage = lazy(() => import("./pages/ChatPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const ModeLandingPage = lazy(() => import("./pages/ModeLandingPage"));
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
@@ -126,8 +128,37 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
+  // 多端协作模式：确保中继已连接（使用已保存配置），手机方可经中继访问本机
+  useEffect(() => {
+    if (getMode() !== "multi" || state.status !== "authenticated") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const relay = await api.get<{ connected: boolean }>("/relay/status");
+        if (!relay?.connected && !cancelled) {
+          await api.post("/relay/connect", {});
+        }
+      } catch {
+        /* 忽略（连接失败不阻断） */
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [state.status]);
+
   const authPaths = ["/login", "/register"];
   const onAuthPage = authPaths.includes(location.pathname);
+
+  // 首启/未选模式：进入模式选择页
+  const mode = getMode();
+  if (!mode) {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoading />}>
+          <ModeLandingPage />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
 
   // 登录态判定中
   if (state.status === "loading") return <PageLoading />;
@@ -176,18 +207,27 @@ export default function App() {
           <div className="flex items-center justify-between px-1">
             <span className="flex items-center gap-1.5 text-xs font-medium text-fg/80">
               <UserIcon className="h-3.5 w-3.5" />
-              {isUser ? state.user?.displayName ?? state.user?.username : "本地模式"}
+              {isUser ? state.user?.displayName ?? state.user?.username : (mode === "multi" ? "多端协作" : "本地模式")}
             </span>
-            {isUser && (
-              <button
-                onClick={logout}
+            <div className="flex items-center gap-1">
+              {isUser && (
+                <button
+                  onClick={logout}
+                  className="text-muted transition-colors hover:text-fg"
+                  title="退出登录"
+                  aria-label="退出登录"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <NavLink
+                to="/settings"
                 className="text-muted transition-colors hover:text-fg"
-                title="退出登录"
-                aria-label="退出登录"
+                title={mode === "multi" ? "多端协作（设置中可切换本地/多端）" : "本地模式（设置中可切换本地/多端）"}
               >
-                <LogOut className="h-3.5 w-3.5" />
-              </button>
-            )}
+                <Settings className="h-3.5 w-3.5" />
+              </NavLink>
+            </div>
           </div>
           {/* 服务器状态 */}
           <div className="flex items-center justify-between px-1">
