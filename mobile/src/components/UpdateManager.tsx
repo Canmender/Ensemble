@@ -1,12 +1,12 @@
 /**
- * 应用内更新弹窗：检测到新版本时显示，支持下载进度 + 调起系统安装器
+ * 应用内更新弹窗：检测到新版本时显示，支持下载进度 + 调起系统安装器 + 安装权限引导
  * 挂在 App 根部，由 updateStore 驱动（checkAndPromptUpdate 触发）
  */
 import React, { useState } from "react";
 import { View, Text, Modal, TouchableOpacity, ActivityIndicator, Alert, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useUpdateStore } from "../store/updateStore";
-import { downloadAndInstall } from "../services/appUpdate";
+import { downloadAndInstall, openUnknownSourceSettings } from "../services/appUpdate";
 import { colors, spacing, radius, fontSize } from "../theme";
 
 export function UpdateManager() {
@@ -19,11 +19,16 @@ export function UpdateManager() {
     setDownloading(true);
     try {
       await downloadAndInstall(updateInfo, setProgress);
-      // 系统安装器已调起，关闭弹窗
       reset();
-      Alert.alert("安装包已就绪", "请在系统安装器中完成安装");
+      Alert.alert("安装包已就绪", "如果系统提示需要允许安装，请放行或点击「开启安装权限」");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "下载失败");
+      const msg = e instanceof Error ? e.message : "下载失败";
+      setError(msg);
+      // Android 安装被系统拦截时，主动引导到「安装未知应用」授权页
+      const low = msg.toLowerCase();
+      if (low.includes("activity") || low.includes("view") || low.includes("denied") || low.includes("permission")) {
+        void openUnknownSourceSettings();
+      }
     } finally {
       setDownloading(false);
     }
@@ -52,6 +57,17 @@ export function UpdateManager() {
 
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
+          {!downloading && (
+            <TouchableOpacity
+              style={styles.permissionHint}
+              onPress={() => void openUnknownSourceSettings()}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />
+              <Text style={styles.permissionHintText}>无法安装？点此开启「允许安装未知应用」</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.actions}>
             {!updateInfo?.force && (
               <TouchableOpacity style={styles.cancelBtn} onPress={reset} disabled={downloading}>
@@ -79,23 +95,8 @@ export function UpdateManager() {
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: spacing.xl },
-  card: {
-    width: "100%",
-    maxWidth: 320,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    alignItems: "center",
-  },
-  iconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: colors.primarySoft,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing.md,
-  },
+  card: { width: "100%", maxWidth: 320, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, alignItems: "center" },
+  iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: spacing.md },
   title: { color: colors.text, fontSize: fontSize.lg, fontWeight: "700", textAlign: "center" },
   note: { color: colors.textMuted, fontSize: fontSize.sm, textAlign: "center", marginTop: spacing.sm },
   progressWrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, width: "100%", marginTop: spacing.lg },
@@ -103,22 +104,12 @@ const styles = StyleSheet.create({
   progressFill: { height: 6, backgroundColor: colors.primary, borderRadius: 3 },
   progressText: { color: colors.textMuted, fontSize: fontSize.xs, minWidth: 34, textAlign: "right" },
   error: { color: colors.danger, fontSize: fontSize.sm, marginTop: spacing.md, textAlign: "center" },
-  actions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.lg, width: "100%" },
-  cancelBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.surfaceAlt,
-    alignItems: "center",
-  },
+  permissionHint: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: spacing.sm, paddingVertical: 4 },
+  permissionHintText: { color: colors.primary, fontSize: fontSize.xs, fontWeight: "600" },
+  actions: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md, width: "100%" },
+  cancelBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: radius.md, backgroundColor: colors.surfaceAlt, alignItems: "center" },
   cancelText: { color: colors.textMuted, fontSize: fontSize.md },
-  updateBtn: {
-    flex: 1,
-    paddingVertical: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-  },
+  updateBtn: { flex: 1, paddingVertical: spacing.md, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: "center" },
   updateBtnFull: { flex: 1 },
   updateText: { color: "#fff", fontSize: fontSize.md, fontWeight: "600" },
 });

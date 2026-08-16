@@ -80,6 +80,27 @@ export async function downloadAndInstall(info: AppUpdateInfo, onProgress?: (p: n
   });
 }
 
+/** 打开系统的「安装未知应用」授权页（Android 8+；下拉到本应用专属开关）。安装失败/被系统拦截时自动引导。 */
+export async function openUnknownSourceSettings(): Promise<boolean> {
+  if (Platform.OS !== "android") return false;
+  const pkg = Application.applicationId ?? "com.ensemble.mobile";
+  try {
+    await IntentLauncher.startActivityAsync("android.settings.MANAGE_UNKNOWN_APP_SOURCES", {
+      extra: { package: pkg },
+    });
+    return true;
+  } catch {
+    try {
+      await IntentLauncher.startActivityAsync("android.settings.APPLICATION_DETAILS_SETTINGS", {
+        data: "package:" + pkg,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 /** 检查更新并弹窗提示（供启动自动检查 / 设置页手动检查调用）；有更新返回 true */
 export async function checkAndPromptUpdate(onResult?: (hasUpdate: boolean) => void): Promise<boolean> {
   const info = await checkAppUpdate();
