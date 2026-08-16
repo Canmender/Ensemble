@@ -120,10 +120,20 @@ export function privacyRouter(ctx: AppContext): Router {
         return fail(res, new Error("对方不允许被添加好友"), 403);
       }
 
-      // 检查是否已经是好友（通过会话存在判断）
+      // 检查是否已经是好友：仅当双方同属某个 direct 会话时才视为好友。
+      // 1:1 会话存储形态不固定（手动创建 participant_ids 只含对端；好友接受含双方），
+      // 因此按双方同时在会话中判断，单向 user_id 判断会漏掉反向关系。
       const existing = ctx.db.prepare(
-        "SELECT id FROM conversations WHERE user_id = ? AND participant_ids LIKE ? AND type = 'direct'"
-      ).get(userId, `%"${targetId}"%`);
+        "SELECT id FROM conversations WHERE type = 'direct' AND (" +
+        "  (participant_ids LIKE ? AND participant_ids LIKE ?)" +
+        "  OR (user_id = ? AND participant_ids LIKE ?)" +
+        "  OR (user_id = ? AND participant_ids LIKE ?)" +
+        ") LIMIT 1"
+      ).get(
+        `%"${userId}"%`, `%"${targetId}"%`,
+        userId, `%"${targetId}"%`,
+        targetId, `%"${userId}"%`,
+      );
       if (existing) return fail(res, new Error("已经是好友"), 409);
 
       // 检查是否已有待处理的请求
@@ -139,6 +149,12 @@ export function privacyRouter(ctx: AppContext): Router {
         "SELECT id FROM friend_requests WHERE from_user = ? AND to_user = ? AND status = 'pending'"
       ).get(userId, targetId);
       if (pending) return fail(res, new Error("已发送过请求"), 409);
+
+      // 对方已向我发过待处理的请求：引导去处理，避免双向 pending
+      const reversePending = ctx.db.prepare(
+        "SELECT id FROM friend_requests WHERE from_user = ? AND to_user = ? AND status = 'pending'"
+      ).get(targetId, userId);
+      if (reversePending) return fail(res, new Error("对方已向你发送好友请求，请到「好友请求」中处理"), 409);
 
       const id = newId("fr");
       ctx.db.prepare(
@@ -243,14 +259,26 @@ export function privacyRouter(ctx: AppContext): Router {
     // 更新请求状态
     ctx.db.prepare("UPDATE friend_requests SET status = 'accepted' WHERE id = ?").run(requestId);
 
-    // 自动创建会话
-    const convId = newId("conv");
-    const conv = {
-      id: convId, userId: row.from_user, type: "direct" as const,
-      title: row.from_user, participantIds: [row.from_user, row.to_user],
-      runId: convId, unread: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-    };
-    ctx.store.createConversation(conv);
+    // 检查是否已有双方会话（手动创建过则复用，避免重复会话）
+    let convId: string | undefined = undefined;
+    const mine = ctx.db.prepare(
+      "SELECT id FROM conversations WHERE type = 'direct' AND (" +
+      "  (user_id = ? AND participant_ids LIKE ?)" +
+      "  OR (participant_ids LIKE ? AND participant_ids LIKE ?)" +
+      ") LIMIT 1"
+    ).get(row.from_user, `%"${row.to_user}"%`, `%"${row.from_user}"%`, `%"${row.to_user}"%`) as any;
+    if (mine?.id) {
+      convId = String(mine.id);
+    } else {
+      // 无已有会话：自动创建
+      convId = newId("conv");
+      const conv = {
+        id: convId, userId: row.from_user, type: "direct" as const,
+        title: row.from_user, participantIds: [row.from_user, row.to_user],
+        runId: convId, unread: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+      ctx.store.createConversation(conv);
+    }
 
     // 通知对方
     ctx.hub.sendToUser(row.from_user, {
