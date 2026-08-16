@@ -11,8 +11,25 @@ import { useCallStore, type CallPeer } from "../store/callStore";
 
 registerGlobals();
 
-/** ICE 服务器：STUN（同网/友好NAT可通）；如需公网跨运营商互通请部署 TURN，并在此追加 { urls: "turn:...", username, credential } */
-const ICE_SERVERS = { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] };
+// ICE 服务器由 gitignore 的 server.config.js 提供（TURN 凭据不在仓库内；缺省 STUN + host）
+function buildIceServers() {
+  const servers: Array<{ urls: string | string[]; username?: string; credential?: string }> = [
+    { urls: "stun:stun.l.google.com:19302" },
+  ];
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const cfg = require("../../server.config") as {
+      turn?: { urls: string | string[]; username?: string; credential?: string };
+    };
+    if (cfg?.turn?.urls) {
+      servers.push({ urls: cfg.turn.urls, username: cfg.turn.username, credential: cfg.turn.credential });
+    }
+  } catch {
+    /* 无 server.config.js（干净检出）时仅 STUN */
+  }
+  return { iceServers: servers };
+}
+const ICE_SERVERS = buildIceServers();
 
 /** 当前活跃的 peer connection 与本地流 */
 let pc: RTCPeerConnection | null = null;
