@@ -8,7 +8,7 @@ import { createBottomTabNavigator, BottomTabBar } from "@react-navigation/bottom
 import { Ionicons } from "@expo/vector-icons";
 import { connectionService } from "./services/connection";
 import { initNotifications } from "./services/notifications";
-import { checkAndPromptUpdate } from "./services/appUpdate";
+import { checkAndPromptUpdate, bootstrapUpdate } from "./services/appUpdate";
 import { UpdateManager } from "./components/UpdateManager";
 import { CallModal } from "./components/CallModal";
 import { bootstrapCallService, setCallIdentityAndReload } from "./services/callService";
@@ -334,7 +334,12 @@ export default function App() {
     })();
   }, [setGate]);
 
-  // 登录后自动检查应用更新（每次会话一次）
+  // 初始化更新下载（前后台保活 + 恢复中断下载现场），再于登录后自动检查更新
+  useEffect(() => {
+    void bootstrapUpdate();
+  }, []);
+
+  // 登录后自动检查应用更新（每次会话一次）；若已有中断下载现场则自动等待重连续传
   const checkedUpdateRef = useRef(false);
   useEffect(() => {
     if (gate === "in" && !checkedUpdateRef.current) {
