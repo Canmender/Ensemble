@@ -161,8 +161,22 @@ npx expo prebuild --platform android
 
 应用支持应用内自动更新（`/api/app-version` + `/apk/` 托管）。发布新版本步骤：
 
-1. **构建新 APK**（本地）：`cd mobile/android && ./gradlew assembleRelease`
-2. **上传 APK + 更新版本配置**（注意：`/data` 是 Docker 命名卷，必须 `docker cp` 进容器，不能直接写主机 `/data`）：
+1. **更新版本号（单一版本源 = `mobile/app.json`）**：
+   - `expo.version` → 新版本号（如 `0.7.77`）；`expo.android.versionCode` → 上次 +1（Android 安装校验要求严格递增）。
+   - 只需改 `app.json`，不要手动改 `android/app/build.gradle`。
+2. **构建新 APK**（本地）：
+   ```bash
+   cd mobile
+   node scripts/build-release.cjs
+   # 输出：mobile/android/app/build/outputs/apk/release/app-release.apk
+   ```
+   > ⚠️ **不要裸跑 `cd android && ./gradlew assembleRelease`**：`mobile/android` 是 git-ignored 的 Expo prebuild 产物，prebuild 重生成时会把版本号硬编码为旧值，导致 APK 版本错乱（曾出现安装界面显示旧版本、versionCode 不递增）。`build-release.cjs` 会自动从 `app.json` 读取并注入版本号，再执行 assembleRelease。
+3. **验证出包版本**（必要，防止旧版本上线）：
+   ```bash
+   aapt dump badging mobile/android/app/build/outputs/apk/release/app-release.apk | grep package
+   # 应输出 versionCode='<app.json 的值>' versionName='<expo.version>'
+   ```
+4. **上传 APK + 更新版本配置**（注意：`/data` 是 Docker 命名卷，必须 `docker cp` 进容器，不能直接写主机 `/data`）：
    ```bash
    # 1) 上传 APK 到主机临时位置，再 docker cp 进卷
    scp ensemble-v0.7.50.apk root@<SERVER_IP>:/tmp/
@@ -173,8 +187,8 @@ npx expo prebuild --platform android
    {\"version\":\"0.7.50\",\"versionCode\":39,\"apkUrl\":\"/apk/ensemble-v0.7.50.apk\",\"note\":\"更新说明\",\"force\":false}
    EOF"
    ```
-3. **验证**：`curl http://<SERVER_IP>:8787/api/app-version` 应返回新版本号
-4. 用户打开应用 → 自动弹更新 → 应用内下载安装
+5. **验证**：`curl http://<SERVER_IP>:8787/api/app-version` 应返回新版本号
+6. 用户打开应用 → 自动弹更新 → 应用内下载安装
 
 > `force: true` 时用户无法跳过（用于必须升级的场景，如协议不兼容）。
 > versionCode 必须严格递增（Android 安装校验）；versionName 建议同步更新。
