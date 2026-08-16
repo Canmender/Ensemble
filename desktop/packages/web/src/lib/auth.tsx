@@ -9,6 +9,7 @@ export interface AuthUser {
   displayName?: string;
   role: string;
   orgId?: string;
+  avatarUrl?: string;
 }
 
 /** 登录态：loading 判定中 / authenticated 已登录 / local 本地桌面模式（免登录）/ guest 需登录 */

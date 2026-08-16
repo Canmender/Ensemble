@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from "react";
-import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   Bot, Brain, LayoutDashboard, MessageSquare, Moon, Settings, Sun,
   Workflow, Zap, MonitorSmartphone, Archive, LogOut, User as UserIcon
@@ -8,8 +8,9 @@ import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
 import { useTheme, type Theme } from "./lib/theme";
 import { useAuth } from "./lib/auth";
-import { getMode, type RunMode } from "./lib/mode";
+import { useMode } from "./lib/mode";
 import { cls } from "./components/ui";
+import { Avatar } from "./components/Avatar";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 /* 路由级懒加载：首屏只加载当前页面，其余按需拆分 */
@@ -24,6 +25,7 @@ const ChatPage = lazy(() => import("./pages/ChatPage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ModeLandingPage = lazy(() => import("./pages/ModeLandingPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
@@ -109,6 +111,7 @@ function PageLoading() {
 
 export default function App() {
   const { state, logout } = useAuth();
+  const navigate = useNavigate();
   const location = useLocation();
   const [serverOk, setServerOk] = useState<boolean | null>(null);
   const [agentCount, setAgentCount] = useState(0);
@@ -130,7 +133,7 @@ export default function App() {
 
   // 多端协作模式：确保中继已连接（使用已保存配置），手机方可经中继访问本机
   useEffect(() => {
-    if (getMode() !== "multi" || state.status !== "authenticated") return;
+    if (mode !== "multi" || state.status !== "authenticated") return;
     let cancelled = false;
     (async () => {
       try {
@@ -149,7 +152,7 @@ export default function App() {
   const onAuthPage = authPaths.includes(location.pathname);
 
   // 首启/未选模式：进入模式选择页
-  const mode = getMode();
+  const mode = useMode();
   if (!mode) {
     return (
       <ErrorBoundary>
@@ -183,20 +186,26 @@ export default function App() {
   if (onAuthPage) return <Navigate to="/" replace />;
 
   const isUser = state.status === "authenticated";
+  const displayName = isUser ? (state.user?.displayName ?? state.user?.username ?? "用户") : (mode === "multi" ? "多端协作" : "本地模式");
+  const userAvatar = isUser ? state.user?.avatarUrl : undefined;
 
   return (
     <div className="flex h-full">
       {/* Sidebar */}
       <aside className="flex w-56 flex-col border-r border-border bg-surface">
-        <div className="flex items-center gap-2.5 px-4 py-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-accent text-primary-fg shadow-sm">
-            <Zap className="h-4 w-4" />
+        <div className="px-4 py-5">
+        <button
+          onClick={() => navigate("/profile")}
+          className="flex w-full items-center gap-2.5 rounded-lg p-1 text-left transition-colors hover:bg-muted/10 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          title="个人主页"
+        >
+          <Avatar name={displayName} avatarUrl={userAvatar} size={38} />
+          <div className="min-w-0">
+            <div className="truncate text-sm font-bold text-fg">{displayName}</div>
+            <div className="truncate text-[10px] text-muted">{mode === "multi" ? "@云端 · 多端协作" : "本地模式"}</div>
           </div>
-          <div>
-            <div className="text-sm font-bold text-fg">合鸣</div>
-            <div className="text-[10px] text-muted">多 Agent 协作平台</div>
-          </div>
-        </div>
+        </button>
+      </div>
         <nav className="flex-1 space-y-1 px-3">
           {NAV_ITEMS.map((item) => (
             <NavItem key={item.to} {...item} />
@@ -267,6 +276,7 @@ export default function App() {
               <Route path="/memory" element={<MemoryPage />} />
               <Route path="/workflows" element={<WorkflowsPage />} />
               <Route path="/chat" element={<ChatPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>
