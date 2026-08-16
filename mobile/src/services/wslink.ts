@@ -28,6 +28,22 @@ export interface MentionEvent {
   content: string;
 }
 
+/** WebRTC 通话信令载荷 */
+export interface CallSignal {
+  kind: "offer" | "answer" | "candidate" | "hangup" | "accept" | "reject" | "calling";
+  sdp?: string;
+  candidate?: unknown;
+  from?: { userId: string; name?: string };
+  target?: { userId: string };
+}
+
+/** 来自服务端定向转发的通话信令（call.signal 事件） */
+export interface IncomingCallSignal {
+  fromUserId: string;
+  fromName?: string;
+  call: CallSignal;
+}
+
 export interface WsLinkCallbacks {
   onChatMessage?: (msg: ChatWsMessage) => void;
   onChatDeleted?: (msg: { runId: string; msgId: string }) => void;
@@ -37,6 +53,7 @@ export interface WsLinkCallbacks {
   onConnectionState?: (state: "connecting" | "connected" | "reconnecting" | "disconnected" | "error") => void;
   onRunStatus?: (runId: string, status: string) => void;
   onKicked?: (message: string) => void;
+  onCall?: (msg: IncomingCallSignal) => void;
 }
 
 /** 桌面端 WsEnvelope 事件帧（与 server/src/api/ws/protocol.ts 对应） */
@@ -60,6 +77,9 @@ interface WsEnvelope {
     msgId?: string;
     userId?: string;
     readTs?: string;
+    fromUserId?: string;
+    fromName?: string;
+    call?: CallSignal;
     convId?: string;
     convTitle?: string;
     senderId?: string;
@@ -159,6 +179,13 @@ export class WsLink {
   steer(runId: string, content: string): void {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify({ type: "steer", runId, content }));
+    }
+  }
+
+  /** 发送 WebRTC 通话信令给指定用户（经服务端定向转发） */
+  sendCall(targetUserId: string, call: CallSignal): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "call", targetUserId, call }));
     }
   }
 
@@ -327,6 +354,11 @@ export class WsLink {
         break;
       case "auth.kicked":
         this.callbacks.onKicked?.(ev.message ?? "您的账号在其他设备登录");
+        break;
+      case "call.signal":
+        if (ev.call) {
+          this.callbacks.onCall?.({ fromUserId: ev.fromUserId ?? "", fromName: ev.fromName, call: ev.call });
+        }
         break;
       case "run.result":
         if (typeof ev.result === "string") {

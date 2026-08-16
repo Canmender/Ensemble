@@ -57,6 +57,11 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
     if (msg.type === "tool_confirm" && msg.confirmId) ctx.hub.resolveConfirm(msg.confirmId, msg.approved ?? false);
   };
 
+  // WebRTC 通话信令：A → (hub) → B 定向转发；目标离线/未上线时忽略
+  ctx.hub.onCallSignal = (fromUserId, fromName, targetUserId, call) => {
+    ctx.hub.sendToUser(targetUserId, { type: "call.signal", fromUserId, fromName, call });
+  };
+
   return new Promise((resolve, reject) => {
     // 默认仅绑定 127.0.0.1；配置 ENSEMBLE_LAN_HOST 时绑定局域网（移动端直连）
     const host = env.lanHost && env.lanHost !== "127.0.0.1" && env.lanHost !== "::1" ? env.lanHost : "127.0.0.1";

@@ -10,6 +10,8 @@ import { connectionService } from "./services/connection";
 import { initNotifications } from "./services/notifications";
 import { checkAndPromptUpdate } from "./services/appUpdate";
 import { UpdateManager } from "./components/UpdateManager";
+import { CallModal } from "./components/CallModal";
+import { bootstrapCallService, setCallIdentityAndReload } from "./services/callService";
 import { wsLink } from "./services/wslink";
 import { api } from "./services/api";
 import { useAuthGate } from "./store/authGateStore";
@@ -318,8 +320,14 @@ export default function App() {
         await connectionService.init();
         await connectionService.connectToCloud();
         const me = await api.getMe();
-        setGate(me.data ? "in" : "out");
-        if (me.data) void useMeStore.getState().reload();
+        bootstrapCallService();
+        if (me.data) {
+          setGate("in");
+          setCallIdentityAndReload(me.data.id, me.data.displayName ?? me.data.username);
+          void useMeStore.getState().reload();
+        } else {
+          setGate("out");
+        }
       } catch {
         setGate("out");
       }
@@ -345,6 +353,7 @@ export default function App() {
         {gate === "out" && <LoginPage />}
         {gate === "in" && <MainApp />}
         <UpdateManager />
+        <CallModal />
       </SafeAreaProvider>
     </ErrorBoundary>
   );

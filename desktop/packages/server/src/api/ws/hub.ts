@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
-import { parseClientMsg, type RunEvent, type WsEnvelope } from "./protocol";
+import { parseClientMsg, type RunEvent, type WsEnvelope, type CallSignal } from "./protocol";
 import { logger } from "../../util/logger";
 import type { AuthUser } from "../../db/users";
 
@@ -87,6 +87,8 @@ export class WsHub {
 
   /** 客户端消息回调（cancel/steer/tool_confirm 等需要引擎配合的操作） */
   onClientMessage?: (msg: { type: string; runId: string; content?: string; confirmId?: string; approved?: boolean }) => void;
+  /** WebRTC 通话信令回调（从某用户发往目标用户；由 app 层路由） */
+  onCallSignal?: (fromUserId: string, fromName: string | undefined, targetUserId: string, call: CallSignal) => void;
 
   attach(server: Server, path = "/ws", resolveUser?: (token: string) => AuthUser | undefined): void {
     this.serverPath = path;
@@ -173,6 +175,14 @@ export class WsHub {
             break;
           case "tool_confirm":
             this.onClientMessage?.({ type: "tool_confirm", runId: msg.runId, confirmId: msg.confirmId, approved: msg.approved });
+            break;
+          case "call":
+            {
+              const fromUser = this.wsUsers.get(ws);
+              if (fromUser && msg.targetUserId) {
+                this.onCallSignal?.(fromUser.id, fromUser.displayName ?? fromUser.username, msg.targetUserId, msg.call);
+              }
+            }
             break;
         }
       });

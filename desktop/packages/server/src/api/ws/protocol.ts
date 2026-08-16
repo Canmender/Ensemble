@@ -10,12 +10,25 @@ export interface WsEnvelope {
   event: RunEvent;
 }
 
+/** WebRTC 通话信令载荷（业务识别 fromUserId 定位发起方） */
+export interface CallSignal {
+  kind: "offer" | "answer" | "candidate" | "hangup" | "accept" | "reject" | "calling";
+  /** SDP（offer/answer） */
+  sdp?: string;
+  /** ICE candidate */
+  candidate?: unknown;
+  /** 呼入时携带：发起方信息 */
+  from?: { userId: string; name?: string };
+  target?: { userId: string };
+}
+
 export type RunEvent =
   | { type: "run.status"; status: RunStatus }
   | { type: "job.status"; jobId: string; agentId: string; status: JobStatus }
   | { type: "agent.event"; jobId: string; agentId: string; event: AgentEvent }
   | { type: "chat.message"; jobId: string; agentId: string; content: string; attachment?: MessageAttachment; replyTo?: MessageReply; mentions?: string[] }
   | { type: "chat.deleted"; msgId: string }
+  | { type: "call.signal"; fromUserId: string; fromName?: string; call: CallSignal }
   | { type: "chat.read"; userId: string; readTs: string }
   | { type: "chat.mention"; convId: string; convTitle: string; senderId: string; senderName: string; content: string }
   | { type: "device.status"; deviceId: string; name: string; kind: string; online: boolean }
@@ -31,7 +44,8 @@ export type WsClientMsg =
   | { type: "unsubscribe"; runId: string }
   | { type: "cancel"; runId: string }
   | { type: "steer"; runId: string; content: string }
-  | { type: "tool_confirm"; runId: string; confirmId: string; approved: boolean };
+  | { type: "tool_confirm"; runId: string; confirmId: string; approved: boolean }
+  | { type: "call"; targetUserId: string; call: CallSignal };
 
 export function parseClientMsg(raw: string): WsClientMsg | null {
   try {
@@ -41,6 +55,7 @@ export function parseClientMsg(raw: string): WsClientMsg | null {
     if (msg?.type === "cancel" && typeof msg.runId === "string") return msg;
     if (msg?.type === "steer" && typeof msg.runId === "string" && typeof msg.content === "string") return msg;
     if (msg?.type === "tool_confirm" && typeof msg.runId === "string" && typeof msg.confirmId === "string" && typeof msg.approved === "boolean") return msg;
+    if (msg?.type === "call" && typeof msg.targetUserId === "string" && msg.call && typeof msg.call === "object") return msg;
     return null;
   } catch {
     return null;

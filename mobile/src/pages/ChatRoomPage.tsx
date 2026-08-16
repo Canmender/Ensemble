@@ -27,7 +27,9 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
 import { useUnreadStore } from "../store/unreadStore";
+import { useMeStore } from "../store/meStore";
 import { wsLink } from "../services/wslink";
+import { startCall } from "../services/callService";
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { EmojiPicker } from "../components/EmojiPicker";
@@ -180,6 +182,23 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               </TouchableOpacity>
             ),
           });
+        } else {
+          // 1:1 用户会话：header 右侧加「语音通话」按钮
+          navigation.setOptions({
+            headerRight: () => {
+              const peer = callPeer(c);
+              if (!peer) return null;
+              return (
+                <TouchableOpacity
+                  onPress={() => void startCall(peer)}
+                  hitSlop={8}
+                  style={{ marginRight: 12 }}
+                >
+                  <Ionicons name="call" size={24} color={colors.success} />
+                </TouchableOpacity>
+              );
+            },
+          });
         }
       }
     });
@@ -202,6 +221,21 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   const usersById = useMemo(() => new Map(users.map((u) => [u.id, u])), [users]);
   const agentsById = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
+
+  /** 1:1 用户会话的对方（发起方 userId / participantIds 中非我者的真实用户），供语音通话发起 */
+  function callPeer(c: Conversation | null) {
+    if (!c) return null;
+    const me = useMeStore.getState().me?.id;
+    const candidates: string[] = [];
+    if (c.participantIds) candidates.push(...c.participantIds);
+    if (c.userId) candidates.push(c.userId);
+    for (const uid of candidates) {
+      if (!uid || uid === me) continue;
+      const u = usersById.get(uid);
+      if (u) return { userId: uid, name: u.displayName || u.username || uid };
+    }
+    return null;
+  }
 
   // @提及：可@的参与者列表（排除自己）
   const mentionableParticipants = useMemo(() => {

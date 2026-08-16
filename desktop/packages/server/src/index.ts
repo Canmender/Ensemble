@@ -27,6 +27,11 @@ async function main(): Promise<void> {
     }
   };
 
+  // WebRTC 通话信令：A → (hub) → B 定向转发；目标离线时忽略
+  ctx.hub.onCallSignal = (fromUserId, fromName, targetUserId, call) => {
+    ctx.hub.sendToUser(targetUserId, { type: "call.signal", fromUserId, fromName, call });
+  };
+
   // 安全：默认仅绑定 127.0.0.1。显式 ENSEMBLE_LAN_HOST 才对外绑定。
   const host = env.lanHost ?? "127.0.0.1";
   // 对外绑定但未配置固定 API key → 拒绝启动。
