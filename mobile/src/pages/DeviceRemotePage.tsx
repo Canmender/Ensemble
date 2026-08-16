@@ -182,12 +182,12 @@ export default function DeviceRemotePage() {
 
   const statusMeta =
     relayStatus === "connected"
-      ? { color: "#10b981", label: "已连接", icon: "cloud-done-outline" as const }
+      ? { color: "#5F7A5A", label: "已连接", icon: "cloud-done-outline" as const }
       : relayStatus === "connecting"
-        ? { color: "#f59e0b", label: "连接中...", icon: "cloud-upload-outline" as const }
+        ? { color: "#A9873C", label: "连接中...", icon: "cloud-upload-outline" as const }
         : relayStatus === "error"
-          ? { color: "#ef4444", label: "连接错误", icon: "cloud-offline-outline" as const }
-          : { color: "#9ca3af", label: "未连接", icon: "cloud-outline" as const };
+          ? { color: "#B05038", label: "连接错误", icon: "cloud-offline-outline" as const }
+          : { color: "#9A918A", label: "未连接", icon: "cloud-outline" as const };
 
   const renderLogRow = ({ item }: { item: LogEntry }) => {
     const isMe = item.from === "me";

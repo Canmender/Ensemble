@@ -363,7 +363,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
             <Text style={styles.rowName}>{row.name}</Text>
             <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
           </View>
-          <View style={[styles.onlineDot, { backgroundColor: online ? "#10b981" : "#9ca3af" }]} />
+          <View style={[styles.onlineDot, { backgroundColor: online ? "#5F7A5A" : "#9A918A" }]} />
         </View>
       );
     }

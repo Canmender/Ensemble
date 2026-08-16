@@ -73,11 +73,11 @@ export default function ChatPage() {
   const isConnected = connectionState === "connected";
 
   const connMap: Record<string, { text: string; color: string }> = {
-    connected: { text: "已连接云端", color: "#10b981" },
-    connecting: { text: "连接中…", color: "#f59e0b" },
-    reconnecting: { text: "重连中…", color: "#f59e0b" },
-    disconnected: { text: "未连接", color: "#9ca3af" },
-    error: { text: "连接错误", color: "#ef4444" },
+    connected: { text: "已连接云端", color: "#5F7A5A" },
+    connecting: { text: "连接中…", color: "#A9873C" },
+    reconnecting: { text: "重连中…", color: "#A9873C" },
+    disconnected: { text: "未连接", color: "#9A918A" },
+    error: { text: "连接错误", color: "#B05038" },
   };
   const conn = connMap[connectionState] ?? connMap.disconnected;
 

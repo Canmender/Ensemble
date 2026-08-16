@@ -7,7 +7,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { colors, radius } from "../theme";
 
 const AVATAR_COLORS = [
-  "#6366f1", "#ec4899", "#f59e0b", "#10b981", "#3b82f6", "#8b5cf6",
+  "#3B3F4A", "#8F7D6F", "#6E5F52", "#5F7A5A", "#7E6B5E", "#897F75",
 ];
 
 interface AvatarProps {

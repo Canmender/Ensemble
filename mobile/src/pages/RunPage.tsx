@@ -27,15 +27,15 @@ type RunPageProps = NativeStackScreenProps<RootStackParamList, "Run">;
 function getStatusColor(status: RunStatus | string): string {
   switch (status) {
     case "running":
-      return "#f59e0b";
+      return "#A9873C";
     case "success":
-      return "#10b981";
+      return "#5F7A5A";
     case "error":
-      return "#ef4444";
+      return "#B05038";
     case "cancelled":
-      return "#6b7280";
+      return "#9A918A";
     case "queued":
-      return "#6366f1";
+      return "#3B3F4A";
     default:
       return "#374151";
   }
@@ -150,7 +150,7 @@ function renderEvent(event: AgentEvent, index: number) {
               eventStyles.doneBadge,
               {
                 backgroundColor:
-                  event.outcome === "success" ? "#10b981" : "#ef4444",
+                  event.outcome === "success" ? "#5F7A5A" : "#B05038",
               },
             ]}
           >
@@ -276,7 +276,7 @@ export default function RunPage({ route, navigation }: RunPageProps) {
           {run.status === "running" && (
             <ActivityIndicator
               size="small"
-              color="#f59e0b"
+              color="#A9873C"
               style={{ marginLeft: 8 }}
             />
           )}
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: "#ef4444",
+    backgroundColor: "#B05038",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 6,
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#10b981",
+    borderColor: "#5F7A5A",
   },
   resultTitle: {
     color: colors.primary,
@@ -546,7 +546,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#ef4444",
+    borderColor: "#B05038",
   },
   errorTitle: {
     color: colors.danger,
@@ -713,7 +713,7 @@ const eventStyles = StyleSheet.create({
     marginBottom: 6,
   },
   toolBadge: {
-    backgroundColor: "#6366f1",
+    backgroundColor: "#3B3F4A",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
@@ -744,7 +744,7 @@ const eventStyles = StyleSheet.create({
     marginBottom: 6,
   },
   toolResultBadge: {
-    backgroundColor: "#10b981",
+    backgroundColor: "#5F7A5A",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,

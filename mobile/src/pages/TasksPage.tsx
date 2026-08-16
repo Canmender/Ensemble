@@ -90,15 +90,15 @@ export default function TasksPage({ navigation }: { navigation: any }) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
-        return "#f59e0b";
+        return "#A9873C";
       case "success":
-        return "#10b981";
+        return "#5F7A5A";
       case "error":
-        return "#ef4444";
+        return "#B05038";
       case "cancelled":
-        return "#6b7280";
+        return "#9A918A";
       case "queued":
-        return "#6366f1";
+        return "#3B3F4A";
       default:
         return "#374151";
     }
@@ -244,8 +244,8 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#10b981"
-              colors={["#10b981"]}
+              tintColor="#5F7A5A"
+              colors={["#5F7A5A"]}
             />
           }
         />
@@ -265,7 +265,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <TextInput
               style={styles.input}
               placeholder="任务标题"
-              placeholderTextColor="#6b7280"
+              placeholderTextColor="#9A918A"
               value={newTaskTitle}
               onChangeText={setNewTaskTitle}
             />
@@ -299,7 +299,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="输入提示词..."
-              placeholderTextColor="#6b7280"
+              placeholderTextColor="#9A918A"
               value={newTaskPrompt}
               onChangeText={setNewTaskPrompt}
               multiline
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   addButton: {
-    backgroundColor: "#10b981",
+    backgroundColor: "#5F7A5A",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: "#ef4444",
+    backgroundColor: "#B05038",
     borderRadius: 4,
     alignSelf: "flex-end",
   },
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modeButtonActive: {
-    backgroundColor: "#10b981",
+    backgroundColor: "#5F7A5A",
   },
   modeButtonText: {
     color: colors.textMuted,
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   createButton: {
-    backgroundColor: "#10b981",
+    backgroundColor: "#5F7A5A",
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,

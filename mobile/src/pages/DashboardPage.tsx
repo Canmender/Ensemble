@@ -291,19 +291,19 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
 
       {/* Stats */}
       <View style={styles.statsContainer}>
-        <View style={[styles.statCard, { backgroundColor: "rgba(59,130,246,0.15)" }]}>
+        <View style={[styles.statCard, { backgroundColor: "rgba(59,63,74,0.12)" }]}>
           <Text style={styles.statNumber}>{stats.totalTasks}</Text>
           <Text style={styles.statLabel}>总任务</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "rgba(16,185,129,0.15)" }]}>
+        <View style={[styles.statCard, { backgroundColor: "rgba(95,122,90,0.12)" }]}>
           <Text style={styles.statNumber}>{stats.runningRuns}</Text>
           <Text style={styles.statLabel}>进行中</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "rgba(16,185,129,0.15)" }]}>
+        <View style={[styles.statCard, { backgroundColor: "rgba(95,122,90,0.12)" }]}>
           <Text style={styles.statNumber}>{stats.completedRuns}</Text>
           <Text style={styles.statLabel}>已完成</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "rgba(239,68,68,0.15)" }]}>
+        <View style={[styles.statCard, { backgroundColor: "rgba(176,80,56,0.12)" }]}>
           <Text style={styles.statNumber}>{stats.errorRuns}</Text>
           <Text style={styles.statLabel}>错误</Text>
         </View>
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   syncErrorText: {
-    color: "#ef4444",
+    color: "#B05038",
     fontSize: 12,
   },
   deviceList: {

@@ -54,12 +54,12 @@ export default function SettingsPage() {
 
   const statusColor =
     connectionState === "connected"
-      ? "#10b981"
+      ? "#5F7A5A"
       : connectionState === "connecting" || connectionState === "reconnecting"
-        ? "#f59e0b"
+        ? "#A9873C"
         : connectionState === "error"
-          ? "#ef4444"
-          : "#9ca3af";
+          ? "#B05038"
+          : "#9A918A";
   const statusText =
     connectionState === "connected"
       ? "已连接云端"

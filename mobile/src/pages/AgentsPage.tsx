@@ -236,12 +236,12 @@ export default function AgentsPage() {
           </Text>
         </View>
         {deleting === item.id ? (
-          <ActivityIndicator size="small" color="#ef4444" />
+          <ActivityIndicator size="small" color="#B05038" />
         ) : (
           <View
             style={[
               styles.statusDot,
-              { backgroundColor: item.enabled ? "#10b981" : "#6b7280" },
+              { backgroundColor: item.enabled ? "#5F7A5A" : "#9A918A" },
             ]}
           />
         )}
@@ -290,7 +290,7 @@ export default function AgentsPage() {
           </Text>
           <TouchableOpacity onPress={handleSave} disabled={saving}>
             {saving ? (
-              <ActivityIndicator size="small" color="#10b981" />
+              <ActivityIndicator size="small" color="#5F7A5A" />
             ) : (
               <Text style={[styles.modalSave, saving && styles.modalSaveDisabled]}>
                 保存
@@ -307,7 +307,7 @@ export default function AgentsPage() {
               value={formData.name}
               onChangeText={(text) => setFormData({ ...formData, name: text })}
               placeholder="输入 Agent 名称"
-              placeholderTextColor="#6b7280"
+              placeholderTextColor="#9A918A"
             />
           </View>
 
@@ -358,7 +358,7 @@ export default function AgentsPage() {
                 setFormData({ ...formData, description: text })
               }
               placeholder="Agent 描述"
-              placeholderTextColor="#6b7280"
+              placeholderTextColor="#9A918A"
               multiline
               numberOfLines={3}
             />
@@ -405,7 +405,7 @@ export default function AgentsPage() {
                   setFormData({ ...formData, model: text })
                 }
                 placeholder="例如: claude-sonnet-4-20250514"
-                placeholderTextColor="#6b7280"
+                placeholderTextColor="#9A918A"
               />
             </View>
           )}
@@ -420,7 +420,7 @@ export default function AgentsPage() {
                   setFormData({ ...formData, systemPrompt: text })
                 }
                 placeholder="系统提示词"
-                placeholderTextColor="#6b7280"
+                placeholderTextColor="#9A918A"
                 multiline
                 numberOfLines={4}
               />
@@ -483,8 +483,8 @@ export default function AgentsPage() {
                 onValueChange={(value) =>
                   setFormData({ ...formData, enabled: value })
                 }
-                trackColor={{ false: "#d1d5db", true: "#10b981" }}
-                thumbColor={formData.enabled ? "#fff" : "#9ca3af"}
+                trackColor={{ false: "#F2EFEA", true: "#5F7A5A" }}
+                thumbColor={formData.enabled ? "#fff" : "#9A918A"}
               />
             </View>
           </View>
@@ -511,7 +511,7 @@ export default function AgentsPage() {
 
       {loading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#10b981" />
+          <ActivityIndicator size="small" color="#5F7A5A" />
           <Text style={styles.loadingText}>加载中...</Text>
         </View>
       )}
@@ -579,7 +579,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   addButton: {
-    backgroundColor: "#10b981",
+    backgroundColor: "#5F7A5A",
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
@@ -793,7 +793,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   kindOptionActive: {
-    borderColor: "#10b981",
+    borderColor: "#5F7A5A",
     backgroundColor: "rgba(16, 185, 129, 0.1)",
   },
   kindText: {
@@ -813,7 +813,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   providerOptionActive: {
-    borderColor: "#10b981",
+    borderColor: "#5F7A5A",
     backgroundColor: "rgba(16, 185, 129, 0.1)",
   },
   providerText: {
@@ -844,7 +844,7 @@ const styles = StyleSheet.create({
     top: -8,
     width: 20,
     height: 20,
-    backgroundColor: "#10b981",
+    backgroundColor: "#5F7A5A",
     borderRadius: 10,
     marginLeft: -10,
   },
@@ -862,7 +862,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   toolChipActive: {
-    borderColor: "#10b981",
+    borderColor: "#5F7A5A",
     backgroundColor: "rgba(16, 185, 129, 0.1)",
   },
   toolChipText: {
