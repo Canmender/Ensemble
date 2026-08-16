@@ -2,6 +2,15 @@ import { useRunStore, type AgentEventItem } from "../store/runs";
 import { getSessionToken, resetSessionToken } from "./token";
 import { getCloudBase, isMultiMode } from "./apiBase";
 
+/** WebRTC 通话信令载荷 */
+export interface CallSignal {
+  kind: "offer" | "answer" | "candidate" | "hangup" | "accept" | "reject" | "calling";
+  sdp?: string;
+  candidate?: unknown;
+  from?: { userId: string; name?: string };
+  target?: { userId: string };
+}
+
 interface WsEnvelope {
   v: 1;
   ts: number;
@@ -33,6 +42,9 @@ interface WsEnvelope {
       input?: unknown;
       ts?: number;
     };
+    fromUserId?: string;
+    fromName?: string;
+    call?: CallSignal;
   };
 }
 
@@ -65,6 +77,8 @@ class WsClient {
   private onOpenCbs: Array<() => void> = [];
   /** 消息撤回回调（chat.deleted） */
   private onChatDeletedCbs: Array<(msg: { runId: string; msgId: string }) => void> = [];
+  /** 通话信令回调（call.signal 事件） */
+  private onCallCbs: Array<(msg: { fromUserId: string; fromName?: string; call: CallSignal }) => void> = [];
 
   /** 注册连接建立/重连成功回调 */
   onOpen(cb: () => void): void {
@@ -74,6 +88,18 @@ class WsClient {
   /** 注册消息撤回回调 */
   onChatDeleted(cb: (msg: { runId: string; msgId: string }) => void): void {
     this.onChatDeletedCbs.push(cb);
+  }
+
+  /** 注册通话信令回调 */
+  onCall(cb: (msg: { fromUserId: string; fromName?: string; call: CallSignal }) => void): void {
+    this.onCallCbs.push(cb);
+  }
+
+  /** 发送 WebRTC 通话信令给指定用户（经服务端定向转发） */
+  sendCall(targetUserId: string, call: CallSignal): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: "call", targetUserId, call }));
+    }
   }
 
   /** Fetch the session token from the server, then connect the WebSocket. */
@@ -233,6 +259,17 @@ class WsClient {
             tool: ev.tool,
             args: ev.args,
           });
+        }
+        break;
+      case "call.signal":
+        if (ev.call) {
+          for (const cb of this.onCallCbs) {
+            try {
+              cb({ fromUserId: ev.fromUserId ?? "", fromName: ev.fromName, call: ev.call as CallSignal });
+            } catch {
+              /* 通话回调异常不影响 WS */
+            }
+          }
         }
         break;
     }

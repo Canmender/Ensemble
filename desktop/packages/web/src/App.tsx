@@ -12,6 +12,8 @@ import { useMode } from "./lib/mode";
 import { cls } from "./components/ui";
 import { Avatar } from "./components/Avatar";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { CallOverlay } from "./components/CallOverlay";
+import { bootstrapCallService } from "./lib/callService";
 
 /* 路由级懒加载：首屏只加载当前页面，其余按需拆分 */
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -118,6 +120,7 @@ export default function App() {
 
   useEffect(() => {
     wsClient.connect();
+    bootstrapCallService();
     const check = () =>
       api
         .get("/health")
@@ -191,6 +194,7 @@ export default function App() {
 
   return (
     <div className="flex h-full">
+      <CallOverlay />
       {/* Sidebar */}
       <aside className="flex w-56 flex-col border-r border-border bg-surface">
         <div className="px-4 py-5">

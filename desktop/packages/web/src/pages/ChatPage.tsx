@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive, User as UserIcon,
-  Image as ImageIcon, Paperclip, File as FileIcon, X, Menu, Info, Settings2, UserPlus
+  Image as ImageIcon, Paperclip, File as FileIcon, X, Menu, Info, Settings2, UserPlus, Phone
 } from "lucide-react";
 import { GroupSettingsDialog } from "../components/GroupSettingsDialog";
 import { ContactInfoDialog } from "../components/ContactInfoDialog";
@@ -20,6 +20,7 @@ import { wsClient } from "../lib/ws";
 import { useRunStore } from "../store/runs";
 import { loadRunDetail } from "../lib/loadRunDetail";
 import { useAuth } from "../lib/auth";
+import { startCall } from "../lib/callService";
 import type { Agent } from "../types";
 import { Button, Card, Input, Label, Modal, Spinner, cls, showToast } from "../components/ui";
 
@@ -1091,8 +1092,26 @@ export default function ChatPage() {
                   )}
                 </div>
               </div>
+              {/* 语音通话（1:1 用户会话） */}
+              {activeContact.type === "user" && (
+                <button
+                  onClick={() => {
+                    const peerId = (activeContact.participantIds ?? []).find((pid) => pid !== authState.user?.id);
+                    if (peerId) {
+                      void startCall({ userId: peerId, name: activeContact.name });
+                    } else {
+                      showToast("无法获取通话对象", "error");
+                    }
+                  }}
+                  className="ml-auto mr-1 rounded-lg p-2 text-success transition-colors hover:bg-success/10"
+                  title="语音通话"
+                  aria-label="语音通话"
+                >
+                  <Phone className="h-5 w-5" />
+                </button>
+              )}
               {/* 右上角 ≡ 菜单 */}
-              <div ref={headerMenuRef} className="relative ml-auto">
+              <div ref={headerMenuRef} className={cls("relative", activeContact.type !== "user" ? "ml-auto" : "")}>
                 <button
                   onClick={() => setShowHeaderMenu((v) => !v)}
                   className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg"
