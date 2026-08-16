@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
+import { getCloudBase } from "../lib/apiBase";
 import { Button, Input, Label } from "../components/ui";
 
 /** 注册页 */
@@ -22,7 +23,8 @@ export default function RegisterPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/auth/register", {
+      const base = await getCloudBase();
+      const res = await fetch(`${base}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, displayName: displayName || undefined }),

@@ -8,6 +8,8 @@
 
 const STORAGE_KEY = "ensemble.auth.token";
 
+import { isMultiMode } from "./apiBase";
+
 let cached: Promise<string | null> | null = null;
 
 /** 保存用户登录 token（登录/注册成功后调用） */
@@ -52,6 +54,9 @@ export function getSessionToken(): Promise<string | null> {
   } catch {
     /* ignore */
   }
+
+  // 多端协作模式：不使用本机 ws-token（云端请求需用户 token）
+  if (isMultiMode()) return Promise.resolve(null);
 
   if (!cached) {
     cached = (async () => {

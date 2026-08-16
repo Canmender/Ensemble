@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { clearSessionToken, hasUserToken, setSessionToken } from "./token";
 import { getMode } from "./mode";
+import { getCloudBase } from "./apiBase";
 
 export interface AuthUser {
   id: string;
@@ -42,7 +43,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (hasUserToken()) {
         try {
           const token = localStorage.getItem("ensemble.auth.token");
-          const res = await fetch("/api/auth/me", {
+          const base = await getCloudBase();
+          const res = await fetch(`${base}/api/auth/me`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (res.ok) {
@@ -87,10 +89,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = () => {
     const token = localStorage.getItem("ensemble.auth.token");
     if (token) {
-      void fetch("/api/auth/logout", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      }).catch(() => {});
+      void (async () => {
+        const base = await getCloudBase();
+        await fetch(`${base}/api/auth/logout`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => {});
+      })();
     }
     clearSessionToken();
     setState({ status: "local" });

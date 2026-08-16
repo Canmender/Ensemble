@@ -2,6 +2,7 @@
 // 所有请求携带 Authorization: Bearer <sessionToken>（见 token.ts）。
 
 import { getSessionToken, resetSessionToken, clearSessionToken, hasUserToken } from "./token";
+import { getCloudBase } from "./apiBase";
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const doFetch = async (): Promise<Response> => {
@@ -10,7 +11,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
       ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
-    return fetch(`/api${path}`, {
+    const base = await getCloudBase();
+    return fetch(`${base}/api${path}`, {
       method,
       headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,

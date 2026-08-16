@@ -1,5 +1,6 @@
 import { useRunStore, type AgentEventItem } from "../store/runs";
 import { getSessionToken, resetSessionToken } from "./token";
+import { getCloudBase, isMultiMode } from "./apiBase";
 
 interface WsEnvelope {
   v: 1;
@@ -88,6 +89,8 @@ class WsClient {
     }
 
     const proto = location.protocol === "https:" ? "wss" : "ws";
+    // 多端协作：WS 连接云端服务器（与手机同一数据）；本地模式连本机
+    const host = isMultiMode() ? new URL(await getCloudBase()).host : location.host;
     const tokenParam = this.wsToken ? `?token=${this.wsToken}` : "";
     // 设备上报（电脑端/浏览器）：多端在线状态
     let deviceId = localStorage.getItem("ensemble_device_id");
@@ -98,7 +101,7 @@ class WsClient {
     const devParams = tokenParam
       ? `&deviceId=${encodeURIComponent(deviceId)}&type=desktop&deviceName=${encodeURIComponent("电脑端")}`
       : "";
-    const ws = new WebSocket(`${proto}://${location.host}/ws${tokenParam}${devParams}`);
+    const ws = new WebSocket(`${proto}://${host}/ws${tokenParam}${devParams}`);
     this.ws = ws;
 
     ws.onopen = () => {
@@ -240,7 +243,8 @@ class WsClient {
   private async catchUp(runId: string, afterSeq: number): Promise<void> {
     try {
       const token = await getSessionToken();
-      const res = await fetch(`/api/runs/${runId}/events?afterSeq=${afterSeq}`, {
+      const base = await getCloudBase();
+      const res = await fetch(`${base}/api/runs/${runId}/events?afterSeq=${afterSeq}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
       const json = (await res.json()) as { data?: { events?: Array<{ seq: number; jobId?: string; event: AgentEventItem["event"] }> } };

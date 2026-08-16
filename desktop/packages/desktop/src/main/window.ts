@@ -1,8 +1,24 @@
 import { BrowserWindow, dialog, ipcMain, app, shell, session } from "electron";
 import { join } from "node:path";
+import { readFileSync, existsSync } from "node:fs";
 import { IPC } from "../shared/ipc";
 
+/** 读取持久化的云端主机（多端协作时允许跨域到云端 REST/WS） */
+function readCloudHost(): string {
+  try {
+    const file = join(app.getPath("userData"), "config", "settings.json");
+    if (!existsSync(file)) return "";
+    const raw = JSON.parse(readFileSync(file, "utf8"));
+    const host = typeof raw?.cloudHost === "string" ? raw.cloudHost.trim() : "";
+    return host ? host.replace(/\/+$/, "") : "";
+  } catch {
+    return "";
+  }
+}
+
 export function createWindow(loadUrl: string): BrowserWindow {
+  const _ch = readCloudHost();
+  const connectSrcCloud = _ch ? ("http://" + _ch + " ws://" + _ch + " ") : "";
   const win = new BrowserWindow({
     width: 1360,
     height: 860,
@@ -33,7 +49,7 @@ export function createWindow(loadUrl: string): BrowserWindow {
           "default-src 'self'; " +
             "script-src 'self'; " +
             "style-src 'self' 'unsafe-inline'; " +
-            "connect-src 'self' ws://127.0.0.1:*; " +
+            "connect-src 'self' ws://127.0.0.1:* " + connectSrcCloud + 
             "img-src 'self' data:; " +
             "object-src 'none'; " +
             "base-uri 'self'",
