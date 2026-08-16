@@ -31,6 +31,7 @@ import UserProfilePage from "./pages/UserProfilePage";
 import GroupSettingsPage from "./pages/GroupSettingsPage";
 import PrivacySettingsPage from "./pages/PrivacySettingsPage";
 import RunPage from "./pages/RunPage";
+import DeviceRemotePage from "./pages/DeviceRemotePage";
 import LoginPage from "./pages/LoginPage";
 import { AppHeader } from "./components/AppHeader";
 import { LiquidGlass } from "./components/Glass";
@@ -52,6 +53,7 @@ export type RootStackParamList = {
   About: undefined;
   UserProfile: { userId: string; name: string; username: string; displayName?: string };
   PrivacySettings: undefined;
+  DeviceRemote: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -253,6 +255,14 @@ function MainApp() {
           options={{
             headerShown: true,
             header: () => <AppHeader title="隐私设置" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="DeviceRemote"
+          component={DeviceRemotePage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="我的电脑" showBack showAvatar={false} />,
           }}
         />
       </Stack.Navigator>

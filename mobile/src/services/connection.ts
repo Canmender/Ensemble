@@ -57,6 +57,26 @@ interface RelayConfig {
   token?: string;
 }
 
+/** 中继下发的设备形状（字段与 LAN 的 DeviceInfo 不同） */
+export interface RelayDeviceShape {
+  id: string;
+  name: string;
+  type: "desktop" | "mobile";
+  connectedAt?: number;
+  lastSeen?: number;
+}
+
+/** 中继转发的消息信封（字段为 timestamp 而非 ts） */
+interface RelayEnvelope {
+  id: string;
+  from: string;
+  fromName?: string;
+  to: string;
+  type: string;
+  payload: any;
+  timestamp?: number;
+}
+
 /** 连接质量指标 */
 export interface ConnectionQuality {
   /** 最近一次 ping 延迟（毫秒） */
@@ -103,7 +123,7 @@ interface ConnectionEventMap {
   /** 设备离线 */
   "device:offline": (deviceId: string) => void;
   /** 任务创建响应 */
-  "task:created": (data: { task?: Task; run?: Run }) => void;
+  "task:created": (data: { task?: Task; run?: Run; runId?: string }) => void;
   /** 任务状态更新 */
   "task:status": (data: { taskId: string; runId: string; status: string; jobs: Job[] }) => void;
   /** Agent 事件 */
@@ -116,6 +136,8 @@ interface ConnectionEventMap {
   "control:response": (data: { success: boolean; error?: string }) => void;
   /** 连接质量变更 */
   "quality:change": (quality: ConnectionQuality) => void;
+  /** 中继原始信封（供远端控制台展示 fromName/timestamp 等） */
+  "relay:inbound": (envelope: RelayEnvelope) => void;
   /** 错误 */
   error: (error: string) => void;
 }
@@ -378,25 +400,41 @@ class ConnectionService {
     this.emit("connection:state", state === "error" ? "error" : state);
   }
 
-  /** 连接到云端中继服务器 */
-  async connectViaRelay(relayUrl?: string): Promise<boolean> {
-    this.connectionMode = "relay";
+  /** 配置并连接云端中继服务器（自动向中继注册本机为 mobile 设备） */
+  async connectToRelay(relayUrl?: string, key?: string): Promise<boolean> {
     const url = relayUrl || this.relayConfig?.url;
-
     if (!url) {
       const error = "未配置中继服务器地址";
-      useDeviceStore.getState().setError(error);
+      useDeviceStore.getState().setRelayError(error);
       this.emit("error", error);
       return false;
     }
 
-    return this.connectToServer(url);
+    // 保存中继配置（含可选认证密钥）
+    this.relayConfig = { url, token: key || this.relayConfig?.token };
+    this.connectionMode = "relay";
+
+    // 记录连接历史开始时间
+    this.currentConnectionStart = Date.now();
+
+    useDeviceStore.getState().setRelayStatus("connecting");
+    useDeviceStore.getState().setRelayError(null);
+    useDeviceStore.getState().setRelayDevices([]);
+    useDeviceStore.getState().setRelayTarget(null);
+
+    const ok = await this.connectToServer(url);
+    return ok;
+  }
+
+  /** 连接到云端中继服务器（等价的旧接口；仍会自动注册设备） */
+  async connectViaRelay(relayUrl?: string): Promise<boolean> {
+    return this.connectToRelay(relayUrl);
   }
 
   /** 底层连接实现 */
   private async connectToServer(url: string): Promise<boolean> {
     if (this.socket?.connected) {
-      this.disconnect();
+      this.disconnectSocket();
     }
 
     useDeviceStore.getState().setConnectionState("connecting");
@@ -444,10 +482,8 @@ class ConnectionService {
     }
   }
 
-  /** 断开连接 */
-  disconnect(reason?: string): void {
-    // 关闭直连 WS 事件流
-    wsLink.disconnect();
+  /** 仅拆除 socket.io 中继套接字（不触碰云端 WS 事件流，保持 IM 连接不受影响） */
+  private disconnectSocket(): void {
     // 清理重连定时器
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
@@ -458,6 +494,23 @@ class ConnectionService {
       clearInterval(this.pingInterval);
       this.pingInterval = null;
     }
+
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+      this.currentUrl = null;
+    }
+
+    this.reconnectAttempts = 0;
+    this.missedPongs = 0;
+    this.pingHistory = [];
+  }
+
+  /** 断开连接（局域网直连 / 云端直连模式） */
+  disconnect(reason?: string): void {
+    // 关闭直连 WS 事件流
+    wsLink.disconnect();
 
     // 记录连接历史
     if (this.currentConnectionStart) {
@@ -474,19 +527,29 @@ class ConnectionService {
       this.currentConnectionStart = null;
     }
 
-    if (this.socket) {
-      this.socket.removeAllListeners();
-      this.socket.disconnect();
-      this.socket = null;
-      this.currentUrl = null;
+    this.disconnectSocket();
+
+    if (this.connectionMode === "relay") {
+      useDeviceStore.getState().setRelayStatus("disconnected");
+      useDeviceStore.getState().setRelayDevices([]);
+      useDeviceStore.getState().setRelayTarget(null);
     }
 
     useDeviceStore.getState().setConnectionState("disconnected");
     useDeviceStore.getState().setConnectedDevice(null);
     this.emit("connection:state", "disconnected");
-    this.reconnectAttempts = 0;
-    this.missedPongs = 0;
-    this.pingHistory = [];
+  }
+
+  /** 断开云端中继连接（仅断中继，不影响云端 IM/WS 连接） */
+  disconnectRelay(): void {
+    this.disconnectSocket();
+    this.connectionMode = "relay";
+    useDeviceStore.getState().setRelayStatus("disconnected");
+    useDeviceStore.getState().setRelayDevices([]);
+    useDeviceStore.getState().setRelayTarget(null);
+    useDeviceStore.getState().setRelayError(null);
+    useDeviceStore.getState().setConnectedDevice(null);
+    this.emit("connection:state", "disconnected");
   }
 
   // ==================== 消息发送 ====================
@@ -554,7 +617,24 @@ class ConnectionService {
 
   // ==================== 便捷方法 ====================
 
-  /** 创建任务（直连模式走 REST；中继模式广播） */
+  /**
+   * 选择中继的目标桌面设备。所有中继遥控消息（task/chat/control/sync）默认发给它。
+   */
+  selectRelayTarget(deviceId: string | null): void {
+    if (!deviceId) {
+      useDeviceStore.getState().setRelayTarget(null);
+      return;
+    }
+    const dev = useDeviceStore.getState().relayDevices.find((d) => d.id === deviceId);
+    if (dev) useDeviceStore.getState().setRelayTarget(dev);
+  }
+
+  /** 中继遥控的目标设备 ID；未选中时退回广播 */
+  private relayTargetId(): string | null {
+    return useDeviceStore.getState().relayTarget?.id || null;
+  }
+
+  /** 创建任务（直连模式走 REST；中继模式发给目标桌面设备） */
   async createTask(title: string, mode: "single" | "workflow" | "chat", input: unknown): Promise<void> {
     if (this.connectionMode === "lan") {
       const res = await api.createTask({ title, mode, input });
@@ -566,10 +646,18 @@ class ConnectionService {
       }
       return;
     }
-    this.broadcast("task:create", { title, mode, input });
+    // 中继端桌面引擎读取 input.mode（见 desktop/packages/server/src/.../engine.ts），
+    // 故需把 mode 嵌进 input： { title, input: { mode, ...input } }
+    const relayPayload = {
+      title,
+      input: { mode, ...(input as object) },
+    };
+    const target = this.relayTargetId();
+    if (target) this.sendToDevice(target, "task:create", relayPayload);
+    else this.broadcast("task:create", relayPayload);
   }
 
-  /** 发送聊天消息（直连模式走 REST；回复通过 WS 实时推送） */
+  /** 发送聊天消息（直连模式走 REST；中继模式发给目标桌面设备） */
   async sendChatMessage(runId: string, content: string): Promise<void> {
     if (this.connectionMode === "lan") {
       const res = await api.sendChatMessage(runId, content);
@@ -578,10 +666,12 @@ class ConnectionService {
       }
       return;
     }
-    this.broadcast("chat:send", { runId, content });
+    const target = this.relayTargetId();
+    if (target) this.sendToDevice(target, "chat:send", { runId, content });
+    else this.broadcast("chat:send", { runId, content });
   }
 
-  /** 发送控制命令（直连模式仅支持 run 取消） */
+  /** 发送控制命令（直连模式仅支持 run 取消；中继模式发给目标桌面设备） */
   async sendControlCommand(
     command: "pause" | "resume" | "cancel" | "retry",
     targetId: string,
@@ -598,19 +688,21 @@ class ConnectionService {
       }
       return;
     }
-    this.broadcast("control:command", { command, targetId, targetType });
+    const target = this.relayTargetId();
+    if (target) this.sendToDevice(target, "control:command", { command, targetId, targetType });
+    else this.broadcast("control:command", { command, targetId, targetType });
   }
 
-  /** 请求状态同步（直连模式拉取 REST；中继模式广播） */
+  /** 请求状态同步（直连模式拉取 REST；中继模式发给目标桌面设备） */
   async requestSync(_since?: number): Promise<void> {
     if (this.connectionMode === "lan") {
       await this.syncData();
       return;
     }
-    this.broadcast("sync:request", {
-      types: ["agents", "tasks", "runs", "jobs"],
-      since: _since,
-    });
+    const payload = { types: ["agents", "tasks", "runs", "jobs"], since: _since };
+    const target = this.relayTargetId();
+    if (target) this.sendToDevice(target, "sync:request", payload);
+    else this.broadcast("sync:request", payload);
   }
 
   /** 直连模式：拉取桌面端初始数据到本地 store */
@@ -689,11 +781,29 @@ class ConnectionService {
 
     // 连接成功
     this.socket.on("connect", () => {
-      console.log("已连接到桌面端");
-      useDeviceStore.getState().setConnectionState("connected");
-      useDeviceStore.getState().setConnectionQuality(this.getConnectionQuality());
+      console.log(this.connectionMode === "relay" ? "已连接云端中继服务器" : "已连接到桌面端");
       this.reconnectAttempts = 0;
       this.currentConnectionStart = Date.now();
+
+      if (this.connectionMode === "relay") {
+        // 中继模式：必须先向中继注册本设备，否则服务器拒绝转发任何消息
+        const dev = useDeviceStore.getState().currentDevice;
+        useDeviceStore.getState().setRelayStatus("connected");
+        useDeviceStore.getState().setConnectionQuality(this.getConnectionQuality());
+        this.emit("connection:state", "connected");
+        this.socket!.emit("device:register", {
+          deviceId: this.currentDeviceId,
+          deviceName: dev?.name || "我的手机",
+          deviceType: "mobile",
+        });
+        // 中继用原生 ping/pong 心跳
+        this.startPing();
+        return;
+      }
+
+      // 局域网 / 云端直连模式
+      useDeviceStore.getState().setConnectionState("connected");
+      useDeviceStore.getState().setConnectionQuality(this.getConnectionQuality());
       this.emit("connection:state", "connected");
 
       // 发送设备信息
@@ -709,9 +819,6 @@ class ConnectionService {
     // 连接断开
     this.socket.on("disconnect", (reason) => {
       console.log("连接断开:", reason);
-      useDeviceStore.getState().setConnectionState("disconnected");
-      useDeviceStore.getState().setConnectedDevice(null);
-      this.emit("connection:state", "disconnected");
 
       if (this.pingInterval) {
         clearInterval(this.pingInterval);
@@ -733,6 +840,21 @@ class ConnectionService {
         this.currentConnectionStart = null;
       }
 
+      if (this.connectionMode === "relay") {
+        // 中继断开：只更新中继状态，不动云端 IM
+        useDeviceStore.getState().setRelayStatus(
+          reason === "io client disconnect" ? "disconnected" : "error"
+        );
+        useDeviceStore.getState().setRelayDevices([]);
+        useDeviceStore.getState().setRelayTarget(null);
+        this.emit("connection:state", "disconnected");
+        return;
+      }
+
+      useDeviceStore.getState().setConnectionState("disconnected");
+      useDeviceStore.getState().setConnectedDevice(null);
+      this.emit("connection:state", "disconnected");
+
       // 尝试重连（指数退避）
       this.scheduleReconnect();
     });
@@ -740,27 +862,102 @@ class ConnectionService {
     // 连接错误
     this.socket.on("connect_error", (err) => {
       console.error("连接错误:", err.message);
-      useDeviceStore.getState().setError(err.message);
-      useDeviceStore.getState().setLastErrorAt(Date.now());
+      if (this.connectionMode === "relay") {
+        const msg = err.message === "unauthorized"
+          ? "认证失败：中继密钥错误或未授权"
+          : err.message || "连接失败";
+        useDeviceStore.getState().setRelayStatus("error");
+        useDeviceStore.getState().setRelayError(msg);
+      } else {
+        useDeviceStore.getState().setError(err.message);
+        useDeviceStore.getState().setLastErrorAt(Date.now());
+      }
       this.emit("error", err.message);
     });
 
-    // 接收消息
+    // 服务器主动错误事件（如"设备未注册"/顶替提示）
+    this.socket.on("error", (err: unknown) => {
+      const msg =
+        typeof err === "object" && err !== null && "message" in (err as Record<string, unknown>)
+          ? String((err as Record<string, unknown>).message)
+          : String(err);
+      console.warn("服务器错误:", msg);
+      if (this.connectionMode === "relay") {
+        useDeviceStore.getState().setRelayError(msg || "中继服务器错误");
+      }
+    });
+
+    // 接收消息：中继模式走 relay 信封（字段为 timestamp 而非 ts）
     this.socket.on("message", (data: unknown) => {
+      if (this.connectionMode === "relay") {
+        this.handleRelayInbound(data);
+        return;
+      }
       if (isValidMessage(data)) {
         this.handleMessage(data);
       }
     });
 
-    // Socket.IO 特定事件
-    this.socket.on("device:online", (device: DeviceInfo) => {
+    // 中继心跳 pong（中继服务器对原生 "ping" 的响应）
+    this.socket.on("pong", () => {
+      if (this.connectionMode === "relay") this.handlePong();
+    });
+
+    // Socket.IO 特定事件（中继：注册确认 / 设备发现广播）
+    this.socket.on("device:registered", (data: { success?: boolean; deviceId?: string; serverTime?: number }) => {
+      if (this.connectionMode === "relay") {
+        const dev = useDeviceStore.getState().currentDevice;
+        useDeviceStore.getState().setRelayStatus(data?.success === false ? "error" : "connected");
+        useDeviceStore.getState().setRelayDevices([]);
+        useDeviceStore.getState().setRelayTarget(null);
+        useDeviceStore.getState().setRelayError(null);
+        // 注册成功后请求一次状态同步（同步桌面端 agents/tasks/runs）
+        this.socket!.emit("message", this.toRelayEnvelope({
+          to: "*",
+          type: "sync:request",
+          payload: { types: ["agents", "tasks", "runs", "jobs"] },
+        }));
+        console.log("[中继] 注册成功 device=", data?.deviceId || this.currentDeviceId, "name=", dev?.name);
+      }
+    });
+
+    this.socket.on("device:list", (data: { devices?: RelayDeviceShape[] }) => {
+      if (this.connectionMode !== "relay") return;
+      const desktopDevices = (data?.devices || [])
+        .filter((d) => d && typeof d.id === "string")
+        .map((d) => this.toDeviceInfo(d));
+      useDeviceStore.getState().setRelayDevices(desktopDevices);
+      // 自动选中第一个在线桌面设备
+      const target = useDeviceStore.getState().relayTarget;
+      if (desktopDevices.length > 0 && !target) {
+        useDeviceStore.getState().setRelayTarget(desktopDevices[0]);
+      }
+    });
+
+    this.socket.on("device:online", (device: RelayDeviceShape) => {
+      if (this.connectionMode === "relay") {
+        const info = this.toDeviceInfo(device);
+        useDeviceStore.getState().upsertRelayDevice(info);
+        const target = useDeviceStore.getState().relayTarget;
+        if (!target && info.type === "desktop") {
+          useDeviceStore.getState().setRelayTarget(info);
+        }
+        this.emit("device:online", info);
+        return;
+      }
+      // 局域网/云端直连：desktop 上线设为已连接设备
       if (device.type === "desktop") {
-        useDeviceStore.getState().setConnectedDevice(device);
-        this.emit("device:online", device);
+        useDeviceStore.getState().setConnectedDevice(this.toDeviceInfo(device));
+        this.emit("device:online", this.toDeviceInfo(device));
       }
     });
 
     this.socket.on("device:offline", ({ deviceId }: { deviceId: string }) => {
+      if (this.connectionMode === "relay") {
+        useDeviceStore.getState().removeRelayDevice(deviceId);
+        this.emit("device:offline", deviceId);
+        return;
+      }
       const connected = useDeviceStore.getState().connectedDevice;
       if (connected?.id === deviceId) {
         useDeviceStore.getState().setConnectedDevice(null);
@@ -869,6 +1066,117 @@ class ConnectionService {
     }
   }
 
+  // ==================== 中继助手 ====================
+
+  /** 把中继设备形状映射为 LAN 的 DeviceInfo 结构（缺省字段补默认值） */
+  private toDeviceInfo(d: RelayDeviceShape): DeviceInfo {
+    return {
+      id: d.id,
+      name: d.name || d.id,
+      type: d.type === "mobile" ? "mobile" : "desktop",
+      os: "relay",
+      appVersion: "",
+      wsPort: 0,
+      httpPort: 0,
+      ip: "",
+      lastSeen: d.lastSeen || d.connectedAt || Date.now(),
+    };
+  }
+
+  /** 构造发给中继的 message 信封（中继无需 id/from/timestamp，转发时自行补） */
+  private toRelayEnvelope(m: { to: string; type: string; payload: unknown }) {
+    return { to: m.to, type: m.type, payload: m.payload };
+  }
+
+  /**
+   * 处理中继入站消息。
+   * 服务器只做原样转发，信封字段为 timestamp（LAN 是 ts），故在此归一化后复用
+   * 与 handleMessage 相同的业务分支。桌面端回复类型：task:created / chat:message /
+   * control:response / sync:response（以及未来的 task:status / agent:event）。
+   */
+  private handleRelayInbound(data: unknown): void {
+    if (typeof data !== "object" || data === null) return;
+    const env = data as RelayEnvelope;
+    if (typeof env.type !== "string") return;
+    const payload = env.payload as Record<string, any> | undefined;
+
+    // 暴露原始信封给远端控制台
+    this.emit("relay:inbound", env);
+
+    const taskStore = useTaskStore.getState();
+
+    switch (env.type) {
+      case "task:created": {
+        // 桌面端只回传 runId，本地无完整 Task/Run 可入 store
+        const runId: string | undefined = (payload as { runId?: string } | undefined)?.runId;
+        this.emit("task:created", { runId });
+        break;
+      }
+
+      case "task:status": {
+        const p = payload as { taskId: string; runId: string; status: string; jobs: Job[] } | undefined;
+        if (p?.runId) {
+          taskStore.updateRun(p.runId, { status: p.status as Run["status"] });
+          (p.jobs || []).forEach((job) => taskStore.updateJob(job.id, job));
+          this.emit("task:status", { taskId: p.taskId, runId: p.runId, status: p.status, jobs: p.jobs });
+        }
+        break;
+      }
+
+      case "agent:event": {
+        const p = payload as { runId: string; jobId: string; event: AgentEvent } | undefined;
+        if (p?.jobId) {
+          const existingJob = taskStore.jobs.find((j) => j.id === p.jobId);
+          taskStore.updateJob(p.jobId, { events: [...(existingJob?.events || []), p.event] });
+          this.emit("agent:event", { runId: p.runId, jobId: p.jobId, event: p.event });
+        }
+        break;
+      }
+
+      case "chat:message": {
+        const p = payload as { runId?: string; agentId?: string; content?: string; ts?: string | number } | undefined;
+        if (typeof p?.content === "string") {
+          const chatMessage: ChatMessage = {
+            id: env.id || ("relay-" + Date.now()),
+            runId: p.runId || "",
+            agentId: p.agentId || "system",
+            role: "assistant",
+            content: p.content,
+            ts: typeof p.ts === "string" ? p.ts : String(p.ts || env.timestamp || Date.now()),
+          };
+          this.emit("chat:message", chatMessage);
+        }
+        break;
+      }
+
+      case "sync:response": {
+        const p = payload as { agents?: AgentConfig[]; tasks?: Task[]; runs?: Run[]; jobs?: Job[] } | undefined;
+        if (p?.agents) taskStore.setAgents(p.agents);
+        if (p?.tasks) taskStore.setTasks(p.tasks);
+        if (p?.runs) taskStore.setRuns(p.runs);
+        if (p?.jobs) taskStore.setJobs(p.jobs);
+        taskStore.setLastSyncTs(Date.now());
+        this.emit("sync:response", { agents: p?.agents, tasks: p?.tasks, runs: p?.runs, jobs: p?.jobs });
+        break;
+      }
+
+      case "control:response": {
+        const p = payload as { success?: boolean; error?: string } | undefined;
+        const success = p?.success !== false;
+        if (!success) {
+          const error = p?.error || "控制命令执行失败";
+          console.error("控制命令失败:", error);
+          useDeviceStore.getState().setRelayError(error);
+        }
+        this.emit("control:response", { success, error: p?.error });
+        break;
+      }
+
+      default:
+        console.log("中继未处理的消息类型:", env.type);
+    }
+  }
+
   // ==================== 心跳 & 连接质量 ====================
 
   /** 发送设备上线消息 */
@@ -885,7 +1193,7 @@ class ConnectionService {
     }
   }
 
-  /** 启动心跳 */
+  /** 启动心跳：中继模式用原生 ping/pong 事件，局域网用 message 通道 */
   private startPing(): void {
     this.pingInterval = setInterval(() => {
       if (this.socket?.connected && this.currentDeviceId) {
@@ -893,13 +1201,18 @@ class ConnectionService {
         this.lastPingAt = this.pingTimestamp;
         this.missedPongs++;
 
-        const message = createMessage(
-          "ping",
-          this.currentDeviceId,
-          null,
-          {}
-        );
-        this.send(message);
+        if (this.connectionMode === "relay") {
+          // 中继服务器监听原生 "ping" sent
+          this.socket!.emit("ping");
+        } else {
+          const message = createMessage(
+            "ping",
+            this.currentDeviceId,
+            null,
+            {}
+          );
+          this.send(message);
+        }
 
         // 更新设备 store 中的连接质量
         useDeviceStore.getState().setConnectionQuality(this.getConnectionQuality());

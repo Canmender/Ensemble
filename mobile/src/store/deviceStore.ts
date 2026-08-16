@@ -42,6 +42,9 @@ export interface ConnectionHistoryEntry {
   disconnectReason?: string;
 }
 
+/** 中继连接状态 */
+export type RelayStatus = "disconnected" | "connecting" | "connected" | "error";
+
 interface DeviceStore {
   /** 当前设备信息 */
   currentDevice: DeviceInfo | null;
@@ -60,6 +63,15 @@ interface DeviceStore {
   /** 连接历史 */
   connectionHistory: ConnectionHistoryEntry[];
 
+  /** 云端中继连接状态 */
+  relayStatus: RelayStatus;
+  /** 移动端在中继上发现的设备列表（桌面端设备） */
+  relayDevices: DeviceInfo[];
+  /** 当前选中的中继目标设备（桌面端） */
+  relayTarget: DeviceInfo | null;
+  /** 中继错误信息 */
+  relayError: string | null;
+
   // Actions
   setCurrentDevice: (device: DeviceInfo) => void;
   setDiscoveredDevices: (devices: DeviceInfo[]) => void;
@@ -72,6 +84,12 @@ interface DeviceStore {
   setConnectionQuality: (quality: ConnectionQuality) => void;
   addConnectionHistory: (entry: ConnectionHistoryEntry) => void;
   clearConnectionHistory: () => void;
+  setRelayStatus: (status: RelayStatus) => void;
+  setRelayDevices: (devices: DeviceInfo[]) => void;
+  upsertRelayDevice: (device: DeviceInfo) => void;
+  removeRelayDevice: (deviceId: string) => void;
+  setRelayTarget: (device: DeviceInfo | null) => void;
+  setRelayError: (error: string | null) => void;
 }
 
 /** 默认连接质量 */
@@ -96,6 +114,10 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
   lastErrorAt: null,
   connectionQuality: { ...defaultConnectionQuality },
   connectionHistory: [],
+  relayStatus: "disconnected",
+  relayDevices: [],
+  relayTarget: null,
+  relayError: null,
 
   setCurrentDevice: (device) => set({ currentDevice: device }),
   setDiscoveredDevices: (devices) => set({ discoveredDevices: devices }),
@@ -120,4 +142,20 @@ export const useDeviceStore = create<DeviceStore>((set) => ({
       connectionHistory: [entry, ...state.connectionHistory].slice(0, MAX_HISTORY_ENTRIES),
     })),
   clearConnectionHistory: () => set({ connectionHistory: [] }),
+  setRelayStatus: (relayStatus) => set({ relayStatus }),
+  setRelayDevices: (relayDevices) => set({ relayDevices }),
+  upsertRelayDevice: (device) =>
+    set((state) => ({
+      relayDevices: [...state.relayDevices.filter((d) => d.id !== device.id), device],
+    })),
+  removeRelayDevice: (deviceId) =>
+    set((state) => {
+      const relayDevices = state.relayDevices.filter((d) => d.id !== deviceId);
+      return {
+        relayDevices,
+        relayTarget: state.relayTarget?.id === deviceId ? relayDevices[0] ?? null : state.relayTarget,
+      };
+    }),
+  setRelayTarget: (relayTarget) => set({ relayTarget }),
+  setRelayError: (relayError) => set({ relayError }),
 }));

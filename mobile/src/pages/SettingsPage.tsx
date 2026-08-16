@@ -72,6 +72,12 @@ export default function SettingsPage() {
 
   const menuItems = [
     {
+      icon: "desktop-outline" as const,
+      title: "我的电脑",
+      desc: "连接中继，远程执行任务",
+      onPress: () => navigation.navigate("DeviceRemote"),
+    },
+    {
       icon: "person-outline" as const,
       title: "个人信息",
       desc: "昵称、账号信息",
