@@ -8,7 +8,7 @@ import * as Application from "expo-application";
 import * as IntentLauncher from "expo-intent-launcher";
 import { useDeviceStore } from "../store/deviceStore";
 import { useUpdateStore } from "../store/updateStore";
-import { startDownload, cancelDownload, restorePendingDownload, initUpdateDownloader } from "./updateDownloader";
+import { startDownload, cancelDownload, installReadyApk, restorePendingDownload, initUpdateDownloader } from "./updateDownloader";
 
 export interface AppUpdateInfo {
   version: string;
@@ -18,7 +18,7 @@ export interface AppUpdateInfo {
   force: boolean;
 }
 
-export { cancelDownload, restorePendingDownload, initUpdateDownloader };
+export { cancelDownload, installReadyApk, restorePendingDownload, initUpdateDownloader };
 
 function baseUrl(): string | null {
   const { connectedDevice } = useDeviceStore.getState();

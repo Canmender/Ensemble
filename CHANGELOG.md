@@ -3,6 +3,13 @@
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。版本号规则见 [desktop/docs/WIKI.md](desktop/docs/WIKI.md#版本号规则)。
 
 
+## v0.7.79 (2026-08-16) — 修复下载后无法自动跳转安装页
+- **根因**：v0.7.76 开始下载改为后台模块任务，下载完成曶机不确定——若在后台/App 失活时完成，expo-intent-launcher 依赖当前 Activity（throwingActivity）会抛异常，导致安装器无法拉起。
+- **修复：launchInstaller**：拉起安装前先等 App 回到前台（AppState active），并重试 5 次，克服后台/Activity 丢失导致的无法自动跳转。
+- **添加 `installReadyApk`**：安装失败后可重试安装已下载的包，不重复下载；UpdateManager 失败时提供重装入口。
+
+**版本**：0.7.78 → 0.7.79，versionCode 67 → 68
+
 ## v0.7.78 (2026-08-16) — 修复语音通话无法接听
 - **根因**：云端转发通话信令（call.signal）时 runId 为空，移动端 WS 分发器在入口 `!env.runId` 判断中直接丢弃该事件，导致未来电永远触发不了来电响铃，无法接听。
 - **修复：移动端 wslink**：入口放宽为 `!env.event`，允许无 runId 的用户定向事件（call.signal / chat.mention / device.status / auth.kicked）正常分发。

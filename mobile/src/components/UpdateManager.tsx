@@ -9,7 +9,7 @@ import React, { useState } from "react";
 import { View, Text, Modal, TouchableOpacity, ActivityIndicator, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useUpdateStore } from "../store/updateStore";
-import { cancelDownload, downloadAndInstall, openUnknownSourceSettings } from "../services/appUpdate";
+import { cancelDownload, downloadAndInstall, installReadyApk, openUnknownSourceSettings } from "../services/appUpdate";
 import { colors, spacing, radius, fontSize } from "../theme";
 
 export function UpdateManager() {
@@ -26,7 +26,12 @@ export function UpdateManager() {
     if (!updateInfo) return;
     if (phase === "downloading" || phase === "waiting_network") return;
     try {
-      await downloadAndInstall(updateInfo);
+      // 若上一次已下载完成但安装未拉起（error），直接重装已下载的包（不重复下载）
+      if (error) {
+        await installReadyApk(updateInfo);
+      } else {
+        await downloadAndInstall(updateInfo);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "下载失败");
     }

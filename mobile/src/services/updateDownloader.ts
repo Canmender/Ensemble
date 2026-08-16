@@ -268,12 +268,55 @@ async function persistResume(task: FileSystem.DownloadResumable | null, fileUri:
   }
 }
 
+/**
+ * 调起系统安装器。
+ * 问题：expo-intent-launcher 依赖当前 Activity（appContext.throwingActivity），
+ * 若 App 在后台/无 resume Activity 会抛异常，导致「下载完成无法自动跳安装页」。
+ * 解决：等 App 回到前台（AppState active）再拉；且用重试保证稳定。
+ */
 async function launchInstaller(dest: string): Promise<void> {
-  const contentUri = await FileSystem.getContentUriAsync(dest);
-  await launchIntent("android.intent.action.VIEW", {
-    data: contentUri,
-    type: "application/vnd.android.package-archive",
-    flags: 0x40000001, // FLAG_GRANT_READ_URI_PERMISSION | FLAG_ACTIVITY_NEW_TASK
+  const contentUri = await FileSystem.getContentUriAsync(dest).catch(() => null);
+  if (!contentUri) throw new Error("无法获取安装包路径");
+
+  // 等待 App 回到前台（后台时 Android 10+ 禁止 Activity 启动，且 expo 拿不到 currentActivity）
+  await waitForAppForeground(30000);
+
+  let lastErr: unknown = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      await launchIntent("android.intent.action.VIEW", {
+        data: contentUri!,
+        type: "application/vnd.android.package-archive",
+        flags: 0x40000001, // FLAG_GRANT_READ_URI_PERMISSION | FLAG_ACTIVITY_NEW_TASK
+      });
+      // pendingPromise 挂起直到安装页 result 返回；认为已成功拉起
+      return;
+    } catch (e) {
+      lastErr = e;
+      // 若因 Activity 丢失失败，延后重试，等待前台恢复
+      await waitForAppForeground(2000);
+    }
+  }
+  // 多次失败：抛给上层，UI 引导开启安装权限 / 手动安装
+  throw new Error(lastErr instanceof Error ? lastErr.message : "无法拉起安装页面");
+}
+
+/** 阻塞直到 App 回到前台（超时则直接返回，继续尝试） */
+function waitForAppForeground(timeoutMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (AppState.currentState === "active") { resolve(); return; }
+    const sub = AppState.addEventListener("change", onChange);
+    const timer = setTimeout(() => {
+      sub.remove();
+      resolve();
+    }, timeoutMs);
+    function onChange(s: AppStateStatus) {
+      if (s === "active") {
+        clearTimeout(timer);
+        sub.remove();
+        resolve();
+      }
+    }
   });
 }
 
@@ -291,6 +334,23 @@ export function initUpdateDownloader(): void {
       })();
     }
   });
+}
+
+/**
+ * 安装已下载完成的 APK（不重新下载），用于安装失败后的复试入口。
+ * 如果对应文件不存在或尺寸异常，则抛出错误，用户需重新下载。
+ */
+export async function installReadyApk(info: AppUpdateInfo): Promise<void> {
+  if (Platform.OS !== "android") return;
+  const dest = destPath(info);
+  const stat = await FileSystem.getInfoAsync(dest).catch(() => null);
+  if (!stat?.exists || fileSize(stat) < 20 * 1024 * 1024) {
+    throw new Error("安装包未下载完成，请重新更新");
+  }
+  state.info = info;
+  state.phase = "done";
+  push();
+  await launchInstaller(dest);
 }
 
 /** 用户取消（非强制）：停止等待、清账本、清半成品 */
