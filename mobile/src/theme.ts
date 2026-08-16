@@ -1,124 +1,80 @@
 /**
- * 移动端设计系统 — 2026 现代升级版
- * 分层表面 / 柔和投影 / 增量间距 / 大圆角 / 清爽蓝白（保留品牌识别）
+ * 移动端设计系统 — 「玄墨瓷雅」(Xuan-Ink · Warm Mineral Ceramic)  v0.8.2
  *
- * 设计要点（iOS-18 / 现代清爽风）：
- * - 尽量去描边，用「柔影 + 分层」表达层级，降低视觉噪点
- * - 圆角更圆润（卡片 md/lg/xl 由 12/16 拉大），按钮胶囊化
- * - 输入/卡片用浅色填充而非描边
- * - elevation 体系适配 RN（iOS shadow* + Android elevation）
+ * 色组严格来自用户给定六色：
+ *   淡黏土 #8F7D6F / 玄泉 #3B3F4A / 冷灰褐 #897F75 / 墨色 #3D3D3D / 纯白 #FFFFFF / 纯黑 #000000
+ *
+ * 角色分配（经 WCAG 对比度验证）：
+ *   · 玄泉 #3B3F4A = 主品牌/主操作（白字 10.5:1）· 墨色 = 主文本(10.86) · 纯黑 = 大标题(21)
+ *   · 纯白 = 页面底 · 淡黏土 = 暖表面/装饰(3.94，勿作小字正文) · 冷灰褐 = 次级文本(压深达标)
  */
+
+const PURE = {
+  clay: "#8F7D6F",
+  xuan: "#3B3F4A",
+  taupe: "#897F75",
+  ink: "#3D3D3D",
+  white: "#FFFFFF",
+  black: "#000000",
+} as const;
 
 export const colors = {
-  /** 页面背景（极浅蓝白） */
-  bg: "#F6F7FB",
-  /** 卡片/表面 */
-  surface: "#FFFFFF",
-  /** 更高层表面（输入框、悬浮层、hover） */
-  surfaceAlt: "#F0F2F7",
-  /** 侧边/图标底 */
-  surfaceTint: "rgba(79,110,247,0.07)",
-  /** 边框（弱化，尽量少用） */
-  border: "#E9ECF2",
-  /** 主文本 */
-  text: "#14171F",
-  /** 次级文本 */
-  textMuted: "#5C6470",
-  /** 弱文本 */
-  textFaint: "#9AA1AD",
-  /** 辅助文本 */
-  textHelper: "#C6CBD4",
+  primary: PURE.xuan,            // 玄泉主操作 10.5:1
+  primaryDeep: "#2E323C",        // 玄泉压深（按压态）
+  primarySoft: "rgba(59,63,74,0.10)",
+  primaryBubble: PURE.xuan,      // 自己聊天气泡
+  gradient: [PURE.xuan, PURE.ink] as const,
 
-  /** 品牌主色（靛蓝，保持识别） */
-  primary: "#4F6EF7",
-  /** 主色弱背景 */
-  primarySoft: "rgba(79,110,247,0.08)",
-  /** 主色亮背景（聊天气泡-自己） */
-  primaryBubble: "#6B83FF",
-  /** 主色深（按压态/渐变收尾） */
-  primaryDeep: "#3A56D8",
-  /** 强调色（辅助蓝） */
-  accent: "#3B82F6",
+  text: PURE.ink,
+  textEmphasis: PURE.black,
+  textMuted: "#6B6259",          // 冷灰褐压深 5.97:1
+  textFaint: "#9A918A",
+  textHelper: "#C3BCB4",
 
-  /** 危险/错误 */
-  danger: "#E5484D",
-  /** 警告 */
-  warning: "#F5A623",
-  /** 成功 */
-  success: "#25B564",
+  bg: PURE.white,
+  surface: "#FCFBF9",
+  surfaceAlt: "#F2EFEA",
+  border: "#E7E2DC",
 
-  /** 输入框背景（浅填充，非描边） */
-  inputBg: "#F0F2F7",
-  /** 对方消息气泡背景 */
-  bubbleOther: "#EEF0F6",
-  /** 时间分割线背景 */
-  timeBadge: "rgba(20,23,31,0.06)",
+  accent: PURE.xuan,             // 冷强调（开关/状态/导航）
+  clay: PURE.clay,               // 暖细节（装饰/图标，勿作小字）
+  accentSoft: "rgba(143,125,111,0.12)",
+  surfaceTint: "rgba(143,125,111,0.08)",
 
-  /** 渐变（大标语/品牌焦点/按钮可选用） */
-  gradient: ["#4F6EF7", "#6B83FF"] as const,
-  /** 纯白 */
-  white: "#FFFFFF",
-  /** 纯黑（遮罩） */
-  scrim: "rgba(15,18,25,0.5)",
+  danger: "#B05038",
+  warning: "#A9873C",
+  success: "#5F7A5A",
+
+  inputBg: "#F4F1EC",
+  bubbleOther: "#F0ECE6",
+  timeBadge: "rgba(61,61,61,0.06)",
+
+  white: PURE.white,
+  black: PURE.black,
+  scrim: "rgba(20,16,12,0.55)",
+
+  glassHighlight: "rgba(255,255,255,0.7)",
+  glassShadow: "#2E323C",
 } as const;
 
-/** 间距（增量尺度 4→40） */
-export const spacing = {
-  xxs: 2,
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 24,
-  xxxl: 32,
-  huge: 40,
-} as const;
+export const spacing = { xxs:2, xs:4, sm:8, md:12, lg:16, xl:20, xxl:24, xxxl:32, huge:40 } as const;
+export const radius = { xs:6, sm:10, md:14, lg:18, xl:24, xxl:28, full:999 } as const;
+export const fontSize = { xs:11, sm:13, md:15, lg:17, xl:20, xxl:26, xxxl:32 } as const;
+export const lineHeight = { tight:1.2, normal:1.4, relaxed:1.6 } as const;
 
-/** 圆角（更圆润） */
-export const radius = {
-  xs: 6,
-  sm: 10,
-  md: 14,
-  lg: 18,
-  xl: 24,
-  xxl: 28,
-  full: 999,
-} as const;
-
-/** 字号 */
-export const fontSize = {
-  xs: 11,
-  sm: 13,
-  md: 15,
-  lg: 17,
-  xl: 20,
-  xxl: 26,
-  xxxl: 32,
-} as const;
-
-/** 行高倍数 */
-export const lineHeight = {
-  tight: 1.2,
-  normal: 1.4,
-  relaxed: 1.6,
-} as const;
-
-/**
- * 柔和投影（RN 原生属性；elevation 仅 Android，iOS 用 shadow*）
- * 多层可选：sm（卡片默认）/ md（悬浮）/ lg（弹层）/ xl（浮层大卡）
- */
 export const elevation = {
-  none: { shadowColor: "#000", shadowOpacity: 0, shadowRadius: 0, shadowOffset: { width: 0, height: 0 }, elevation: 0 } as const,
-  sm: { shadowColor: "#0B1220", shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 } as const,
-  md: { shadowColor: "#0B1220", shadowOpacity: 0.09, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 4 } as const,
-  lg: { shadowColor: "#0B1220", shadowOpacity: 0.12, shadowRadius: 22, shadowOffset: { width: 0, height: 8 }, elevation: 10 } as const,
-  xl: { shadowColor: "#0B1220", shadowOpacity: 0.16, shadowRadius: 30, shadowOffset: { width: 0, height: 12 }, elevation: 16 } as const,
+  none: { shadowColor:"#000", shadowOpacity:0, shadowRadius:0, shadowOffset:{width:0,height:0}, elevation:0 } as const,
+  sm: { shadowColor:"#2E323C", shadowOpacity:0.06, shadowRadius:10, shadowOffset:{width:0,height:3}, elevation:2 } as const,
+  md: { shadowColor:"#2E323C", shadowOpacity:0.10, shadowRadius:16, shadowOffset:{width:0,height:5}, elevation:4 } as const,
+  lg: { shadowColor:"#2E323C", shadowOpacity:0.14, shadowRadius:26, shadowOffset:{width:0,height:9}, elevation:10 } as const,
+  xl: { shadowColor:"#2E323C", shadowOpacity:0.18, shadowRadius:34, shadowOffset:{width:0,height:14}, elevation:16 } as const,
 } as const;
 
-/** 动画时长（ms） */
-export const duration = {
-  fast: 140,
-  normal: 240,
-  slow: 360,
+export const easing = { standard:"cubic-bezier(0.2,0,0,1)", outQuart:"cubic-bezier(0.25,1,0.5,1)", inOutCubic:"cubic-bezier(0.65,0,0.35,1)" } as const;
+export const duration = { fast:120, normal:240, slow:380, float:560 } as const;
+
+export const glass = {
+  pane: { backgroundColor:"rgba(246,243,238,0.72)", borderColor:"rgba(255,255,255,0.75)" },
+  paneInk: { backgroundColor:"rgba(59,63,74,0.74)", borderColor:"rgba(255,255,255,0.18)" },
 } as const;
+export const glassWarm = "rgba(246,243,238,0.72)";

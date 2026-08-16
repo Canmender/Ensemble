@@ -23,9 +23,10 @@ import { checkAndPromptUpdate } from "../services/appUpdate";
 import { Avatar } from "../components/Avatar";
 import { useMeStore } from "../store/meStore";
 import { useAuthGate } from "../store/authGateStore";
+import { nativeApplicationVersion } from "expo-application";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
-const APP_VERSION = "0.7.74";
+const APP_VERSION = nativeApplicationVersion ?? "0.8.2";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
