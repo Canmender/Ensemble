@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Cloud, Download, Globe, MapPin, Radio, Pencil, Plug, Server, Settings, Trash2, Wrench } from "lucide-react";
+import { BookOpen, Cloud, Download, Globe, MapPin, Radio, Pencil, Plug, Server, Settings, Shield, Trash2, Wrench } from "lucide-react";
 import { api } from "../lib/api";
 import { getMode, setMode } from "../lib/mode";
 import type { AppSettings, DetectedAgent, McpServerConfig, ProviderConfig, SkillDef, SyncResult } from "../types";
@@ -8,6 +8,7 @@ import {
   Badge, Button, Card, Input, Label, Modal, Select, Spinner, Textarea, cls, showToast,
 } from "../components/ui";
 import { useConfirm } from "../hooks/useConfirm";
+import { PrivacySettingsDialog } from "../components/PrivacySettingsDialog";
 
 const TYPE_LABEL: Record<string, string> = {
   anthropic: "Anthropic Claude",
@@ -650,6 +651,7 @@ export default function SettingsPage() {
   const [editing, setEditing] = useState<ProviderConfig | undefined>();
   const [fetchingModels, setFetchingModels] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const { confirm, Dialog } = useConfirm();
 
   // 中继服务器状态
@@ -749,10 +751,18 @@ export default function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-8 py-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-bold text-fg">设置</h1>
-        <p className="mt-1 text-sm text-muted">配置模型提供商、Agent 工具与工作区</p>
+      <header className="mb-6 flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-fg">设置</h1>
+          <p className="mt-1 text-sm text-muted">配置模型提供商、Agent 工具与工作区</p>
+        </div>
+        <Button variant="secondary" className="gap-2 text-sm" onClick={() => setShowPrivacy(true)}>
+          <Shield className="h-4 w-4" />
+          隐私设置
+        </Button>
       </header>
+
+      <PrivacySettingsDialog open={showPrivacy} onClose={() => setShowPrivacy(false)} />
 
       <div className="mb-6 flex gap-1 rounded-xl bg-muted/10 p-1" role="tablist">
         {tabs.map((t) => (

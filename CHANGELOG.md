@@ -3,6 +3,10 @@
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。版本号规则见 [desktop/docs/WIKI.md](desktop/docs/WIKI.md#版本号规则)。
 
 
+## v0.7.80 (2026-08-16) — 桌面端功能对齐：隐私设置
+- 新增桌面端「隐私设置」（设置页右上角对话框），与移动端 PrivacySettingsPage 对齐：允许被添加好友 / 好友验证 / 允许私聊 / 消息语音提醒 / 展示手机号 / 展示邮箱。
+- 通接服务端 `/api/privacy`（GET/PATCH），开关实时保存；两端共享同一个隐私配置。
+
 ## v0.7.79 (2026-08-16) — 修复下载后无法自动跳转安装页
 - **根因**：v0.7.76 开始下载改为后台模块任务，下载完成曶机不确定——若在后台/App 失活时完成，expo-intent-launcher 依赖当前 Activity（throwingActivity）会抛异常，导致安装器无法拉起。
 - **修复：launchInstaller**：拉起安装前先等 App 回到前台（AppState active），并重试 5 次，克服后台/Activity 丢失导致的无法自动跳转。
