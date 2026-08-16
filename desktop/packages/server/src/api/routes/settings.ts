@@ -21,7 +21,10 @@ export function settingsRouter(ctx: AppContext): Router {
   const r = Router();
 
   r.get("/", (_req, res) => {
-    ok(res, maskSettings(ctx.config.getSettings()));
+    const s = ctx.config.getSettings();
+    // cloudHost 缺省回退到 env（桌面端由 server.config.js 提供默认云端地址）
+    if (!s.cloudHost && ctx.env.cloudHost) s.cloudHost = ctx.env.cloudHost;
+    ok(res, maskSettings(s));
   });
 
   r.put("/", async (req, res) => {

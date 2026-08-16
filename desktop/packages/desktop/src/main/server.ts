@@ -90,6 +90,29 @@ function bootstrap(configDir: string): void {
  */
 export async function startLocalServer(opts?: { port?: number }): Promise<LocalServer> {
   const userData = app.getPath("userData");
+  // 测试环境默认云端地址：从 gitigored 的 server.config.js 读取（见 server.config.example.js）
+  // 供「多端协作」默认登录用；打包后位于 resources/server.config.js，dev 走仓库根路径
+  try {
+    const candidates = app.isPackaged
+      ? [join(process.resourcesPath, "server.config.js")]
+      : [resolve(__dirname, "../../../server.config.js"), "../../server.config.js"];
+    interface ServerConfig { cloud?: { host?: string; port?: number } }
+    let cfg: ServerConfig | null = null;
+    for (const p of candidates) {
+      try {
+        cfg = require(p) as ServerConfig;
+        if (cfg?.cloud?.host) break;
+      } catch {
+        /* 该路径不存在，尝试下一个 */
+      }
+    }
+    if (cfg?.cloud?.host && !process.env.CLOUD_HOST) {
+      process.env.CLOUD_HOST = cfg.cloud.host;
+    }
+  } catch {
+    /* 无 server.config.js（干净检出）时忽略 */
+  }
+
   const configDir = join(userData, "config");
   const dbPath = join(userData, "data", "ensemble.db");
   const secretsFile = join(userData, "secrets.json");

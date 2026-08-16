@@ -10,6 +10,7 @@ release/
 # env
 .env
 .env.local
+server.config.js
 
 # runtime data
 data/

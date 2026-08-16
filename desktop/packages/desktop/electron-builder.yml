@@ -15,6 +15,9 @@ extraResources:
   # 托盘/系统图标 → resources/icon.png
   - from: build/icon.png
     to: icon.png
+  # 测试环境默认云端地址 → resources/server.config.js
+  - from: ../../server.config.js
+    to: server.config.js
 asar: true
 win:
   target:
