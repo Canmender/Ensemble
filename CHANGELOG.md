@@ -3,6 +3,14 @@
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。版本号规则见 [desktop/docs/WIKI.md](desktop/docs/WIKI.md#版本号规则)。
 
 
+## v0.7.78 (2026-08-16) — 修复语音通话无法接听
+- **根因**：云端转发通话信令（call.signal）时 runId 为空，移动端 WS 分发器在入口 `!env.runId` 判断中直接丢弃该事件，导致未来电永远触发不了来电响铃，无法接听。
+- **修复：移动端 wslink**：入口放宽为 `!env.event`，允许无 runId 的用户定向事件（call.signal / chat.mention / device.status / auth.kicked）正常分发。
+- **服务器**：call.signal 转发时传非空占位 runId=“call”，避免桌面端为空 run 创建污染条目；桌面端 WS 同步支持（信令不再触发 run 创建）。
+- 已用两个测试用户通过云端 WS 实测：A 发 offer → B 收到 call.signal（runId=call）。
+
+**发布**：服务端 server.cjs 重新打包部署（备份 .bak.callfix）；手机 APK v0.7.77、versionCode 66 已部署
+
 ## v0.7.77 (2026-08-16) — 修复加好友问题
 - **修复「已经是好友」判断的方向性 bug**：此前只按会话创建者（user_id）单向判断，导致受好友请求方接受后，反向加好友时无法识别已经是好友，会重复发送请求。现改为按「双方同属某个 direct 会话」判断（覆盖手动创建 / 好友接受两种存储形态）。
 - **反向 pending 提示**：对方已经向你发过待处理请求时，再发请求会提示「请到好友请求中处理」，避免双向 pending。

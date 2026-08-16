@@ -269,7 +269,8 @@ export class WsLink {
     } catch {
       return;
     }
-    if (env.v !== 1 || !env.runId || !env.event) return;
+    // runId 可为空：用户定向事件（call.signal / chat.mention / device.status / auth.kicked 等）无 runId
+    if (env.v !== 1 || !env.event) return;
 
     const store = useTaskStore.getState();
     const ev = env.event;

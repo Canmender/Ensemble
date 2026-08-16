@@ -57,9 +57,10 @@ export function createLocalServer(opts: LocalServerOptions): Promise<LocalServer
     if (msg.type === "tool_confirm" && msg.confirmId) ctx.hub.resolveConfirm(msg.confirmId, msg.approved ?? false);
   };
 
-  // WebRTC 通话信令：A → (hub) → B 定向转发；目标离线/未上线时忽略
+  // WebRTC 通话信令：A → (hub) → B 定向转发；目标离线/未上线时忽略。
+  // runId 用占位 "call"（非空）：桌面端 ws 客户端会按 runId 建 run 缓存，空 runId 会产生污染条目。
   ctx.hub.onCallSignal = (fromUserId, fromName, targetUserId, call) => {
-    ctx.hub.sendToUser(targetUserId, { type: "call.signal", fromUserId, fromName, call });
+    ctx.hub.sendToUser(targetUserId, { type: "call.signal", fromUserId, fromName, call }, "call");
   };
 
   return new Promise((resolve, reject) => {

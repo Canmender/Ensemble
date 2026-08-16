@@ -210,6 +210,20 @@ class WsClient {
   }
 
   private apply(env: WsEnvelope): void {
+    // 通话信令不按 run 归属：先分发，避免给占位 runId（如 "call"）创建无意义 run 条目
+    if (env.event?.type === "call.signal") {
+      const ev = env.event;
+      if (ev.call) {
+        for (const cb of this.onCallCbs) {
+          try {
+            cb({ fromUserId: ev.fromUserId ?? "", fromName: ev.fromName, call: ev.call as CallSignal });
+          } catch {
+            /* 通话回调异常不影响 WS */
+          }
+        }
+      }
+      return;
+    }
     const store = useRunStore.getState();
     store.getOrCreate(env.runId);
     const ev = env.event;
@@ -259,17 +273,6 @@ class WsClient {
             tool: ev.tool,
             args: ev.args,
           });
-        }
-        break;
-      case "call.signal":
-        if (ev.call) {
-          for (const cb of this.onCallCbs) {
-            try {
-              cb({ fromUserId: ev.fromUserId ?? "", fromName: ev.fromName, call: ev.call as CallSignal });
-            } catch {
-              /* 通话回调异常不影响 WS */
-            }
-          }
         }
         break;
     }
