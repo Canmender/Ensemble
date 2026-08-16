@@ -38,7 +38,5 @@ server.config.js
 
 # typescript
 *.tsbuildinfo
-
-# generated native folders
-/ios
-/android
+# 个推凭据（本地仅有）
+getui.config.js

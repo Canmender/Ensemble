@@ -9,7 +9,18 @@
 - **服务器**：call.signal 转发时传非空占位 runId=“call”，避免桌面端为空 run 创建污染条目；桌面端 WS 同步支持（信令不再触发 run 创建）。
 - 已用两个测试用户通过云端 WS 实测：A 发 offer → B 收到 call.signal（runId=call）。
 
-**发布**：服务端 server.cjs 重新打包部署（备份 .bak.callfix）；手机 APK v0.7.77、versionCode 66 已部署
+**发布**：服务端 server.cjs 重新打包部署（备份 .bak.callfix）
+
+---
+
+## v0.7.78 (2026-08-16) — 接入个推(GeTui)推送
+- **新增 Config Plugin `plugins/withGetuiPush.js`**：Expo prebuild 后自动注入个推 Android SDK（gtsdk/gtc/gsido）、个推 Maven 仓库、AndroidManifest（GETUI_APPID / PushService / IntentService / queries）、并生成原生 Kotlin。
+- **MainApplication 自动初始化**：`PushManager.preInit + initialize`，app 启动即登录个推。
+- **新增 `services/getui.ts`**：通过 DeviceEventEmitter 接收 cid / 透传 / 通知点击，并缓存 cid 供接入服务端按用户推送。
+- 凭据（APPID/AppKey/AppSecret）仅存本地 gitignore 的 `getui.config.js`，不入库。
+- 本轮先阶段打通个推基本推送（支持通知模板，应用被杀也能收到）；厂商通道待配。
+
+**发布**：手机 APK v0.7.78、versionCode 67 已部署云端（/apk/ensemble-v0.7.78.apk）
 
 ## v0.7.77 (2026-08-16) — 修复加好友问题
 - **修复「已经是好友」判断的方向性 bug**：此前只按会话创建者（user_id）单向判断，导致受好友请求方接受后，反向加好友时无法识别已经是好友，会重复发送请求。现改为按「双方同属某个 direct 会话」判断（覆盖手动创建 / 好友接受两种存储形态）。

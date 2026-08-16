@@ -8,6 +8,7 @@ import { createBottomTabNavigator, BottomTabBar } from "@react-navigation/bottom
 import { Ionicons } from "@expo/vector-icons";
 import { connectionService } from "./services/connection";
 import { initNotifications } from "./services/notifications";
+import { initGetui } from "./services/getui";
 import { checkAndPromptUpdate, bootstrapUpdate } from "./services/appUpdate";
 import { UpdateManager } from "./components/UpdateManager";
 import { CallModal } from "./components/CallModal";
@@ -308,6 +309,7 @@ export default function App() {
   // 启动：初始化通知 → 连接云端 → 读取登录态 → 进登录页或主界面
   useEffect(() => {
     initNotifications();
+    initGetui();
     // 异地登录：被踢下线时跳转登录页
     wsLink.on({
       onKicked: () => {
