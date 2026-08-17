@@ -1,15 +1,13 @@
 /**
- * LiquidGlass — 液态玻璃容器（expo-blur 真透穿）
+ * LiquidGlass — 液态玻璃容器
  *
- * 关键：BlurView 直接作为容器（支持 borderRadius + overflow:hidden），
- * 不用外层 View 包裹，避免 Android 上模糊失效变白色矩形。
+ * Android 上 BlurView + borderRadius 会出白色矩形（库的已知限制），
+ * 改用纯 View 多层叠加：半透明暖白 + 内高光边 + 外阴影 + 微光斑。
+ * 视觉上接近液态玻璃，且 Android/iOS 稳定一致。
  */
-import React, { memo, useEffect, useState } from "react";
-import { View, StyleSheet, Platform, AccessibilityInfo, type StyleProp, type ViewStyle } from "react-native";
-import { BlurView } from "expo-blur";
-import { radius, colors } from "../theme";
-
-const IS_WEB = Platform.OS === "web";
+import React, { memo } from "react";
+import { View, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { radius } from "../theme";
 
 export interface LiquidGlassProps {
   children?: React.ReactNode;
@@ -24,67 +22,46 @@ export interface LiquidGlassProps {
 }
 
 function LiquidGlassInner({
-  children, style, blur = 50, tint, glow = "tl",
-  contentStyle, padding, radiusValue = radius.xxl, transparent = true,
+  children, style, blur, tint, glow = "tl",
+  contentStyle, padding, radiusValue = radius.xxl,
 }: LiquidGlassProps): React.ReactElement {
   const R = radiusValue;
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let m = true;
-    AccessibilityInfo.isReduceTransparencyEnabled().then(v => { if (m) setReduce(v); });
-    return () => { m = false; };
-  }, []);
 
-  const effBlur = Platform.OS === "ios" ? blur : Math.max(10, Math.round(blur * 0.7));
-  const useBlur = transparent && !reduce && effBlur > 0 && !IS_WEB;
-
-  const containerStyle = {
-    borderRadius: R,
-    overflow: "hidden" as const,
-    shadowColor: "#000",
-    shadowOpacity: 0.18,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 12,
-  };
-
-  if (useBlur) {
-    // BlurView 作为最外层容器（它原生支持 borderRadius + overflow:hidden）
-    return (
-      <BlurView
-        intensity={effBlur}
-        tint="default"
-        style={[containerStyle, style]}
-      >
-        {/* 极薄暖色着色 */}
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-          backgroundColor: "rgba(245,240,232,0.06)",
-        }]} />
-        {/* 顶部高光条 */}
-        {glow !== "none" && (
-          <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-            borderTopWidth: 1.5, borderTopColor: "rgba(255,255,255,0.35)",
-          }]} />
-        )}
-        {/* 底部阴影条 */}
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-          borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.05)",
-        }]} />
-        {/* 发丝外边框 */}
-        <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-          borderWidth: 0.5, borderColor: "rgba(255,255,255,0.18)",
-        }]} />
-        {/* 内容层 */}
-        <View style={[{ flex: 1, padding }, contentStyle]} pointerEvents="box-none">
-          {children}
-        </View>
-      </BlurView>
-    );
-  }
-
-  // 降级：纯色（无模糊或 web）
   return (
-    <View style={[containerStyle, style, { backgroundColor: tint || "rgba(250,248,244,0.88)" }]}>
+    <View style={[{
+      borderRadius: R,
+      overflow: "hidden",
+      // 半透明暖白玻璃面
+      backgroundColor: "rgba(252,250,246,0.78)",
+      // 3D 阴影
+      shadowColor: "#000",
+      shadowOpacity: 0.18,
+      shadowRadius: 20,
+      shadowOffset: { width: 0, height: 8 },
+      elevation: 12,
+    }, style]}>
+      {/* 内高光边（玻璃折射感） */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+        borderRadius: R,
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.55)",
+      }]} />
+      {/* 左上微光斑 */}
+      {glow !== "none" && (
+        <View pointerEvents="none" style={{
+          position: "absolute", top: 0, left: 0,
+          width: "60%", height: "40%",
+          borderTopLeftRadius: R,
+          backgroundColor: "rgba(255,255,255,0.3)",
+        }} />
+      )}
+      {/* 底部暗边（3D 离地感） */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+        borderRadius: R,
+        borderBottomWidth: 1,
+        borderBottomColor: "rgba(0,0,0,0.06)",
+      }]} />
+      {/* 内容 */}
       <View style={[{ flex: 1, padding }, contentStyle]} pointerEvents="box-none">
         {children}
       </View>
