@@ -40,6 +40,7 @@ import { timeAgo } from "../utils/timeAgo";
 import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
+import { LiquidGlass } from "../components/Glass";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
 import type { RootStackParamList } from "../App";
 
@@ -994,10 +995,15 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         <Ionicons name="menu" size={22} color={colors.text} />
       </TouchableOpacity>
 
-      {/* 详细信息弹窗 */}
+      {/* 详细信息弹窗 — 液态玻璃 */}
       <Modal visible={showDetailModal} transparent animationType="fade" onRequestClose={() => setShowDetailModal(false)}>
-        <TouchableOpacity style={{ flex: 1, backgroundColor: colors.scrim }} activeOpacity={1} onPress={() => setShowDetailModal(false)}>
-          <View style={{ position: "absolute", top: 80, right: 16, backgroundColor: colors.surface, borderRadius: 18, padding: 20, minWidth: 260, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 12 }}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.2)" }} activeOpacity={1} onPress={() => setShowDetailModal(false)}>
+          <LiquidGlass
+            blur={40}
+            radiusValue={18}
+            style={{ position: "absolute", top: 80, right: 16, minWidth: 260 }}
+            contentStyle={{ padding: 20 }}
+          >
             <Text style={{ color: colors.text, fontSize: 18, fontWeight: "700", marginBottom: 16 }}>{conv?.type === "group" ? "群聊信息" : "聊天信息"}</Text>
 
             <View style={{ marginBottom: 12 }}>
@@ -1027,7 +1033,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             <TouchableOpacity style={{ marginTop: 16, alignItems: "center", paddingVertical: 8 }} onPress={() => setShowDetailModal(false)}>
               <Text style={{ color: colors.textMuted, fontSize: 14 }}>关闭</Text>
             </TouchableOpacity>
-          </View>
+          </LiquidGlass>
         </TouchableOpacity>
       </Modal>
 
