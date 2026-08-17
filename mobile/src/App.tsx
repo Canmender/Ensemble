@@ -170,6 +170,7 @@ function GlassTabBar({ state, descriptors, navigation }: any) {
 function MainTabs() {
   return (
     <Tab.Navigator
+      tabBar={(props) => <GlassTabBar {...props} />}
       screenOptions={({ route }) => ({
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textFaint,
