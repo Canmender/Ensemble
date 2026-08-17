@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
@@ -103,34 +103,64 @@ function ChatTabBadge() {
 /** 悬浮玻璃 Tab 栏：毛玻璃容器包裹默认 BottomTabBar，浮于内容之上 */
 /** 自定义液态玻璃 Tab 栏：每条配色 + 活动项"玻璃胶囊"高亮（人类设计师的细节），避免默认 tab 的"贴纸感" */
 /** 悬浮玻璃 Tab 栏：官方 BottomTabBar 包一层液态玻璃 Dock（渲染/交互交给 RN 官方实现，避免自绘 tab 引入崩溃） */
-function GlassTabBar(props: React.ComponentProps<typeof BottomTabBar>) {
+function GlassTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
-  const DOCK_H = 58;
+  const DOCK_H = 60;
   const capsuleR = DOCK_H / 2;
+  const tabW = (Dimensions.get("window").width - 32) / state.routes.length;
+
   return (
     <View style={{
-      position: "absolute", left: 16, right: 16,
-      bottom: Math.max(insets.bottom, 10),
-    }} pointerEvents="box-none">
-      {/* 3D 投影层 */}
+      position: "absolute",
+      left: 16, right: 16,
+      bottom: Math.max(insets.bottom, 8),
+      height: DOCK_H,
+      borderRadius: capsuleR,
+      overflow: "hidden",
+    }}>
+      {/* 液态玻璃底层 */}
+      <LiquidGlass blur={55} radiusValue={capsuleR} style={{ flex: 1 }} />
+      
+      {/* Tab 按钮层（放在玻璃之上） */}
       <View style={{
-        position: "absolute", left: 4, right: 4, bottom: 0,
-        height: DOCK_H, borderRadius: capsuleR,
-        backgroundColor: "#1a1a1a", opacity: 0.25,
-        transform: [{ translateY: 6 }],
-      }} />
-      {/* 液态玻璃胶囊 Dock */}
-      <LiquidGlass blur={55} radiusValue={capsuleR} style={{ height: DOCK_H }}>
-        <BottomTabBar
-          {...props}
-          style={{
-            ...props.style,
-            height: DOCK_H,
-            backgroundColor: "transparent",
-            borderTopWidth: 0, elevation: 0, shadowOpacity: 0,
-          }}
-        />
-      </LiquidGlass>
+        position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+        flexDirection: "row",
+      }}>
+        {state.routes.map((route: any, index: number) => {
+          const { options } = descriptors[route.key];
+          const focused = state.index === index;
+          const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
+          const label = options.title ?? route.name;
+
+          return (
+            <TouchableOpacity
+              key={route.key}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate(route.name)}
+              style={{
+                flex: 1,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons
+                name={focused ? icon.active : icon.inactive}
+                size={22}
+                color={focused ? colors.primary : colors.textFaint}
+              />
+              <Text style={{
+                fontSize: 10,
+                fontWeight: focused ? "700" : "500",
+                color: focused ? colors.primary : colors.textFaint,
+                marginTop: 2,
+              }}>
+                {label}
+              </Text>
+              {route.name === "Chat" && <ChatTabBadge />}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
     </View>
   );
 }
