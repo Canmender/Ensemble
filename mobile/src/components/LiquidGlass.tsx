@@ -1,7 +1,8 @@
 /**
  * LiquidGlass — 液态玻璃容器（expo-blur 真透穿）
  *
- * 核心：BlurView 真实背景模糊 → 仅叠极薄暖色 + 顶部高光条 + 底部阴影
+ * 关键：BlurView 直接作为容器（支持 borderRadius + overflow:hidden），
+ * 不用外层 View 包裹，避免 Android 上模糊失效变白色矩形。
  */
 import React, { memo, useEffect, useState } from "react";
 import { View, StyleSheet, Platform, AccessibilityInfo, type StyleProp, type ViewStyle } from "react-native";
@@ -37,51 +38,53 @@ function LiquidGlassInner({
   const effBlur = Platform.OS === "ios" ? blur : Math.max(10, Math.round(blur * 0.7));
   const useBlur = transparent && !reduce && effBlur > 0 && !IS_WEB;
 
-  return (
-    <View
-      style={[{
-        borderRadius: R,
-        overflow: "hidden",
-        backgroundColor: "transparent",
-      }, style, {
-        shadowColor: "#000", shadowOpacity: 0.18, shadowRadius: 20,
-        shadowOffset: { width: 0, height: 8 }, elevation: 12,
-      }]}
-    >
-      {/* 玻璃底：真模糊（直接放在 borderRadius 父级内，无额外 overflow:hidden） */}
-      {useBlur ? (
-        <BlurView
-          intensity={effBlur}
-          tint="default"
-          style={StyleSheet.absoluteFill}
-        />
-      ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: tint || "rgba(250,248,244,0.88)" }]} />
-      )}
+  const containerStyle = {
+    borderRadius: R,
+    overflow: "hidden" as const,
+    shadowColor: "#000",
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 12,
+  };
 
-      {/* 极薄暖色着色（6% 透明度） */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-        backgroundColor: "rgba(245,240,232,0.06)",
-      }]} />
-
-      {/* 顶部高光条 */}
-      {glow !== "none" && (
+  if (useBlur) {
+    // BlurView 作为最外层容器（它原生支持 borderRadius + overflow:hidden）
+    return (
+      <BlurView
+        intensity={effBlur}
+        tint="default"
+        style={[containerStyle, style]}
+      >
+        {/* 极薄暖色着色 */}
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-          borderTopWidth: 1.5, borderTopColor: "rgba(255,255,255,0.35)",
+          backgroundColor: "rgba(245,240,232,0.06)",
         }]} />
-      )}
+        {/* 顶部高光条 */}
+        {glow !== "none" && (
+          <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+            borderTopWidth: 1.5, borderTopColor: "rgba(255,255,255,0.35)",
+          }]} />
+        )}
+        {/* 底部阴影条 */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+          borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.05)",
+        }]} />
+        {/* 发丝外边框 */}
+        <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+          borderWidth: 0.5, borderColor: "rgba(255,255,255,0.18)",
+        }]} />
+        {/* 内容层 */}
+        <View style={[{ flex: 1, padding }, contentStyle]} pointerEvents="box-none">
+          {children}
+        </View>
+      </BlurView>
+    );
+  }
 
-      {/* 底部阴影条 */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-        borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.05)",
-      }]} />
-
-      {/* 发丝外边框 */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-        borderWidth: 0.5, borderColor: "rgba(255,255,255,0.18)",
-      }]} />
-
-      {/* 内容层 */}
+  // 降级：纯色（无模糊或 web）
+  return (
+    <View style={[containerStyle, style, { backgroundColor: tint || "rgba(250,248,244,0.88)" }]}>
       <View style={[{ flex: 1, padding }, contentStyle]} pointerEvents="box-none">
         {children}
       </View>
