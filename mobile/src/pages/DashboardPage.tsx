@@ -252,11 +252,11 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
     >
       {/* Stats */}
       <View style={styles.statsContainer}>
-        <View style={[styles.statCard, { backgroundColor: "rgba(59,63,74,0.12)" }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.surfaceAlt }]}>
           <Text style={styles.statNumber}>{stats.totalTasks}</Text>
           <Text style={styles.statLabel}>总任务</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "rgba(95,122,90,0.12)" }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.surfaceAlt }]}>
           <Text style={styles.statNumber}>{stats.runningRuns}</Text>
           <Text style={styles.statLabel}>进行中</Text>
         </View>
@@ -264,7 +264,7 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
           <Text style={styles.statNumber}>{stats.completedRuns}</Text>
           <Text style={styles.statLabel}>已完成</Text>
         </View>
-        <View style={[styles.statCard, { backgroundColor: "rgba(176,80,56,0.12)" }]}>
+        <View style={[styles.statCard, { backgroundColor: colors.surfaceAlt }]}>
           <Text style={styles.statNumber}>{stats.errorRuns}</Text>
           <Text style={styles.statLabel}>错误</Text>
         </View>
@@ -440,7 +440,6 @@ const styles = StyleSheet.create({
     padding: 16,
     marginHorizontal: 4,
     alignItems: "center",
-    ...elevation.sm,
   },
   statNumber: {
     color: colors.text,
