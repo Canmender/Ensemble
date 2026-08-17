@@ -202,7 +202,6 @@ export default function TasksPage({ navigation }: { navigation: any }) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>任务列表</Text>
         <TouchableOpacity
           style={[styles.addButton, !isConnected && styles.addButtonDisabled]}
           onPress={() => {
