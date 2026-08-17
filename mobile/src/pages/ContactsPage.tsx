@@ -267,6 +267,21 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
         conv: c,
       })),
     },
+
+    {
+      key: "agents",
+      title: "智能体",
+      system: true,
+      rows: (agents || []).map((a: any) => ({
+        type: "item" as const,
+        key: "agent-" + a.id,
+        kind: "agent" as const,
+        id: a.id,
+        name: a.name || a.id,
+        subtitle: a.model || a.provider || "智能体",
+        agent: a,
+      })),
+    },
     {
       key: "devices",
       title: "设备",
