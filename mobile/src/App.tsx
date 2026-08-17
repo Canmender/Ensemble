@@ -1,5 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { NavigationContainer } from "@react-navigation/native";
@@ -107,61 +109,86 @@ function GlassTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const DOCK_H = 60;
   const capsuleR = DOCK_H / 2;
-  const tabW = (Dimensions.get("window").width - 32) / state.routes.length;
+  const screenW = Dimensions.get("window").width;
+  const dockW = screenW - 32;
+  const tabCount = state.routes.length;
+  const tabW = dockW / tabCount;
+
+  // 动画共享值
+  const pillX = useSharedValue(state.index * tabW);
+  const gestureOffset = useSharedValue(0);
+
+  // 同步外部切换（如从页面内导航）
+  React.useEffect(() => {
+    pillX.value = withSpring(state.index * tabW, { damping: 18, stiffness: 180 });
+  }, [state.index]);
+
+  // 拖动切换
+  const swipe = Gesture.Pan()
+    .activeOffsetX([-15, 15])
+    .onUpdate((e) => { gestureOffset.value = e.translationX; })
+    .onEnd((e) => {
+      gestureOffset.value = 0;
+      if (e.translationX < -40 && state.index < tabCount - 1) {
+        pillX.value = withSpring((state.index + 1) * tabW, { damping: 18, stiffness: 180 });
+        runOnJS(navigation.navigate)(state.routes[state.index + 1].name);
+      } else if (e.translationX > 40 && state.index > 0) {
+        pillX.value = withSpring((state.index - 1) * tabW, { damping: 18, stiffness: 180 });
+        runOnJS(navigation.navigate)(state.routes[state.index - 1].name);
+      } else {
+        pillX.value = withSpring(state.index * tabW, { damping: 18, stiffness: 180 });
+      }
+    });
+
+  const pillStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pillX.value + gestureOffset.value * 0.3 }],
+  }));
 
   return (
-    <View style={{
-      position: "absolute",
-      left: 16, right: 16,
-      bottom: Math.max(insets.bottom, 8),
-      height: DOCK_H,
-      borderRadius: capsuleR,
-      overflow: "hidden",
-    }}>
-      {/* 液态玻璃底层 */}
-      <LiquidGlass blur={55} radiusValue={capsuleR} style={{ flex: 1 }} />
-      
-      {/* Tab 按钮层（放在玻璃之上） */}
+    <GestureDetector gesture={swipe}>
       <View style={{
-        position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-        flexDirection: "row",
-      }}>
-        {state.routes.map((route: any, index: number) => {
-          const { options } = descriptors[route.key];
-          const focused = state.index === index;
-          const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
-          const label = options.title ?? route.name;
-
-          return (
-            <TouchableOpacity
-              key={route.key}
-              activeOpacity={0.7}
-              onPress={() => navigation.navigate(route.name)}
-              style={{
-                flex: 1,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons
-                name={focused ? icon.active : icon.inactive}
-                size={22}
-                color={focused ? colors.primary : colors.textFaint}
-              />
-              <Text style={{
-                fontSize: 10,
-                fontWeight: focused ? "700" : "500",
-                color: focused ? colors.primary : colors.textFaint,
-                marginTop: 2,
-              }}>
-                {label}
-              </Text>
-              {route.name === "Chat" && <ChatTabBadge />}
-            </TouchableOpacity>
-          );
-        })}
+        position: "absolute", left: 16, right: 16,
+        bottom: Math.max(insets.bottom, 8), height: DOCK_H,
+      }} pointerEvents="box-none">
+        {/* 液态玻璃胶囊 */}
+        <View style={{
+          flex: 1, borderRadius: capsuleR, overflow: "hidden",
+          shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 24,
+          shadowOffset: { width: 0, height: 8 }, elevation: 12,
+        }}>
+          <LiquidGlass blur={55} radiusValue={capsuleR} style={{ flex: 1 }} />
+        </View>
+        {/* 滑动高亮胶囊 */}
+        <Animated.View style={[{
+          position: "absolute", top: 6, left: 6,
+          width: tabW - 12, height: DOCK_H - 12,
+          borderRadius: (DOCK_H - 12) / 2,
+          backgroundColor: "rgba(255,255,255,0.2)",
+        }, pillStyle]} />
+        {/* Tab 按钮 */}
+        <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row" }}>
+          {state.routes.map((route: any, index: number) => {
+            const focused = state.index === index;
+            const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
+            return (
+              <TouchableOpacity
+                key={route.key}
+                activeOpacity={0.7}
+                onPress={() => {
+                  navigation.navigate(route.name);
+                  pillX.value = withSpring(index * tabW, { damping: 18, stiffness: 180 });
+                }}
+                style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+              >
+                <Ionicons name={focused ? icon.active : icon.inactive} size={22} color={focused ? "#fff" : "rgba(255,255,255,0.5)"} />
+                <Text style={{ fontSize: 10, fontWeight: focused ? "700" : "500", color: focused ? "#fff" : "rgba(255,255,255,0.5)", marginTop: 2 }}>{route.name === "Me" ? "我" : (descriptors[route.key].options.title ?? route.name)}</Text>
+                {route.name === "Chat" && <ChatTabBadge />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
-    </View>
+    </GestureDetector>
   );
 }
 
