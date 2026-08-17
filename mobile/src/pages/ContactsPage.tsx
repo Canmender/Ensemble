@@ -130,6 +130,10 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     void loadDevices();
     void loadGroupConvs();
     void loadFriends();
+    // 加载智能体列表
+    void api.getAgents().then((res) => {
+      if (res.data) setAgents(res.data);
+    }).catch(() => {});
     // 设备在线状态变化实时刷新
     const unsub = wsLink.on({ onDeviceStatus: () => void loadDevices() });
     return unsub;
@@ -334,7 +338,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
           user: u,
         })),
     })),
-  ].filter((s) => s.rows.length > 0);
+  ];
 
   const flatData: Row[] = [];
   for (const s of sections) {
