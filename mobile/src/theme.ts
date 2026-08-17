@@ -1,15 +1,8 @@
 /**
- * 移动端设计系统 — 「玄墨瓷雅」(Xuan-Ink · Warm Ceramic)  v0.8.4
+ * 移动端设计系统 — 纯色版（零混色）
  *
- * 颜色仅来自用户给定六色（唯一外源）：
+ * 严格只用六色，不混白/混黑/rgba：
  *   淡黏土 #8F7D6F / 玄泉 #3B3F4A / 冷灰褐 #897F75 / 墨色 #3D3D3D / 纯白 #FFFFFF / 纯黑 #000000
- *
- * 层次原则（去「脏灰糊」）：
- *   · 底 = 纯白（干净）· 正文 = 墨色 #3D3D3D · 大标题 = 纯黑 #000000
- *   · 主操作/品牌 = 玄泉 #3B3F4A（在白底上沉静有力）
- *   · 暖表面/卡片/高光 = 淡黏土 #8F7D6F 及其向白 blend
- *   · 次级文本 = 冷灰褐 #897F75 体系（压深保证对比）
- *   · 避免把整张页面推成米灰：白底打底，黏土只做局部暖层次 + 玄泉做主重点
  */
 
 const PURE = {
@@ -22,47 +15,42 @@ const PURE = {
 } as const;
 
 export const colors = {
-  /* 品牌主 —— 玄泉 */
   primary: PURE.xuan,
-  primaryDeep: "#2A2E36",
-  primarySoft: "rgba(59,63,74,0.08)",
+  primaryDeep: PURE.black,
+  primarySoft: PURE.taupe,
   primaryBubble: PURE.xuan,
   gradient: [PURE.xuan, PURE.ink] as const,
 
-  /* 文字 —— 墨/黑 为主，冷灰褐做次级 */
   text: PURE.ink,
   textEmphasis: PURE.black,
-  textMuted: "#6A6257",
-  textFaint: "#99907F",
-  textHelper: "#C5BCAE",
+  textMuted: PURE.taupe,
+  textFaint: PURE.clay,
+  textHelper: PURE.taupe,
 
-  /* 底 & 表面 —— 白底打底，黏土只做局部暖层次 */
   bg: PURE.white,
-  surface: "#F8F5F0",
-  surfaceAlt: "#EFEAE2",
-  border: "#E5DFD5",
+  surface: PURE.clay,
+  surfaceAlt: PURE.taupe,
+  border: PURE.taupe,
 
-  /* 强调 */
   accent: PURE.xuan,
   clay: PURE.clay,
-  accentSoft: "rgba(143,125,111,0.10)",
-  surfaceTint: "rgba(143,125,111,0.06)",
+  accentSoft: PURE.clay,
+  surfaceTint: PURE.clay,
 
-  /* 状态 */
-  danger: "#A94530",
-  warning: "#A1842F",
-  success: "#5E7450",
+  danger: PURE.ink,
+  warning: PURE.clay,
+  success: PURE.taupe,
 
-  inputBg: "#F3EFE8",
-  bubbleOther: "#EFEAE2",
-  timeBadge: "rgba(61,61,61,0.06)",
+  inputBg: PURE.clay,
+  bubbleOther: PURE.clay,
+  timeBadge: PURE.taupe,
 
   white: PURE.white,
   black: PURE.black,
-  scrim: "rgba(20,16,12,0.5)",
+  scrim: PURE.black,
 
-  glassHighlight: "rgba(255,255,255,0.7)",
-  glassShadow: "#241E18",
+  glassHighlight: PURE.white,
+  glassShadow: PURE.black,
 } as const;
 
 export const spacing = { xxs:2, xs:4, sm:8, md:12, lg:16, xl:20, xxl:24, xxxl:32, huge:40 } as const;
@@ -72,17 +60,17 @@ export const lineHeight = { tight:1.2, normal:1.4, relaxed:1.6 } as const;
 
 export const elevation = {
   none: { shadowColor:"#000", shadowOpacity:0, shadowRadius:0, shadowOffset:{width:0,height:0}, elevation:0 } as const,
-  sm: { shadowColor:"#241E18", shadowOpacity:0.06, shadowRadius:10, shadowOffset:{width:0,height:3}, elevation:2 } as const,
-  md: { shadowColor:"#241E18", shadowOpacity:0.10, shadowRadius:16, shadowOffset:{width:0,height:5}, elevation:4 } as const,
-  lg: { shadowColor:"#241E18", shadowOpacity:0.14, shadowRadius:26, shadowOffset:{width:0,height:9}, elevation:10 } as const,
-  xl: { shadowColor:"#241E18", shadowOpacity:0.18, shadowRadius:34, shadowOffset:{width:0,height:14}, elevation:16 } as const,
+  sm: { shadowColor:"#000", shadowOpacity:0.08, shadowRadius:10, shadowOffset:{width:0,height:3}, elevation:2 } as const,
+  md: { shadowColor:"#000", shadowOpacity:0.12, shadowRadius:16, shadowOffset:{width:0,height:5}, elevation:4 } as const,
+  lg: { shadowColor:"#000", shadowOpacity:0.16, shadowRadius:26, shadowOffset:{width:0,height:9}, elevation:10 } as const,
+  xl: { shadowColor:"#000", shadowOpacity:0.20, shadowRadius:34, shadowOffset:{width:0,height:14}, elevation:16 } as const,
 } as const;
 
 export const easing = { standard:"cubic-bezier(0.2,0,0,1)", outQuart:"cubic-bezier(0.25,1,0.5,1)", inOutCubic:"cubic-bezier(0.65,0,0.35,1)" } as const;
 export const duration = { fast:120, normal:240, slow:380, float:560 } as const;
 
 export const glass = {
-  pane: { backgroundColor:"rgba(248,245,240,0.72)", borderColor:"rgba(255,255,255,0.75)" },
-  paneInk: { backgroundColor:"rgba(59,63,74,0.74)", borderColor:"rgba(255,255,255,0.18)" },
+  pane: { backgroundColor: PURE.white, borderColor: PURE.taupe },
+  paneInk: { backgroundColor: PURE.xuan, borderColor: PURE.taupe },
 } as const;
-export const glassWarm = "rgba(248,245,240,0.72)";
+export const glassWarm = PURE.clay;
