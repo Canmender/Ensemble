@@ -25,7 +25,7 @@ const PURE = {
 export const colors = {
   primary: PURE.xuan,
   primaryDeep: PURE.black,
-  primarySoft: PURE.white,
+  primarySoft: "#F5F3F0",
   primaryBubble: PURE.xuan,
   gradient: [PURE.xuan, PURE.ink] as const,
 
@@ -36,21 +36,21 @@ export const colors = {
   textHelper: PURE.taupe,
 
   bg: PURE.white,
-  surface: PURE.white,
-  surfaceAlt: PURE.white,
-  border: PURE.xuan,
+  surface: "#FAF9F7",
+  surfaceAlt: "#F5F3F0",
+  border: "transparent",
 
   accent: PURE.amber,
   clay: PURE.clay,
-  accentSoft: PURE.white,
-  surfaceTint: PURE.white,
+  accentSoft: "#F5F3F0",
+  surfaceTint: "#FAF9F7",
 
   danger: "#C0392B",
   warning: PURE.amber,
   success: "#27AE60",
 
-  inputBg: PURE.white,
-  bubbleOther: PURE.white,
+  inputBg: "#FAF9F7",
+  bubbleOther: "#FAF9F7",
   timeBadge: PURE.ink,
 
   white: PURE.white,

@@ -369,8 +369,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
     paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   qualityDot: {
     width: 8,
@@ -408,8 +406,6 @@ const styles = StyleSheet.create({
   },
   deviceList: {
     marginTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     paddingTop: 12,
   },
   deviceListTitle: {

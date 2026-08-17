@@ -651,8 +651,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   actionBtn: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
   actionIcon: {
@@ -725,8 +723,6 @@ const styles = StyleSheet.create({
   groupRow: {
     flexDirection: "row",
     alignItems: "center",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
     paddingVertical: spacing.md,
     gap: spacing.sm,
   },

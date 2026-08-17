@@ -77,8 +77,6 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
 const styles = StyleSheet.create({
   header: {
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
     ...elevation.sm,
     zIndex: 10,
   },

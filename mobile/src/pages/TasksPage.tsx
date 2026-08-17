@@ -345,8 +345,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   headerTitle: {
     color: colors.text,
@@ -439,8 +437,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 10,
     paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   runInfoText: {
     color: colors.textMuted,

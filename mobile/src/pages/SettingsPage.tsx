@@ -26,7 +26,7 @@ import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.8.16";
+const APP_VERSION = nativeApplicationVersion ?? "0.8.17";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
@@ -254,8 +254,6 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
   menuInfo: { flex: 1 },
   menuTitle: { color: colors.text, fontSize: fontSize.md, fontWeight: "500" },
