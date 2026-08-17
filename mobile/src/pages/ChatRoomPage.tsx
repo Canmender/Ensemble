@@ -85,6 +85,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [conv, setConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState("");
+  const [showDetailModal, setShowDetailModal] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
@@ -984,6 +985,52 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   return (
     <View style={styles.container} {...panResponder.panHandlers}>
+      {/* 右上角汉堡菜单按钮 */}
+      <TouchableOpacity
+        style={{ position: "absolute", top: 8, right: 8, zIndex: 100, padding: 8, backgroundColor: colors.surface, borderRadius: 20, shadowColor: "#000", shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4 }}
+        onPress={() => setShowDetailModal(true)}
+        hitSlop={12}
+      >
+        <Ionicons name="menu" size={22} color={colors.text} />
+      </TouchableOpacity>
+
+      {/* 详细信息弹窗 */}
+      <Modal visible={showDetailModal} transparent animationType="fade" onRequestClose={() => setShowDetailModal(false)}>
+        <TouchableOpacity style={{ flex: 1, backgroundColor: colors.scrim }} activeOpacity={1} onPress={() => setShowDetailModal(false)}>
+          <View style={{ position: "absolute", top: 80, right: 16, backgroundColor: colors.surface, borderRadius: 18, padding: 20, minWidth: 260, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20, shadowOffset: { width: 0, height: 8 }, elevation: 12 }}>
+            <Text style={{ color: colors.text, fontSize: 18, fontWeight: "700", marginBottom: 16 }}>{conv?.type === "group" ? "群聊信息" : "聊天信息"}</Text>
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>{conv?.type === "group" ? "群名称" : "会话名称"}</Text>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600", marginTop: 2 }}>{title || conv?.title || "未命名"}</Text>
+            </View>
+
+            {conv?.type === "group" && (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>成员数量</Text>
+                <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600", marginTop: 2 }}>{(conv.participantIds ?? []).length} 人</Text>
+              </View>
+            )}
+
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ color: colors.textMuted, fontSize: 12 }}>会话类型</Text>
+              <Text style={{ color: colors.text, fontSize: 16, fontWeight: "600", marginTop: 2 }}>{conv?.type === "group" ? "群聊" : "私聊"}</Text>
+            </View>
+
+            {conv?.announcement ? (
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ color: colors.textMuted, fontSize: 12 }}>公告</Text>
+                <Text style={{ color: colors.text, fontSize: 14, marginTop: 2, lineHeight: 20 }}>{conv.announcement}</Text>
+              </View>
+            ) : null}
+
+            <TouchableOpacity style={{ marginTop: 16, alignItems: "center", paddingVertical: 8 }} onPress={() => setShowDetailModal(false)}>
+              <Text style={{ color: colors.textMuted, fontSize: 14 }}>关闭</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <FlatList
         ref={flatListRef}
         data={messages}
