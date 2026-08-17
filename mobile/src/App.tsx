@@ -120,7 +120,7 @@ function GlassTabBar(props: React.ComponentProps<typeof BottomTabBar>) {
         transform: [{ translateY: 6 }],
       }} />
       {/* 液态玻璃胶囊 Dock */}
-      <LiquidGlass blur={55} radiusValue={capsuleR}>
+      <LiquidGlass blur={55} radiusValue={capsuleR} style={{ height: DOCK_H }}>
         <BottomTabBar
           {...props}
           style={{
