@@ -17,7 +17,9 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { nativeApplicationVersion } from "expo-application";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
@@ -61,6 +63,7 @@ export default function ChatPage() {
   const lastReload = useRef(0);
   // 搜索
   const [searchText, setSearchText] = useState("");
+  const [showInfoModal, setShowInfoModal] = useState(false);
   const [searchResults, setSearchResults] = useState<Conversation[]>([]);
   const [searching, setSearching] = useState(false);
   // 长按操作菜单
