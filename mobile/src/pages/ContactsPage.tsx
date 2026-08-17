@@ -45,7 +45,7 @@ type Row =
   | { type: "item"; key: string; kind: "user" | "agent" | "device" | "group"; id: string; name: string; subtitle: string; user?: UserInfo; agent?: AgentConfig; deviceIcon?: keyof typeof Ionicons.glyphMap; conv?: Conversation };
 
 export default function ContactsPage({ navigation }: { navigation: any }) {
-  const { agents } = useTaskStore();
+  const { agents, setAgents } = useTaskStore();
   const { currentDevice } = useDeviceStore();
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [devices, setDevices] = useState<Array<{ id: string; name: string; type: string; online: boolean }>>([]);
@@ -138,6 +138,11 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
   // 返回本页时刷新群聊（创建/管理群后能看到最新）
   useFocusEffect(
     useCallback(() => {
+    // 加载智能体列表
+    void api.getAgents().then((res) => {
+      if (res.data) setAgents(res.data);
+    }).catch(() => {});
+
       void loadGroupConvs();
       void loadFriends();
     }, [loadGroupConvs, loadFriends]),
