@@ -1,8 +1,12 @@
 /**
- * 移动端设计系统 — 纯色版（零混色）
+ * 移动端设计系统 — 暖奢矿物（Anti-AI-Slop）
  *
- * 严格只用六色，不混白/混黑/rgba：
+ * 基础六色 + 暖琥珀点缀（解决纯中性色无视觉焦点的问题）：
  *   淡黏土 #8F7D6F / 玄泉 #3B3F4A / 冷灰褐 #897F75 / 墨色 #3D3D3D / 纯白 #FFFFFF / 纯黑 #000000
+ *   + 暖琥珀 #C4933F（CTA/强调/活跃态，从技能搜索的 Luxury 配色演化）
+ *
+ * 设计方向：Brutally Minimal + Luxury/Refined
+ *   白底 + 墨/黑文字 + 玄泉品牌 + 暖琥珀 CTA + 黏土/冷灰褐暖层次
  */
 
 const PURE = {
@@ -12,6 +16,7 @@ const PURE = {
   ink: "#3D3D3D",
   white: "#FFFFFF",
   black: "#000000",
+  amber: "#C4933F",
 } as const;
 
 export const colors = {
@@ -32,14 +37,14 @@ export const colors = {
   surfaceAlt: PURE.taupe,
   border: PURE.taupe,
 
-  accent: PURE.xuan,
+  accent: PURE.amber,
   clay: PURE.clay,
   accentSoft: PURE.clay,
   surfaceTint: PURE.clay,
 
-  danger: PURE.ink,
-  warning: PURE.clay,
-  success: PURE.taupe,
+  danger: "#B5432A",
+  warning: PURE.amber,
+  success: "#5A7A4E",
 
   inputBg: PURE.clay,
   bubbleOther: PURE.clay,
