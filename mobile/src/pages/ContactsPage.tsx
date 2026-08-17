@@ -238,8 +238,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
         displayName: row.user.displayName,
       });
     } else if (row.kind === "agent") {
-      setTarget({ kind: "agent", id: row.id, name: row.name });
-      navigation.navigate("Chat");
+      navigation.navigate("AgentDetail", { agentId: row.id });
     } else if (row.kind === "group" && row.conv) {
       // 打开群聊
       navigation.navigate("ChatRoom", { convId: row.conv.id, runId: row.conv.runId, title: row.conv.title || "群聊" });
@@ -382,7 +381,25 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
         </View>
       );
     }
-    const isUser = row.kind === "user";
+    if (row.kind === "agent") {
+      return (
+        <TouchableOpacity
+          style={styles.row}
+          activeOpacity={0.7}
+          onPress={() => navigation.navigate("AgentDetail", { agentId: row.id })}
+        >
+          <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name="hardware-chip" size={20} color={colors.primary} />
+          </View>
+          <View style={styles.rowInfo}>
+            <Text style={styles.rowName}>{row.name}</Text>
+            <Text style={styles.rowSubtitle}>{row.subtitle || "智能体"}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textFaint} />
+        </TouchableOpacity>
+      );
+    }
+        const isUser = row.kind === "user";
     return (
       <TouchableOpacity style={styles.row} onPress={() => openContact(row)} activeOpacity={0.7}>
         <Avatar
