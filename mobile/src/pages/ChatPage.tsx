@@ -72,14 +72,6 @@ export default function ChatPage() {
 
   const isConnected = connectionState === "connected";
 
-  const connMap: Record<string, { text: string; color: string }> = {
-    connected: { text: "已连接云端", color: "#5F7A5A" },
-    connecting: { text: "连接中…", color: "#A9873C" },
-    reconnecting: { text: "重连中…", color: "#A9873C" },
-    disconnected: { text: "未连接", color: "#9A918A" },
-    error: { text: "连接错误", color: "#B05038" },
-  };
-  const conn = connMap[connectionState] ?? connMap.disconnected;
 
   const loadConversations = useCallback(async () => {
     // 先尝试读取本地缓存（秒加载）
@@ -326,8 +318,8 @@ export default function ChatPage() {
     <View style={styles.container}>
       {/* 连接状态条 + 新对话入口 */}
       <View style={styles.connBar}>
-        <View style={[styles.connDot, { backgroundColor: conn.color }]} />
-        <Text style={styles.connText}>{conn.text}</Text>
+
+
       </View>
 
       {error && (

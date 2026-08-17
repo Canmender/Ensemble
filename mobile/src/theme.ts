@@ -38,7 +38,7 @@ export const colors = {
   bg: PURE.white,
   surface: PURE.white,
   surfaceAlt: PURE.white,
-  border: PURE.ink,
+  border: PURE.xuan,
 
   accent: PURE.amber,
   clay: PURE.clay,

@@ -250,45 +250,6 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
         />
       }
     >
-      {/* Connection status */}
-      <View style={styles.statusCard}>
-        <View style={styles.statusHeader}>
-          <View
-            style={[styles.statusDot, { backgroundColor: getStatusColor() }]}
-          />
-          <Text style={styles.statusText}>{getStatusText()}</Text>
-        </View>
-
-        {/* Connection quality indicator */}
-        {connectionState === "connected" && (
-          <View style={styles.qualityRow}>
-            <View
-              style={[
-                styles.qualityDot,
-                { backgroundColor: getQualityColor(connectionQuality) },
-              ]}
-            />
-            <Text style={styles.qualityText}>
-              连接质量: {getQualityText(connectionQuality)}
-              {lastPingTime.current !== null && ` (${lastPingTime.current}ms)`}
-            </Text>
-          </View>
-        )}
-
-        {/* Sync info */}
-        <View style={styles.syncRow}>
-          <Text style={styles.syncLabel}>最后同步:</Text>
-          <Text style={styles.syncValue}>{formatSyncTime(lastSyncTs)}</Text>
-        </View>
-
-        {/* Sync error */}
-        {syncError && (
-          <View style={styles.syncErrorRow}>
-            <Text style={styles.syncErrorText}>{syncError}</Text>
-          </View>
-        )}
-      </View>
-
       {/* Stats */}
       <View style={styles.statsContainer}>
         <View style={[styles.statCard, { backgroundColor: "rgba(59,63,74,0.12)" }]}>

@@ -27,7 +27,6 @@ import TasksPage from "./pages/TasksPage";
 import ChatPage from "./pages/ChatPage";
 import ChatRoomPage from "./pages/ChatRoomPage";
 import ContactsPage from "./pages/ContactsPage";
-import AgentsPage from "./pages/AgentsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage";
@@ -38,6 +37,7 @@ import PrivacySettingsPage from "./pages/PrivacySettingsPage";
 import RunPage from "./pages/RunPage";
 import DeviceRemotePage from "./pages/DeviceRemotePage";
 import LoginPage from "./pages/LoginPage";
+import AgentDetailPage from "./pages/AgentDetailPage";
 import { AppHeader } from "./components/AppHeader";
 import { LiquidGlass } from "./components/Glass";
 
@@ -59,6 +59,7 @@ export type RootStackParamList = {
   UserProfile: { userId: string; name: string; username: string; displayName?: string };
   PrivacySettings: undefined;
   DeviceRemote: undefined;
+  AgentDetail: { agentId: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -72,7 +73,6 @@ const TAB_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Tasks: { active: "document-text", inactive: "document-text-outline" },
   Chat: { active: "chatbubble-ellipses", inactive: "chatbubble-ellipses-outline" },
   Contacts: { active: "people", inactive: "people-outline" },
-  Agents: { active: "hardware-chip", inactive: "hardware-chip-outline" },
   Me: { active: "person", inactive: "person-outline" },
 };
 
@@ -222,7 +222,6 @@ function MainTabs() {
       <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务", header: () => <AppHeader title="任务" /> }} />
       <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天", header: () => <AppHeader title="聊天" /> }} />
       <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人", header: () => <AppHeader title="联系人" /> }} />
-      <Tab.Screen name="Agents" component={AgentsPage} options={{ title: "Agent", header: () => <AppHeader title="Agent" /> }} />
       <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我", header: () => <AppHeader title="我" /> }} />
     </Tab.Navigator>
   );
@@ -321,6 +320,14 @@ function MainApp() {
           options={{
             headerShown: true,
             header: () => <AppHeader title="隐私设置" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="AgentDetail"
+          component={AgentDetailPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="智能体详情" showBack showAvatar={false} />,
           }}
         />
         <Stack.Screen
