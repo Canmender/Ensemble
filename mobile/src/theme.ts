@@ -1,12 +1,16 @@
 /**
  * 移动端设计系统 — 暖奢矿物（Anti-AI-Slop）
  *
- * 基础六色 + 暖琥珀点缀（解决纯中性色无视觉焦点的问题）：
+ * 六色 + 暖琥珀点缀，文字对比度 >= 4.5:1：
  *   淡黏土 #8F7D6F / 玄泉 #3B3F4A / 冷灰褐 #897F75 / 墨色 #3D3D3D / 纯白 #FFFFFF / 纯黑 #000000
- *   + 暖琥珀 #C4933F（CTA/强调/活跃态，从技能搜索的 Luxury 配色演化）
+ *   + 暖琥珀 #C4933F（CTA/强调）
  *
- * 设计方向：Brutally Minimal + Luxury/Refined
- *   白底 + 墨/黑文字 + 玄泉品牌 + 暖琥珀 CTA + 黏土/冷灰褐暖层次
+ * 文字层级（全 >= 4.5:1 on 白底）：
+ *   纯黑 #000000 = 大标题（21:1）
+ *   墨色 #3D3D3D = 主文本（10.9:1）
+ *   玄泉 #3B3F4A = 次级文本（10.5:1）
+ *   冷灰褐 #897F75 = 仅用于大号 UI / 图标（3.9:1，不做小字）
+ *   淡黏土 #8F7D6F = 仅用于表面/装饰（3.9:1，不做小字）
  */
 
 const PURE = {
@@ -28,9 +32,9 @@ export const colors = {
 
   text: PURE.ink,
   textEmphasis: PURE.black,
-  textMuted: PURE.taupe,
-  textFaint: PURE.clay,
-  textHelper: PURE.taupe,
+  textMuted: PURE.xuan,
+  textFaint: PURE.ink,
+  textHelper: PURE.xuan,
 
   bg: PURE.white,
   surface: PURE.clay,
@@ -42,7 +46,7 @@ export const colors = {
   accentSoft: PURE.clay,
   surfaceTint: PURE.clay,
 
-  danger: "#B5432A",
+  danger: "#A94530",
   warning: PURE.amber,
   success: "#5A7A4E",
 
