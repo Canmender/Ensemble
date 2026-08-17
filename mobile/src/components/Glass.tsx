@@ -34,7 +34,6 @@ export function LiquidGlass(props: LiquidGlassProps) {
       blur={props.blur ?? m.blur}
       tint={props.tint ?? m.tint}
       glow={glow}
-      halo={halo}
       style={style}
       contentStyle={contentStyle}
       radiusValue={props.radiusValue}

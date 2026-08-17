@@ -105,44 +105,36 @@ function ChatTabBadge() {
 /** 悬浮玻璃 Tab 栏：官方 BottomTabBar 包一层液态玻璃 Dock（渲染/交互交给 RN 官方实现，避免自绘 tab 引入崩溃） */
 function GlassTabBar(props: React.ComponentProps<typeof BottomTabBar>) {
   const insets = useSafeAreaInsets();
-  // 胶囊：横向长方形 + 两边半圆 → 圆角 = 高度/2
-  const DOCK_H = 56;
+  const DOCK_H = 58;
   const capsuleR = DOCK_H / 2;
   return (
-    <View
-      style={{
-        position: "absolute",
-        left: 14,
-        right: 14,
-        bottom: Math.max(insets.bottom, 12),
-      }}
-      pointerEvents="box-none"
-    >
-      {/* 玄泉柔影层（3D 离地投影，按胶囊形状） */}
-      <View style={{ position: "absolute", left: 6, right: 6, bottom: 0, height: DOCK_H, borderRadius: capsuleR, backgroundColor: "#2E323C", opacity: 0.22, transform: [{ translateY: 10 }, { scaleY: 0.96 }] }} />
-      {/* 液态玻璃胶囊 Dock：真透穿 + 光折射 + 发丝高光边 */}
-      <LiquidGlass
-        blur={48}
-        tint="rgba(252,251,249,0.52)"
-        glow="tl"
-        halo="rgba(255,255,255,0.5)"
-        radiusValue={capsuleR}
-      >
+    <View style={{
+      position: "absolute", left: 16, right: 16,
+      bottom: Math.max(insets.bottom, 10),
+    }} pointerEvents="box-none">
+      {/* 3D 投影层 */}
+      <View style={{
+        position: "absolute", left: 4, right: 4, bottom: 0,
+        height: DOCK_H, borderRadius: capsuleR,
+        backgroundColor: "#1a1a1a", opacity: 0.25,
+        transform: [{ translateY: 6 }],
+      }} />
+      {/* 液态玻璃胶囊 Dock */}
+      <LiquidGlass blur={55} radiusValue={capsuleR}>
         <BottomTabBar
           {...props}
           style={{
             ...props.style,
             height: DOCK_H,
             backgroundColor: "transparent",
-            borderTopWidth: 0,
-            elevation: 0,
-            shadowOpacity: 0,
+            borderTopWidth: 0, elevation: 0, shadowOpacity: 0,
           }}
         />
       </LiquidGlass>
     </View>
   );
 }
+
 
 // 底部标签导航
 function MainTabs() {

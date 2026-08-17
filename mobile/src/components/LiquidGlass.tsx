@@ -1,15 +1,15 @@
 /**
- * LiquidGlass — 液态玻璃容器（expo-blur 原生透穿 + 液态高光层）
+ * LiquidGlass — 液态玻璃容器（expo-blur 真透穿）
  *
- * 真透穿：底层 expo-blur BlurView（iOS=UIVisualEffectView / Android=RenderEffect，
- *         原生实时采样玻璃「后方」内容做真实背景模糊）。
- * 液态：上叠光折射渐变 + 发丝高光边 + 玄泉柔影。
- * 胶囊：radiusValue 传 高度/2 即得「横向长方形 + 两边半圆」。
+ * 核心：BlurView 真实背景模糊 → 仅叠极薄暖色 + 顶部高光条 + 底部阴影
+ * 关键：绝不能在模糊上叠太多白色，否则模糊被盖死看不见
  */
 import React, { memo, useEffect, useState } from "react";
 import { View, StyleSheet, Platform, AccessibilityInfo, type StyleProp, type ViewStyle } from "react-native";
 import { BlurView } from "expo-blur";
 import { radius, colors } from "../theme";
+
+const IS_WEB = Platform.OS === "web";
 
 export interface LiquidGlassProps {
   children?: React.ReactNode;
@@ -17,7 +17,6 @@ export interface LiquidGlassProps {
   blur?: number;
   tint?: string;
   glow?: "tl" | "tr" | "none";
-  halo?: string;
   contentStyle?: StyleProp<ViewStyle>;
   padding?: number;
   radiusValue?: number;
@@ -25,8 +24,8 @@ export interface LiquidGlassProps {
 }
 
 function LiquidGlassInner({
-  children, style, blur = 40, tint = "rgba(252,251,249,0.55)", glow = "tl",
-  halo = "rgba(255,255,255,0.6)", contentStyle, padding, radiusValue = radius.xxl, transparent = true,
+  children, style, blur = 50, tint, glow = "tl",
+  contentStyle, padding, radiusValue = radius.xxl, transparent = true,
 }: LiquidGlassProps): React.ReactElement {
   const R = radiusValue;
   const [reduce, setReduce] = useState(false);
@@ -36,49 +35,46 @@ function LiquidGlassInner({
     return () => { m = false; };
   }, []);
 
-  const effBlur = Platform.OS === "ios" ? blur : Math.max(4, Math.round(blur / 2));
-  const useBlur = transparent && !reduce && effBlur > 0;
+  const effBlur = Platform.OS === "ios" ? blur : Math.max(8, Math.round(blur * 0.7));
+  const useBlur = transparent && !reduce && effBlur > 0 && !IS_WEB;
 
   return (
     <View style={[{ borderRadius: R }, style, {
-      shadowColor: colors.glassShadow,
-      shadowOpacity: 0.16, shadowRadius: 16,
+      shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20,
       shadowOffset: { width: 0, height: 8 }, elevation: 10,
     }]}>
-      {/* 玻璃底：真模糊 或 纯色降级 */}
+      {/* 玻璃底：真模糊（tint="default" 不额外叠白） */}
       {useBlur ? (
         <BlurView
           intensity={effBlur}
-          tint="light"
-          experimentalBlurMethod="dimezisBlurView"
+          tint="default"
           style={[StyleSheet.absoluteFill, { borderRadius: R, overflow: "hidden" }]}
         />
       ) : (
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: tint, borderRadius: R }]} />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: tint || "rgba(250,248,244,0.85)", borderRadius: R }]} />
       )}
 
-      {/* 玻璃面着色 + 光折射渐变（左上光源） */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: R, backgroundColor: tint }]}>
-        {/* 光源：左上暖白高光 → 右下收敛，制造「光照玻璃」的折射感 */}
-        {glow !== "none" && (
-          <View
-            style={{
-              position: "absolute",
-              top: 0, left: 0, right: 0, height: "70%",
-              borderTopLeftRadius: R, borderTopRightRadius: R,
-              backgroundColor: halo,
-              opacity: 0.5,
-            }}
-          />
-        )}
-      </View>
+      {/* 极薄暖色着色（8% 透明度，不盖模糊） */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+        borderRadius: R, backgroundColor: "rgba(245,240,232,0.08)",
+      }]} />
 
-      {/* 发丝高光边（玻璃边缘的亮边） */}
-      {useBlur && (
+      {/* 顶部高光条 */}
+      {glow !== "none" && (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
-          borderRadius: R, borderWidth: 1, borderColor: "rgba(255,255,255,0.55)",
+          borderRadius: R, borderTopWidth: 1.5, borderTopColor: "rgba(255,255,255,0.4)",
         }]} />
       )}
+
+      {/* 底部阴影条 */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+        borderRadius: R, borderBottomWidth: 1, borderBottomColor: "rgba(0,0,0,0.06)",
+      }]} />
+
+      {/* 发丝外边框 */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
+        borderRadius: R, borderWidth: 0.5, borderColor: "rgba(255,255,255,0.2)",
+      }]} />
 
       {/* 内容层 */}
       <View style={[{ flex: 1, padding }, contentStyle]} pointerEvents="box-none">
@@ -90,7 +86,6 @@ function LiquidGlassInner({
 
 export const LiquidGlass = memo(LiquidGlassInner);
 
-/** 液态玻璃主题背景（页面根氛围底） */
 export function GlassBackdrop({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
   return <View style={[{ flex: 1, backgroundColor: "#FFFFFF" }, style]}>{children}</View>;
 }
