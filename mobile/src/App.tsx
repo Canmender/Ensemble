@@ -37,6 +37,7 @@ import PrivacySettingsPage from "./pages/PrivacySettingsPage";
 import RunPage from "./pages/RunPage";
 import DeviceRemotePage from "./pages/DeviceRemotePage";
 import LoginPage from "./pages/LoginPage";
+import ChangelogPage from "./pages/ChangelogPage";
 import AgentDetailPage from "./pages/AgentDetailPage";
 import { AppHeader } from "./components/AppHeader";
 import { LiquidGlass } from "./components/Glass";
@@ -60,6 +61,7 @@ export type RootStackParamList = {
   PrivacySettings: undefined;
   DeviceRemote: undefined;
   AgentDetail: { agentId: string };
+  Changelog: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -296,6 +298,14 @@ function MainApp() {
           options={{
             headerShown: true,
             header: () => <AppHeader title="通知设置" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="Changelog"
+          component={ChangelogPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="更新日志" showBack showAvatar={false} />,
           }}
         />
         <Stack.Screen

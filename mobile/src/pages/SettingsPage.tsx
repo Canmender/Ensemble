@@ -26,7 +26,7 @@ import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.8.21";
+const APP_VERSION = nativeApplicationVersion ?? "0.8.22";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
@@ -117,27 +117,7 @@ export default function SettingsPage() {
       icon: "document-text-outline" as const,
       title: "更新日志",
       desc: "查看版本历史与更新内容",
-      onPress: () => {
-        Alert.alert(
-          "更新日志",
-          "v0.8.14 · Swiss Modernism 设计系统\n" +
-          "v0.8.13 · 文字对比度修正\n" +
-          "v0.8.12 · 暖琥珀点缀\n" +
-          "v0.8.11 · 纯色版\n" +
-          "v0.8.10 · 胶囊 Dock + 拖动切换\n" +
-          "v0.8.9 · GlassTabBar 接入\n" +
-          "v0.8.8 · 胶囊形液态玻璃 Dock\n" +
-          "v0.8.7 · 玻璃可见性修复\n" +
-          "v0.8.6 · expo-blur 真透穿\n" +
-          "v0.8.5 · 精修陶瓷配色\n" +
-          "v0.8.4 · 真液态玻璃 (Skia)\n" +
-          "v0.8.3 · 内部版本读取原生\n" +
-          "v0.8.2 · 玄墨瓷雅六色系统\n" +
-          "v0.8.1 · 设计系统重做\n" +
-          "v0.8.0 · 全新 UI 重做",
-          [{ text: "关闭" }]
-        );
-      },
+      onPress: () => navigation.navigate("Changelog"),
     },
   ];
 
