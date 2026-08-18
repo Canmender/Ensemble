@@ -5,7 +5,7 @@
 - **项目**：合鸣（Ensemble）移动端 - React Native Expo SDK 57
 - **仓库**：D:\MultiAgent
 - **分支**：feat/mobile-ui-xuank-mo-082（UI 重做保护分支）
-- **当前版本**：0.8.28 / versionCode 98
+- **当前版本**：0.8.29 / versionCode 99
 - **服务器**：47.92.39.184:8787
 
 ## 技能系统
@@ -27,6 +27,13 @@
   node scripts/build-release.cjs
   ```
 - **prebuild 后**：需重新创建 `android/local.properties`（`sdk.dir=D:\\AndroidSDK`）
+
+## APK 优化
+
+- **当前版本**：0.8.29 / versionCode 99
+- **APK 大小**：98MB（从 190MB 优化，去掉 x86/x86_64 架构）
+- **架构配置**：`android/gradle.properties` → `reactNativeArchitectures=arm64-v8a,armeabi-v7a`
+- **注意**：`expo prebuild` 会重置 gradle.properties，prebuild 后需重新设置
 
 ## 设计系统关键决策
 
@@ -62,3 +69,5 @@
 | 分隔线太丑 | 纯黑线 | 用色差，不画线 |
 | 智能体不显示 | 未加载数据 + filter 空 rows | useEffect 加载 + 去掉 filter |
 | 版本号没更新 | prebuild 覆盖 | prebuild 后重新注入版本 |
+| APK 太大(190MB) | 包含 x86 架构 | gradle.properties 设 reactNativeArchitectures |
+| gradle.properties 被重置 | expo prebuild | prebuild 后重新设置 reactNativeArchitectures |

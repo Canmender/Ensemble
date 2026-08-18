@@ -148,6 +148,53 @@
 
 ---
 
+
+## 8. APK 体积优化踩坑
+
+### 8.1 build.gradle abiFilters 不生效
+
+**问题**：在 `build.gradle` 的 `defaultConfig` 中添加 `ndk { abiFilters "arm64-v8a", "armeabi-v7a" }`，但构建后 APK 仍然包含全部 4 种架构。
+
+**原因**：React Native / Expo 的构建流程有自己的架构配置机制（`reactNativeArchitectures` gradle property），会覆盖 build.gradle 中的 abiFilters。
+
+**正确做法**：在 `android/gradle.properties` 中设置：
+```properties
+reactNativeArchitectures=arm64-v8a,armeabi-v7a
+```
+
+**注意**：`gradle.properties` 中已有一行 `reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64`（由 expo prebuild 生成），需要直接修改这一行，不能只添加注释。
+
+### 8.2 expo prebuild 覆盖 gradle.properties
+
+**问题**：`expo prebuild --platform android` 会重新生成 `android/gradle.properties`，把 `reactNativeArchitectures` 重置为全部 4 种架构。
+
+**教训**：prebuild 后必须检查并重新设置 `reactNativeArchitectures`。
+
+### 8.3 AGP 9.x 签名只有 v2
+
+**问题**：Gradle 9.3.1 + AGP 9.x 默认只生成 v2 签名（APK Signature Scheme v2）。apksigner 的 `--v1-signing-enabled true` 和 jarsigner 都无法可靠地给已签名 APK 添加 v1。
+
+**尝试过的方法**：
+- `signingConfig.v1SigningEnabled true` → AGP 9.x 不识别
+- `apksigner sign --v1-signing-enabled true` → 无效
+- `jarsigner` 添加 v1 → 破坏 v2 签名
+- 先 jarsigner(v1) 再 apksigner(v2) → apksigner 覆盖 v1
+
+**现状**：目前只能生成 v2-only 签名的 APK。部分老旧设备或特定安装器可能不支持。
+
+## 9. 服务器带宽瓶颈
+
+**问题**：服务器出站带宽实测约 600KB/s（5Mbps），190MB APK 需要 5 分钟下载。
+
+**优化**：去掉 x86/x86_64 架构后 APK 降到 98MB，下载时间减半。
+
+**进一步优化方向**：
+- 升级阿里云 ECS 带宽
+- 接入 CDN
+- 启用 ProGuard/R8 混淆压缩（需测试兼容性）
+
+---
+
 ## 关键教训总结
 
 1. **先调研再动手**：用设计技能工具获取真实数据，不要凭空臆造
@@ -158,3 +205,5 @@
 6. **Windows 换行符**：文件编辑前检测 \r\n vs \n
 7. **数据加载**：页面依赖的数据必须在该页面内加载
 8. **版本号管理**：不要频繁 bump，一个版本内完成所有改动
+9. **APK 架构配置**：用 `reactNativeArchitectures` gradle property，不用 abiFilters
+10. **prebuild 后检查**：signingConfig、gradle.properties、local.properties 都会丢失

@@ -54,6 +54,29 @@
 - 丝滑弹簧动画（withSpring damping:18, stiffness:180）
 - 白色图标（选中纯白 / 未选中半透明白）
 
+
+## 性能优化
+
+### APK 体积优化
+
+**问题**：APK 190MB，下载慢（服务器带宽 ~5Mbps，需 5 分钟）。
+
+**根因**：APK 包含全部 4 种 CPU 架构的 native 库（WebRTC + Skia + React Native），x86/x86_64（模拟器用的）白白占了 ~92MB。
+
+**解决**：`android/gradle.properties` 中 `reactNativeArchitectures` 改为只保留 arm 架构：
+```properties
+reactNativeArchitectures=arm64-v8a,armeabi-v7a
+```
+
+**效果**：190MB → 98MB（减少 49%），下载时间从 5 分钟降到 2.5 分钟。
+
+### 服务器带宽
+
+实测服务器出站带宽约 600KB/s（5Mbps）。优化方向：
+- 升级阿里云 ECS 带宽
+- 接入 CDN（阿里云 CDN / Cloudflare）
+- 启用 HTTP/2
+
 ## 版本历史
 
 见 `src/pages/ChangelogPage.tsx`（应用内更新日志页面）。
