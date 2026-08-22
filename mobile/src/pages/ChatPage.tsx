@@ -145,7 +145,14 @@ export default function ChatPage() {
           }
         },
       });
-      return unsub;
+      // WS 断线重连成功 → 刷新会话列表（找回断线窗口内漏掉的未读/最后消息）
+      const offResync = wsLink.onResync(() => {
+        void loadConversations();
+      });
+      return () => {
+        unsub();
+        offResync();
+      };
     }, [loadConversations]),
   );
 

@@ -207,3 +207,23 @@ reactNativeArchitectures=arm64-v8a,armeabi-v7a
 8. **版本号管理**：不要频繁 bump，一个版本内完成所有改动
 9. **APK 架构配置**：用 `reactNativeArchitectures` gradle property，不用 abiFilters
 10. **prebuild 后检查**：signingConfig、gradle.properties、local.properties 都会丢失
+
+## 10. Worktree 长路径导致 Android 构建失败
+
+**问题**：在 `.claude/worktrees/<name>/mobile` 这类深层路径下跑 gradle，原生模块（reanimated/expo-modules-core 等）CMake 编译报 `ninja: error: manifest 'build.ninja' still dirty after 100 tries`。根因是 CMake 目标文件路径超限（有明确警告 `object file directory ... has NNN characters, maximum 250`），ninja 对超长路径 stat 循环失败。
+
+**踩过的弯路**：
+- 删 `.cxx` 缓存重试 → 无效（路径本身就超限）
+- `subst Z:` 映射盘符 → expo autolinking 在 settings 阶段就挂（命令退出 1）
+- 把带构建产物的 android/ 复制到短路径目录 → 无效且更糟（产物里固化了旧绝对路径，Gradle 复用后又指回长路径）
+
+**正确做法（2026-08-22 验证通过）**——从 git 导出纯净源码到短路径临时目录构建：
+```bash
+git archive HEAD mobile shared | tar -x -C /d/ens-mb   # shared/ 是 metro watch 目录，必需
+cp D:/MultiAgent/mobile/server.config.js D:/MultiAgent/mobile/getui.config.js /d/ens-mb/mobile/  # gitignore 的本地配置，打包必需
+rm -rf /d/ens-mb/mobile/android/.gradle /d/ens-mb/mobile/android/build /d/ens-mb/mobile/android/app/{build,.cxx}  # 若复制过产物必须清掉
+cd /d/ens-mb/mobile && npm ci && node scripts/build-release.cjs
+```
+注意：
+- 构建失败报 `Unable to delete file classes.jar` = 残留 gradle 守护进程锁文件 → `./gradlew --stop` 后重试即可。
+- Hermes 字节码中中文字符串以 UTF-16LE 存储，验证包内容时 grep 中文要用 utf-16-le 编码搜索，utf-8 会假阴性。

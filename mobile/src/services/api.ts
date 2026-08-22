@@ -156,6 +156,8 @@ export interface RunEventsResponse {
   runId: string;
   events: AgentEvent[];
   total: number;
+  /** 服务端当前最大 seq（本地补拉游标可更新到该值） */
+  lastSeq?: number;
 }
 
 /** 技能信息 */
@@ -186,7 +188,8 @@ export interface PaginationParams {
 export interface RunEventsParams extends PaginationParams {
   jobId?: string;
   type?: string;
-  since?: number;
+  /** 补拉游标：返回 seq 大于该值的事件（与服务端 afterSeq 对齐；缺省从头部返回） */
+  afterSeq?: number;
 }
 
 // ==================== API 服务 ====================
@@ -378,6 +381,11 @@ class ApiService {
 
   // ========== Agent API ==========
 
+  /** 内置 AI 助手对话（服务端不可用时页面回退本地回答） */
+  async assistantChat(message: string): Promise<ApiResponse<{ reply?: string }>> {
+    return this.request<{ reply?: string }>("POST", "/api/assistant/chat", { message });
+  }
+
   /** 获取所有 Agent */
   async getAgents(): Promise<ApiResponse<AgentConfig[]>> {
     return this.request<AgentConfig[]>("GET", "/api/agents");
@@ -464,7 +472,7 @@ class ApiService {
     const searchParams = new URLSearchParams();
     if (params?.jobId) searchParams.set("jobId", params.jobId);
     if (params?.type) searchParams.set("type", params.type);
-    if (params?.since) searchParams.set("since", String(params.since));
+    if (params?.afterSeq !== undefined) searchParams.set("afterSeq", String(params.afterSeq));
     if (params?.page) searchParams.set("page", String(params.page));
     if (params?.limit) searchParams.set("limit", String(params.limit));
 

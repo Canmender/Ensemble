@@ -33,6 +33,8 @@ export interface CallSignal {
   kind: "offer" | "answer" | "candidate" | "hangup" | "accept" | "reject" | "calling";
   sdp?: string;
   candidate?: unknown;
+  /** 视频通话标记（随 offer 携带；缺省为语音通话） */
+  video?: boolean;
   from?: { userId: string; name?: string };
   target?: { userId: string };
 }
@@ -103,6 +105,12 @@ export class WsLink {
   /** 全局聊天消息监听（弹通知 / 未读红点用，不随页面 on() 覆盖） */
   private globalChatMessageCbs: Array<(msg: ChatWsMessage) => void> = [];
   private globalMentionCbs: Array<(msg: MentionEvent) => void> = [];
+  /** 断线重连成功后的补拉回调（页面/服务各自注册增量同步动作） */
+  private resyncCbs: Array<() => void> = [];
+  /** 首次连接不触发补拉（挂载时本就全量加载）；仅重连触发 */
+  private hasConnectedOnce = false;
+  /** 每个 run 已见的最大 WsEnvelope.seq（补拉游标；同一服务器会话内跨重连保留） */
+  private seqByRun = new Map<string, number>();
 
   on(cb: WsLinkCallbacks): () => void {
     this.callbacks = { ...this.callbacks, ...cb };
@@ -120,6 +128,38 @@ export class WsLink {
   /** 注册全局聊天消息监听（始终触发，页面 onChatMessage 覆盖不影响） */
   onGlobalChatMessage(cb: (msg: ChatWsMessage) => void): void {
     this.globalChatMessageCbs.push(cb);
+  }
+
+  /**
+   * 注册「重连补拉」回调：每次断线重连成功（含订阅恢复）后触发一次。
+   * 用于把断线窗口内错过的事件/消息按 HTTP 增量拉回。返回取消注册函数。
+   */
+  onResync(cb: () => void): () => void {
+    this.resyncCbs.push(cb);
+    return () => {
+      this.resyncCbs = this.resyncCbs.filter((f) => f !== cb);
+    };
+  }
+
+  /** 某 run 本地已见的最大 seq（无记录返回 0） */
+  getLastSeq(runId: string): number {
+    return this.seqByRun.get(runId) ?? 0;
+  }
+
+  /** 抬高某 run 的补拉游标（如从 REST 响应的 lastSeq 初始化） */
+  setLastSeq(runId: string, seq: number): void {
+    if (!Number.isFinite(seq)) return;
+    this.seqByRun.set(runId, Math.max(this.seqByRun.get(runId) ?? 0, seq));
+  }
+
+  private fireResync(): void {
+    for (const cb of this.resyncCbs) {
+      try {
+        cb();
+      } catch {
+        /* 单个补拉异常不影响其他 */
+      }
+    }
   }
 
   /** 全局 @提及监听（被@时始终弹通知，不受 lastActiveConvId 限制） */
@@ -155,6 +195,9 @@ export class WsLink {
     }
     this.url = `ws://${ip}:${httpPort}/ws?${params.toString()}`;
     this.manuallyClosed = false;
+    // 新会话：游标与首连标记重置（seq 只在同一服务器会话内有意义）
+    this.seqByRun.clear();
+    this.hasConnectedOnce = false;
     this.open();
     return true;
   }
@@ -236,6 +279,11 @@ export class WsLink {
       }
       // 启动心跳：每 3s 发送，检测连接存活
       this.startHeartbeat();
+      // 重连成功（非首次）→ 通知各处做增量补拉
+      if (this.hasConnectedOnce) {
+        this.fireResync();
+      }
+      this.hasConnectedOnce = true;
     };
 
     ws.onmessage = (e) => {
@@ -271,6 +319,10 @@ export class WsLink {
     }
     // runId 可为空：用户定向事件（call.signal / chat.mention / device.status / auth.kicked 等）无 runId
     if (env.v !== 1 || !env.event) return;
+    // 记录 per-run 补拉游标（服务端事件先落库分配 seq 再广播）
+    if (env.runId && typeof env.seq === "number") {
+      this.setLastSeq(env.runId, env.seq);
+    }
 
     const store = useTaskStore.getState();
     const ev = env.event;
