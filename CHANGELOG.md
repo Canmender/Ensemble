@@ -2,6 +2,26 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.16 (2026-08-23) — 插件化 Agent 内核（Cordis 思想落地）
+
+按《Cordis插件系统调研》三篇（概念/源码/生态）落地，自研轻量内核（~230 行）而非引入 cordis 本体：
+
+- **plugins/kernel.ts 四大核心思想**：
+  - 服务容器 + key 发现：provide(name, value) 注册，get() fail-closed（未注册即抛错）
+  - inject 声明依赖：必需服务缺失不安装；服务被移除时级联卸载依赖方
+  - effect 可逆副作用：disposer 逆序清理；**install 失败自动回滚**（cordis 测试钉死的契约）
+  - waterfall 管线：环绕中间件语义（next() 委托下游 / 不调用即短路），供消息管线扩展
+- **工具系统首个消费者**（plugins/tools.ts）：RAG 工具迁入插件形态——配置变更可
+  unregister+register 干净重装，索引资源经 effect 自动清理；内置工具注册同步改造为
+  effect 登记（后续第三方工具包 = 一个 EnsemblePlugin）
+- **有意简化**（与 cordis 差异）：无 Proxy 魔法/无 fiber-epoch 等待唤醒/无 isolate 多租户——
+  显式异步装配场景下这些是过度设计，需要时再加
+
+验证: server typecheck 通过; 166 测试全过（含 10 个内核契约测试钉住 fail-closed/
+回滚/逆序清理/级联卸载/waterfall 语义）; 本地版冒烟 0 错误
+
+**版本**: desktop 0.8.15 → 0.8.16
+
 ## v0.9.8 (2026-08-22) — 聊天补拉服务端裁剪
 
 配合服务端 v0.8.10（历史接口 `?afterSeq=N`）：

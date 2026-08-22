@@ -24,6 +24,8 @@ import { McpConfigStore } from "./tools/mcp/config";
 import { McpManager } from "./tools/mcp/manager";
 import { OffloadStore } from "./context/offload";
 import { SkillStore, BUILTIN_SKILLS } from "./skills";
+import { PluginHost } from "./plugins/kernel";
+import { ragPlugin } from "./plugins/tools";
 import { makeMemoryTools } from "./tools/memory";
 import { logger } from "./util/logger";
 import { embedTexts, type EmbedFn, type EmbeddingOptions } from "./tools/embedding";
@@ -88,6 +90,8 @@ export interface AppContext {
   skillStore: SkillStore;
   mcpConfig: McpConfigStore;
   mcpManager: McpManager;
+  /** 插件宿主（cordis 思想）：RAG 等可重装工具插件挂载于此 */
+  pluginHost: PluginHost;
   reloadAgents: () => void;
   reloadProviders: () => void;
   dispose: () => Promise<void>;
@@ -134,7 +138,17 @@ export function createAppContext(
     importanceThreshold: 0.5,
   });
 
-  registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager, resolveEmbedFn(config, providerRegistry));
+  registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager);
+  // 插件宿主（cordis 思想落地）：RAG 工具走插件形态，配置变更可 unregister+register 干净重装；
+  // 后续第三方工具包/存储后端并列注册均挂载于此。
+  const pluginHost = new PluginHost();
+  void pluginHost.register(
+    ragPlugin({
+      registry: toolRegistry,
+      getSettings: () => config.getSettings(),
+      embedFn: resolveEmbedFn(config, providerRegistry),
+    }),
+  );
 
   const dataDir = dirname(env.dbPath);
   // 聊天附件存储目录（图片/文件上传）
@@ -283,6 +297,7 @@ export function createAppContext(
     skillStore,
     mcpConfig,
     mcpManager,
+    pluginHost,
     reloadAgents,
     reloadProviders,
     dispose: async () => {
@@ -290,6 +305,7 @@ export function createAppContext(
       registry.disposeAll();
       memoryProvider.dispose();
       await mcpManager.dispose();
+      await pluginHost.unregister("rag-tools");
       hub.close();
     },
   };
