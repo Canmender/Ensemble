@@ -1,12 +1,14 @@
 /**
- * 移动端设计系统 — 浅灰白底现代风
+ * 移动端设计系统 — 设计 token 单源消费
  *
- * 原则：
- *   - 大面积浅灰底 (#F5F5F5) + 白色板块 (#FFFFFF) 突出
- *   - 文字深灰/黑色（高对比，清晰可读）
- *   - 主色调深蓝灰，CTA 用暖琥珀点缀
- *   - 底部Tab栏白色背景 + 深色文字（清晰可读）
+ * 颜色权威源：desktop/packages/shared/design/tokens.json（双端同源），
+ * 构建产物 mobile/src/design/generated/tokens.ts（build-tokens.mjs 生成，手改无效）。
+ * 本文件维护旧键名 → token 的兼容映射，页面代码无需改动；新代码优先用 themeTokens。
  */
+import { LightTheme, type EnsembleTheme } from "./design/generated/tokens";
+
+/** 语义 token（构建期 hex，与桌面端 CSS vars 同值） */
+export const themeTokens: EnsembleTheme = LightTheme;
 
 const PURE = {
   clay: "#8F7D6F",
