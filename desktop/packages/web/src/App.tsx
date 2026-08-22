@@ -207,7 +207,7 @@ export default function App() {
       <div className="flex h-full">
         <CallOverlay />
         {/* Sidebar */}
-        <aside className="flex w-56 flex-col border-r border-border bg-surface">
+        <aside className="glass flex w-56 flex-col border-r border-border">
           <div className="px-4 py-5">
             <div className="flex w-full items-center gap-2.5 rounded-lg p-1">
               <Avatar name="本地用户" size={38} />
@@ -300,7 +300,7 @@ export default function App() {
       <CallOverlay />
       <AssistantPanel isOpen={showAssistant} onClose={() => setShowAssistant(false)} />
       {/* Sidebar */}
-      <aside className="flex w-56 flex-col border-r border-border bg-surface">
+      <aside className="glass flex w-56 flex-col border-r border-border">
         <div className="px-4 py-5">
         <button
           onClick={() => navigate("/profile")}

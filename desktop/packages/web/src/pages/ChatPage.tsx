@@ -630,9 +630,20 @@ export default function ChatPage() {
     });
   }, []);
 
+  /** 切换联系人：支持 View Transitions 的浏览器（Electron Chromium）走共享元素转场 */
+  function selectContact(c: Contact) {
+    const doc = document as Document & { startViewTransition?: (cb: () => void) => void };
+    if (typeof doc.startViewTransition === "function" && window.matchMedia("(prefers-reduced-motion: no-preference)").matches) {
+      doc.startViewTransition(() => setActiveContact(c));
+    } else {
+      setActiveContact(c);
+    }
+  }
+
   // 当前联系人 ref（断线重连回调取最新值，避免闭包陈旧）
   const activeContactRef = useRef(activeContact);
   activeContactRef.current = activeContact;
+
 
   // 断线重连后补拉活跃会话（chat.message 不走 run_events/seq，catchUp 补不回，重拉历史兜底）
   useEffect(() => {
@@ -1048,7 +1059,7 @@ export default function ChatPage() {
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
-                  onClick={() => setActiveContact(c)}
+                  onClick={() => selectContact(c)}
                 />
               ))}
             </div>
@@ -1066,7 +1077,7 @@ export default function ChatPage() {
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
-                  onClick={() => setActiveContact(c)}
+                  onClick={() => selectContact(c)}
                 />
               ))}
             </div>
@@ -1084,7 +1095,7 @@ export default function ChatPage() {
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
-                  onClick={() => setActiveContact(c)}
+                  onClick={() => selectContact(c)}
                 />
               ))}
             </div>
@@ -1102,7 +1113,7 @@ export default function ChatPage() {
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
-                  onClick={() => setActiveContact(c)}
+                  onClick={() => selectContact(c)}
                 />
               ))}
             </div>
@@ -1111,7 +1122,7 @@ export default function ChatPage() {
       </aside>
 
       {/* 右侧聊天窗口 */}
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col" style={{ viewTransitionName: "chat-pane" }}>
         {activeContact ? (
           <>
             {/* 聊天头部 */}

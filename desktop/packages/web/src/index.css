@@ -3,43 +3,12 @@
 @import "@fontsource/inter/600.css";
 @import "@fontsource/inter/700.css";
 
+/* 设计 token：由 shared/design/tokens.json 构建生成（scripts/build-tokens.mjs），双端同源 */
+@import "../../shared/design/generated/tokens.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* ============ 设计 token：浅色（默认） ============ */
-:root {
-  --c-bg: 244 246 249;
-  --c-surface: 255 255 255;
-  --c-border: 226 232 240;
-  --c-fg: 23 27 35;
-  --c-muted: 100 116 139;
-  --c-primary: 12 140 235;
-  --c-primary-fg: 255 255 255;
-  --c-accent: 22 163 74;
-  --c-destructive: 220 38 38;
-  --c-ring: 12 140 235;
-  --c-success: 16 185 129;
-  --c-warning: 245 158 11;
-  color-scheme: light;
-}
-
-/* ============ 设计 token：深色（ui-ux-pro-max 推荐：Code dark） ============ */
-.dark {
-  --c-bg: 15 23 42;
-  --c-surface: 30 41 59;
-  --c-border: 51 65 85;
-  --c-fg: 248 250 252;
-  --c-muted: 148 163 184;
-  --c-primary: 56 189 248;
-  --c-primary-fg: 15 23 42;
-  --c-accent: 34 197 94;
-  --c-destructive: 248 113 113;
-  --c-ring: 56 189 248;
-  --c-success: 52 211 153;
-  --c-warning: 251 191 36;
-  color-scheme: dark;
-}
 
 html,
 body,
@@ -105,6 +74,75 @@ body {
 }
 .dark .shadow-card-hover {
   box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+}
+
+/* ============ Liquid Glass 四层配方（调研《UI设计新潮流调研》第二轮核实版） ============
+ * 层次：backdrop-filter 打底 → inset 阴影勾边光 → 渐变 sheen →（可选）SVG 折射。
+ * Electron 固定 Chromium：backdrop-filter/SVG filter 均可用；大面积仅用 blur（性能纪律），
+ * SVG 折射只给签名元素。@supports 对 backdrop-filter:url() 会撒谎，不做能力探测分支。
+ */
+.glass {
+  position: relative;
+  background: rgb(var(--c-surface) / 0.55);
+  backdrop-filter: blur(20px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  /* 勾边光：上亮下暗的 inset 双影 */
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.25),
+    inset 0 -1px 0 rgb(0 0 0 / 0.05),
+    0 4px 24px -8px rgb(0 0 0 / 0.18);
+}
+.dark .glass {
+  background: rgb(var(--c-surface) / 0.6);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    inset 0 -1px 0 rgb(0 0 0 / 0.2),
+    0 4px 24px -8px rgb(0 0 0 / 0.45);
+}
+/* sheen 渐变高光层（伪元素，不拦截交互） */
+.glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(
+    135deg,
+    rgb(255 255 255 / 0.12) 0%,
+    rgb(255 255 255 / 0.03) 30%,
+    transparent 55%
+  );
+}
+
+/* 签名元素级玻璃（更强折射感，仅小面积）：叠加 SVG 折射滤镜 */
+.glass-strong {
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+}
+
+/* 弹簧微交互（调研参数：温和入场 30/200 的 CSS 近似） */
+.spring-in {
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ============ View Transitions：会话列表 → 聊天窗共享元素转场 ============
+ * Electron Chromium ≥111 原生支持；不支持的浏览器自动退化为直接切换。
+ * ChatPage 切换联系人时以 document.startViewTransition 包裹状态更新，
+ * 旧消息区淡出、新消息区按弹簧曲线滑入。 */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(chat-pane) {
+    animation: vt-fade-out 120ms ease both;
+  }
+  ::view-transition-new(chat-pane) {
+    animation: vt-slide-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+}
+@keyframes vt-fade-out {
+  to { opacity: 0; }
+}
+@keyframes vt-slide-in {
+  from { opacity: 0; transform: translateX(16px); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
 /* 自定义 Checkbox 样式 */
