@@ -66,3 +66,6 @@ image/
 # 保留磁盘副本仅为兼容，不再入库。如确认无需可整目录删除。
 ensemble-local/packages/
 ensemble-cloud/packages/
+
+# electron-builder 产物
+release/
