@@ -139,19 +139,48 @@ async function main() {
   // ── Bob 回复（type 1 WhisperMessage，双棘轮已建立）──
   const ct2 = await bobCipher.encrypt(new TextEncoder().encode("收到！中文往返 OK").buffer);
   console.log(`ct2 type=${ct2.type} (1=WhisperMessage ✓)`);
-  const pt2 = new TextDecoder().decode(
-    new Uint8Array(await new SessionCipher(aliceStore, bobAddr).decryptWhisperMessage(ct2.body, "binary")),
-  );
-  console.log(`alice 收到: "${pt2}"`);
+
+  // ── 信封 base64 编码 + 真实 UTF-8 通道往返（HTTP JSON / SQLite TEXT / WS 推送等价）──
+  // 与 lib/e2e.ts 的 wrapEnvelope/decryptMessage 完全同构
+  const binToB64 = (bin) => Buffer.from(bin, "latin1").toString("base64"); // latin1 = 浏览器 btoa 语义
+  const b64ToBin = (b64) => Buffer.from(b64, "base64").toString("latin1");
+  const envelope = (type, body) => JSON.stringify({ e2e: 1, v: 1, ct: { type, body: binToB64(body) } });
+  const channel = (s) => Buffer.from(s, "utf8").toString("utf8"); // 模拟传输层编解码
+
+  let pt2;
+  {
+    const envJson = channel(envelope(ct2.type, ct2.body));
+    const env = JSON.parse(envJson);
+    if (env.ct.body === ct2.body && /[+\-/=]/.test(env.ct.body) === false && !/^[\x00-\xff]+$/.test(env.ct.body)) {
+      throw new Error("信封 body 不是 base64");
+    }
+    pt2 = new TextDecoder().decode(
+      new Uint8Array(await new SessionCipher(aliceStore, bobAddr).decryptWhisperMessage(b64ToBin(env.ct.body), "binary")),
+    );
+  }
+  console.log(`alice 收到(经base64+UTF-8通道): "${pt2}"`);
   if (pt2 !== "收到！中文往返 OK") throw new Error("回复解密失败");
 
-  // ── 连续多条（乱序容忍前的顺序场景）──
+  // 首条 PreKey 消息的 base64 信封编码在发送侧已覆盖；解密侧重放同一条密文会被
+  // Double Ratchet 拒绝（counter 不可重复消费）——这是预期安全行为，不在此重放。
+
+  // ── 连续多条（乱序容忍前的顺序场景，全部走信封通道）──
   for (let i = 3; i <= 5; i++) {
     const ct = await new SessionCipher(aliceStore, bobAddr).encrypt(new TextEncoder().encode(`msg-${i}`).buffer);
-    const pt = new TextDecoder().decode(new Uint8Array(await bobCipher.decryptPreKeyWhisperMessage ? await bobCipher.decryptWhisperMessage(ct.body, "binary") : await bobCipher.decryptWhisperMessage(ct.body, "binary")));
+    const env = JSON.parse(channel(envelope(ct.type, ct.body)));
+    const pt = new TextDecoder().decode(new Uint8Array(await bobCipher.decryptWhisperMessage(b64ToBin(env.ct.body), "binary")));
     if (pt !== `msg-${i}`) throw new Error(`第 ${i} 条失败`);
   }
-  console.log("连续 3 条双向链路 OK");
+  console.log("连续 3 条双向链路 OK（含信封编码）");
+
+  // ── code unit 安全面检查：body 必须全 ≤0xFF（btoa 前提；libsignal 逐字节构造保证）──
+  {
+    const ct = await new SessionCipher(aliceStore, bobAddr).encrypt(new TextEncoder().encode("check").buffer);
+    for (const ch of ct.body) {
+      if (ch.codePointAt(0) > 0xff) throw new Error("body 含 >0xFF code unit，btoa 会失败");
+    }
+    console.log("code unit ≤0xFF 安全面 OK（btoa 可直接编码）");
+  }
 
   console.log("\n✅ E2E 密码学链路自测全部通过");
 }

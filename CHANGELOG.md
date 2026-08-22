@@ -2,6 +2,20 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.8 (2026-08-22) — E2E 信封 base64 编码修复（双端互通前置）
+
+移动端联调前审查发现信封编码缺陷，桌面端同步修正：
+
+- **问题**：`encryptMessage` 把 libsignal 的 body（binary string）原样塞进 JSON 信封，
+  未按协议 §4 做 base64。与移动端 v0.9.7 的实现不一致，双端互通必然解不开。
+- **修复**：发送 `binToB64(body)`（btoa，body 每 code unit ≤0xFF 可直接编码）、
+  接收 `b64ToBin(env.ct.body)`（atob 还原 binary string）后进 SessionCipher。
+- **自测升级**：e2e-selftest.mjs 新增「base64 信封 + UTF-8 通道往返」步骤
+  （等价 HTTP JSON / SQLite TEXT / WS 的传输编解码），双向链路全部经信封通道验证；
+  另加 code unit ≤0xFF 安全面断言（btoa 前提）。全部通过。
+
+**版本**：desktop 0.8.7 → 0.8.8
+
 ## v0.8.7 (2026-08-22) — 联机方向③续：E2E 桌面客户端接线
 
 按 E2E-PROTOCOL.md 完成桌面端加解密全链路：

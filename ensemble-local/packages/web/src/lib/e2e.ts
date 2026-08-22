@@ -232,6 +232,14 @@ export function isE2eContent(content: unknown): content is string {
 const wrapEnvelope = (ct: { type: 1 | 3; body: string }): string =>
   JSON.stringify({ e2e: 1, v: 1, ct } satisfies E2eEnvelope);
 
+/**
+ * binary string → base64：body 的每个 code unit 是一个字节（libsignal 逐字节
+ * String.fromCharCode 构造），btoa 直接可用。绝不走 UTF-8 编解码中转。
+ */
+const binToB64 = (bin: string): string => btoa(bin);
+/** base64 → binary string（解密入口要求的编码） */
+const b64ToBin = (b64: string): string => atob(b64);
+
 /** 解密失败占位（不抛错，协议 §4） */
 export const DECRYPT_FAILED_PLACEHOLDER = "🔒 无法解密的消息（对方可能重新安装了应用）";
 
@@ -253,18 +261,20 @@ export async function encryptMessage(peerUserId: string, plaintext: string): Pro
     new TextEncoder().encode(plaintext).buffer as ArrayBuffer,
   );
   if (!ct.body) throw new Error("加密输出为空");
-  return wrapEnvelope({ type: ct.type as 1 | 3, body: ct.body });
+  // body 是 binary string → base64 入信封（协议 §4；过 HTTP/SQLite/WS 的 UTF-8 通道无损）
+  return wrapEnvelope({ type: ct.type as 1 | 3, body: binToB64(ct.body) });
 }
 
-/** 解密来自对端的信封；失败返回占位文本（绝不抛错） */
+/** 解密来自对端的信封；失败返回占位文本（绝不抛错）。body 为 base64（协议 §4） */
 export async function decryptMessage(peerUserId: string, envelopeJson: string): Promise<string> {
   try {
     const env = JSON.parse(envelopeJson) as E2eEnvelope;
     const cipher = new SessionCipher(protocolStore, addrOf(peerUserId));
+    const binBody = b64ToBin(env.ct.body);
     const pt =
       env.ct.type === 3
-        ? await cipher.decryptPreKeyWhisperMessage(env.ct.body, "binary")
-        : await cipher.decryptWhisperMessage(env.ct.body, "binary");
+        ? await cipher.decryptPreKeyWhisperMessage(binBody, "binary")
+        : await cipher.decryptWhisperMessage(binBody, "binary");
     return new TextDecoder().decode(new Uint8Array(pt));
   } catch {
     return DECRYPT_FAILED_PLACEHOLDER;
