@@ -493,18 +493,19 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     messagesRef.current = messages;
   }, [messages]);
 
-  /** 增量补拉：优先按会话内单调 seq 过滤（v0.8.3+），旧消息无 seq 时回退时间戳比较；按 id 去重合并 */
+  /** 增量补拉：有 seq 游标时走服务端裁剪（afterSeq，v0.8.10+）；无游标的旧数据回退时间戳过滤；按 id 去重合并 */
   const catchupNewMessages = useCallback(async () => {
     const cur = messagesRef.current;
     if (cur.length === 0) return;
     const seqList = cur.map((m) => m.seq).filter((s): s is number => typeof s === "number");
     const useSeq = seqList.length > 0;
-    const maxSeq = useSeq ? Math.max(...seqList) : 0;
+    const maxSeq = useSeq ? Math.max(...seqList) : undefined;
     const lastTs = cur[cur.length - 1].ts;
     try {
-      const res = await api.getConversationMessages(convId, undefined, 100);
+      // 服务端裁剪：只传回 maxSeq 之后的消息（旧服务端忽略参数返回全量，下方过滤兜底）
+      const res = await api.getConversationMessages(convId, undefined, 100, maxSeq);
       if (res.data) {
-        const filtered = res.data.messages.filter((m) => (useSeq ? (m.seq ?? 0) > maxSeq : m.ts > lastTs));
+        const filtered = res.data.messages.filter((m) => (useSeq ? (m.seq ?? 0) > (maxSeq ?? 0) : m.ts > lastTs));
         const newMsgs = await Promise.all(
           filtered.map(async (m) => {
             let content = m.content;

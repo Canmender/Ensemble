@@ -631,13 +631,18 @@ class ApiService {
     return this.request<Conversation>("POST", "/api/conversations", input);
   }
 
-  /** 会话消息分页（before 时间戳游标） */
+  /** 会话消息分页（before 时间戳游标）；afterSeq 增量补拉：仅返回 seq > N（服务端 v0.8.10+ 裁剪，旧服务端忽略该参数退化为全量） */
   async getConversationMessages(
     convId: string,
     before?: string,
     limit = 50,
+    afterSeq?: number,
   ): Promise<ApiResponse<{ messages: ChatMessageRow[]; total: number; readers?: Array<{ userId: string; readTs?: string }> }>> {
-    const qs = before ? `?before=${encodeURIComponent(before)}&limit=${limit}` : `?limit=${limit}`;
+    const sp = new URLSearchParams();
+    if (before) sp.set("before", before);
+    if (afterSeq !== undefined) sp.set("afterSeq", String(afterSeq));
+    sp.set("limit", String(limit));
+    const qs = `?${sp.toString()}`;
     return this.request<{ messages: ChatMessageRow[]; total: number; readers?: Array<{ userId: string; readTs?: string }> }>(
       "GET",
       `/api/conversations/${convId}/messages${qs}`,

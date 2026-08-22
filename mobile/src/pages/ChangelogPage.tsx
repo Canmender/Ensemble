@@ -8,6 +8,13 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.8",
+    date: "2026-08-22",
+    changes: [
+      "断线重连消息补拉改为服务端裁剪，弱网下更快更省流量",
+    ],
+  },
+  {
     version: "v0.9.7",
     date: "2026-08-22",
     changes: [
