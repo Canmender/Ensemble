@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",
+    "@privacyresearch/libsignal-protocol-typescript": "^0.0.16",
     "@xyflow/react": "^12.11.2",
     "lucide-react": "^1.30.0",
     "react": "^18.3.0",

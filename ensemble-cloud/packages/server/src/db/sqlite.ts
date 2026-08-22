@@ -170,6 +170,24 @@ CREATE INDEX IF NOT EXISTS idx_chat_run ON chat_messages(run_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run_agent ON jobs(run_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run_job ON run_events(run_id, job_id);
+
+-- E2EE 密钥目录（服务器只见公钥；协议见 desktop/docs/E2E-PROTOCOL.md）
+CREATE TABLE IF NOT EXISTS e2e_identities (
+  user_id       TEXT PRIMARY KEY,
+  identity_key  TEXT NOT NULL,
+  spk_id        INTEGER NOT NULL,
+  spk_public    TEXT NOT NULL,
+  spk_signature TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS e2e_one_time_prekeys (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id    TEXT NOT NULL,
+  prekey_id  INTEGER NOT NULL,
+  public_key TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_e2e_opks_user ON e2e_one_time_prekeys(user_id);
 `;
 
 export function openDb(dbPath: string): DatabaseSync {

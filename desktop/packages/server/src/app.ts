@@ -25,6 +25,7 @@ import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
 import { assistantRouter } from "./api/routes/assistant";
 import { tokensRouter } from "./api/routes/tokens";
+import { e2eRouter } from "./api/routes/e2e";
 
 export interface CreateAppOptions {
   /** 托管前端静态资源目录（桌面 prod 同源加载） */
@@ -158,6 +159,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/app-version", appVersionRouter(ctx));
   app.use("/api/assistant", assistantRouter(ctx));
   app.use("/api/tokens", tokensRouter(ctx));
+  app.use("/api/e2e", e2eRouter(ctx));
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）
   initRelayClient(ctx);

@@ -358,6 +358,73 @@ export class Store {
     }));
   }
 
+  // ---------- E2EE 密钥目录（服务器只见公钥；协议见 desktop/docs/E2E-PROTOCOL.md） ----------
+
+  upsertE2eIdentity(
+    userId: string,
+    data: {
+      identityKey: string;
+      signedPreKeyId: number;
+      signedPreKeyPublic: string;
+      signedPreKeySignature: string;
+      oneTimePreKeys?: Array<{ id: number; key: string }>;
+    },
+  ): void {
+    this.db
+      .prepare("INSERT OR REPLACE INTO e2e_identities (user_id, identity_key, spk_id, spk_public, spk_signature, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(userId, data.identityKey, data.signedPreKeyId, data.signedPreKeyPublic, data.signedPreKeySignature, new Date().toISOString());
+    // 轮换身份 = 旧一次性预密钥全部作废
+    this.db.prepare("DELETE FROM e2e_one_time_prekeys WHERE user_id = ?").run(userId);
+    const ins = this.db.prepare("INSERT INTO e2e_one_time_prekeys (user_id, prekey_id, public_key) VALUES (?, ?, ?)");
+    for (const k of data.oneTimePreKeys ?? []) {
+      ins.run(userId, k.id, k.key);
+    }
+  }
+
+  /** 取对端密钥包；其中一次性预密钥取走即删（X3DH 一次性语义） */
+  getE2eBundle(userId: string):
+    | {
+        identityKey: string;
+        signedPreKeyId: number;
+        signedPreKey: string;
+        signedPreKeySignature: string;
+        oneTimePreKey?: { id: number; key: string };
+      }
+    | undefined {
+    const idRow = this.db
+      .prepare("SELECT identity_key, spk_id, spk_public, spk_signature FROM e2e_identities WHERE user_id = ?")
+      .get(userId) as any;
+    if (!idRow) return undefined;
+    let oneTimePreKey: { id: number; key: string } | undefined;
+    const opk = this.db
+      .prepare("SELECT id, prekey_id, public_key FROM e2e_one_time_prekeys WHERE user_id = ? ORDER BY id LIMIT 1")
+      .get(userId) as any;
+    if (opk) {
+      this.db.prepare("DELETE FROM e2e_one_time_prekeys WHERE id = ?").run(opk.id);
+      oneTimePreKey = { id: opk.prekey_id, key: opk.public_key };
+    }
+    return {
+      identityKey: idRow.identity_key,
+      signedPreKeyId: idRow.spk_id,
+      signedPreKey: idRow.spk_public,
+      signedPreKeySignature: idRow.spk_signature,
+      ...(oneTimePreKey ? { oneTimePreKey } : {}),
+    };
+  }
+
+  countE2eOpks(userId: string): number {
+    return (this.db.prepare("SELECT COUNT(*) AS n FROM e2e_one_time_prekeys WHERE user_id = ?").get(userId) as { n: number }).n;
+  }
+
+  addE2eOpks(userId: string, keys: Array<{ id: number; key: string }>): void {
+    const ins = this.db.prepare("INSERT INTO e2e_one_time_prekeys (user_id, prekey_id, public_key) VALUES (?, ?, ?)");
+    for (const k of keys) ins.run(userId, k.id, k.key);
+  }
+
+  hasE2eIdentity(userId: string): boolean {
+    return !!this.db.prepare("SELECT 1 FROM e2e_identities WHERE user_id = ?").get(userId);
+  }
+
   // ---------- Workflows ----------
   listWorkflows(): WorkflowDef[] {
     const rows = this.stmts.listWorkflows.all() as any[];

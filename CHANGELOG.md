@@ -2,6 +2,27 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.5 (2026-08-22) — 联机方向③：E2E 加密（协议规范 + 服务端密钥目录）
+
+依据《IM端到端加密协议调研》选型（X3DH + Double Ratchet），本轮交付协议层：
+
+- **E2E-PROTOCOL.md**：完整协议规范（desktop/docs/E2E-PROTOCOL.md）——
+  两端实现依据。v1 范围：1:1 用户私聊全加密；群聊/附件暂明文（v1.1/v2）。
+  两端统一使用 @privacyresearch/libsignal-protocol-typescript 保证线格式兼容；
+  私钥永不离开设备（桌面 localStorage→DPAPI 加固路线，移动 Android Keystore）。
+- **服务端密钥目录 API**（`/api/e2e/*`，服务器只见公钥）：
+  - PUT /register：注册/轮换身份密钥包（IK + SPK 签名 + OPK 批量）
+  - GET /bundle/:userId：取对端密钥包，**一次性预密钥取走即删**
+  - POST /opks：补充一次性预密钥
+  - GET /capability/:userId：是否已注册（双方注册才加密，灰度共存）
+- **存储**：新表 e2e_identities / e2e_one_time_prekeys（CREATE IF NOT EXISTS，
+  旧库无迁移负担）；base64 字符集校验、数量上限等输入防御。
+
+**验证**：152 个服务端测试全过（新增 6 个 HTTP 级用例覆盖注册校验/bundle 消费/
+OPK 补充/capability）。桌面端客户端加解密接线与移动端实现按协议文档进行中。
+
+**版本**：desktop 0.8.4 → 0.8.5
+
 ## v0.8.4 (2026-08-22) — 联机方向②：云端版首启引导
 
 云端版首次启动不再直接抛出登录页，改为三步连接向导：
