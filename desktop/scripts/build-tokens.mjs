@@ -34,9 +34,16 @@ function hexToRgbTriplet(hex) {
 const semantic = tokens.semantic;
 const names = Object.keys(semantic.light);
 
+/** semantic 条目 → 别名引用字符串（兼容 {$value} 规范形态与历史裸字符串） */
+function semRef(entry) {
+  const raw = typeof entry === "string" ? entry : entry?.$value;
+  if (!raw) throw new Error(`semantic token 缺 $value`);
+  return resolveRef(raw);
+}
+
 // ---------- web CSS ----------
 const cssBlock = (theme) =>
-  names.map((name) => `  --c-${name}: ${hexToRgbTriplet(resolveRef(semantic[theme][name]))};`).join("\n");
+  names.map((name) => `  --c-${name}: ${hexToRgbTriplet(semRef(semantic[theme][name]))};`).join("\n");
 const css = `/* 由 scripts/build-tokens.mjs 从 design/tokens.json 自动生成 —— 手改无效 */
 :root {
 ${cssBlock("light")}
@@ -55,7 +62,7 @@ console.log(`✓ web  → packages/shared/design/generated/tokens.css (${names.l
 // ---------- RN TS ----------
 const tsObject = (theme) =>
   names.map((name) => {
-    const hex = resolveRef(semantic[theme][name]);
+    const hex = semRef(semantic[theme][name]);
     return `  ${name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())}: "${hex}",`;
   }).join("\n");
 const ts = `// 由 desktop/scripts/build-tokens.mjs 从 design/tokens.json 自动生成 —— 手改无效
