@@ -1,0 +1,145 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============ 设计 token：浅色（默认） ============ */
+:root {
+  --c-bg: 244 246 249;
+  --c-surface: 255 255 255;
+  --c-border: 226 232 240;
+  --c-fg: 23 27 35;
+  --c-muted: 100 116 139;
+  --c-primary: 12 140 235;
+  --c-primary-fg: 255 255 255;
+  --c-accent: 22 163 74;
+  --c-destructive: 220 38 38;
+  --c-ring: 12 140 235;
+  --c-success: 16 185 129;
+  --c-warning: 245 158 11;
+  color-scheme: light;
+}
+
+/* ============ 设计 token：深色（ui-ux-pro-max 推荐：Code dark） ============ */
+.dark {
+  --c-bg: 15 23 42;
+  --c-surface: 30 41 59;
+  --c-border: 51 65 85;
+  --c-fg: 248 250 252;
+  --c-muted: 148 163 184;
+  --c-primary: 56 189 248;
+  --c-primary-fg: 15 23 42;
+  --c-accent: 34 197 94;
+  --c-destructive: 248 113 113;
+  --c-ring: 56 189 248;
+  --c-success: 52 211 153;
+  --c-warning: 251 191 36;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-bg text-fg antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* 细滚动条（深浅主题适配） */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-border;
+}
+*::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted/50;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 尊重系统减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Modal 动画 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes zoomIn95 {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-in {
+  animation-fill-mode: both;
+}
+.fade-in {
+  animation-name: fadeIn;
+}
+.zoom-in-95 {
+  animation-name: zoomIn95;
+}
+.anim-dur-200 {
+  animation-duration: 200ms;
+}
+
+/* 深色模式阴影增强 */
+.dark .shadow-card {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+}
+.dark .shadow-card-hover {
+  box-shadow: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+}
+
+/* 自定义 Checkbox 样式 */
+input[type="checkbox"] {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid rgb(var(--c-border));
+  border-radius: 4px;
+  background: rgb(var(--c-surface));
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+}
+input[type="checkbox"]:checked {
+  background: rgb(var(--c-primary));
+  border-color: rgb(var(--c-primary));
+}
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgb(var(--c-ring) / 0.3);
+  border-color: rgb(var(--c-ring));
+}
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

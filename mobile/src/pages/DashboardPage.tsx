@@ -401,7 +401,7 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   syncErrorText: {
-    color: "#B05038",
+    color: colors.danger,
     fontSize: 12,
   },
   deviceList: {

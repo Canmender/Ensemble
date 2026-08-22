@@ -113,6 +113,14 @@ export interface UserInfo {
   displayName?: string;
   role: string;
   avatarUrl?: string;
+  /** 个性签名 */
+  bio?: string;
+  /** 地区 */
+  region?: string;
+  /** 生日 (YYYY-MM-DD) */
+  birthday?: string;
+  /** 职业 */
+  occupation?: string;
 }
 
 /** 会话（企业级 IM） */
@@ -561,9 +569,15 @@ class ApiService {
     return this.request<UserInfo>("GET", "/api/auth/me");
   }
 
-  /** 更新当前用户昵称 */
-  async updateProfile(displayName: string): Promise<ApiResponse<UserInfo>> {
-    return this.request<UserInfo>("PATCH", "/api/auth/me", { displayName });
+  /** 更新当前用户资料 */
+  async updateProfile(data: {
+    displayName?: string;
+    bio?: string;
+    region?: string;
+    birthday?: string;
+    occupation?: string;
+  }): Promise<ApiResponse<UserInfo>> {
+    return this.request<UserInfo>("PATCH", "/api/auth/me", data);
   }
 
   /** 上传头像（base64） */

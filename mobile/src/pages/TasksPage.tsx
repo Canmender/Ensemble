@@ -16,11 +16,12 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
 import type { TaskMode } from "@ensemble/shared-protocol";
-import { colors } from "../theme";
+import { colors, spacing, radius, fontSize } from "../theme";
 
 export default function TasksPage({ navigation }: { navigation: any }) {
   const { tasks, runs, agents } = useTaskStore();
@@ -90,17 +91,17 @@ export default function TasksPage({ navigation }: { navigation: any }) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "running":
-        return "#A9873C";
+        return colors.warning;
       case "success":
-        return "#5F7A5A";
+        return colors.success;
       case "error":
-        return "#B05038";
+        return colors.danger;
       case "cancelled":
-        return "#9A918A";
+        return colors.textFaint;
       case "queued":
-        return "#3B3F4A";
+        return colors.primary;
       default:
-        return "#374151";
+        return colors.textMuted;
     }
   };
 
@@ -166,6 +167,58 @@ export default function TasksPage({ navigation }: { navigation: any }) {
           </Text>
         </View>
 
+        <View style={styles.taskActions}>
+          {/* 查看画布按钮 */}
+          <TouchableOpacity
+            style={[styles.canvasButton, !hasRun && styles.canvasButtonDisabled]}
+            onPress={(e) => {
+              e.stopPropagation();
+              if (hasRun) {
+                navigation.navigate("Run", { runId: latestRun.id });
+              } else {
+                Alert.alert("提示", "该任务暂无运行记录，无法查看画布");
+              }
+            }}
+            disabled={!hasRun}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="color-wand-outline"
+              size={16}
+              color={hasRun ? colors.primary : colors.textFaint}
+            />
+            <Text
+              style={[
+                styles.canvasButtonText,
+                !hasRun && styles.canvasButtonTextDisabled,
+              ]}
+            >
+              查看画布
+            </Text>
+          </TouchableOpacity>
+
+          {/* 取消按钮（仅运行中显示） */}
+          {status === "running" && (
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={(e) => {
+                e.stopPropagation();
+                try {
+                  connectionService.sendControlCommand(
+                    "cancel",
+                    item.id,
+                    "task"
+                  );
+                } catch (err) {
+                  Alert.alert("取消失败", "无法发送取消命令，请检查连接");
+                }
+              }}
+            >
+              <Text style={styles.cancelButtonText}>取消</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {hasRun && (
           <View style={styles.taskRunInfo}>
             <Text style={styles.runInfoText}>
@@ -173,26 +226,6 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             </Text>
             <Text style={styles.viewDetailText}>查看详情</Text>
           </View>
-        )}
-
-        {status === "running" && (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={(e) => {
-              e.stopPropagation();
-              try {
-                connectionService.sendControlCommand(
-                  "cancel",
-                  item.id,
-                  "task"
-                );
-              } catch (err) {
-                Alert.alert("取消失败", "无法发送取消命令，请检查连接");
-              }
-            }}
-          >
-            <Text style={styles.cancelButtonText}>取消</Text>
-          </TouchableOpacity>
         )}
       </TouchableOpacity>
     );
@@ -352,17 +385,18 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   addButton: {
-    backgroundColor: "#5F7A5A",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
   },
   addButtonDisabled: {
     backgroundColor: colors.surfaceAlt,
   },
   addButtonText: {
-    color: colors.text,
-    fontWeight: "500",
+    color: colors.white,
+    fontWeight: "600",
+    fontSize: fontSize.sm,
   },
   errorBanner: {
     flexDirection: "row",
@@ -449,17 +483,43 @@ const styles = StyleSheet.create({
     fontWeight: "500",
     marginLeft: 8,
   },
-  cancelButton: {
+  taskActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    alignItems: "center",
     marginTop: 12,
+    gap: spacing.sm,
+  },
+  canvasButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    backgroundColor: "#B05038",
-    borderRadius: 4,
-    alignSelf: "flex-end",
+    backgroundColor: colors.primarySoft,
+    borderRadius: radius.sm,
+  },
+  canvasButtonDisabled: {
+    opacity: 0.5,
+  },
+  canvasButtonText: {
+    color: colors.primary,
+    fontSize: fontSize.xs,
+    fontWeight: "600",
+  },
+  canvasButtonTextDisabled: {
+    color: colors.textFaint,
+  },
+  cancelButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: colors.danger,
+    borderRadius: radius.sm,
   },
   cancelButtonText: {
-    color: colors.text,
-    fontSize: 12,
+    color: colors.white,
+    fontSize: fontSize.xs,
+    fontWeight: "500",
   },
   emptyState: {
     flex: 1,
@@ -523,7 +583,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modeButtonActive: {
-    backgroundColor: "#5F7A5A",
+    backgroundColor: colors.primary,
   },
   modeButtonText: {
     color: colors.textMuted,
@@ -548,7 +608,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   createButton: {
-    backgroundColor: "#5F7A5A",
+    backgroundColor: colors.primary,
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,

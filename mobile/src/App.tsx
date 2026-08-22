@@ -39,6 +39,7 @@ import DeviceRemotePage from "./pages/DeviceRemotePage";
 import LoginPage from "./pages/LoginPage";
 import ChangelogPage from "./pages/ChangelogPage";
 import AgentDetailPage from "./pages/AgentDetailPage";
+import AssistantPage from "./pages/AssistantPage";
 import { AppHeader } from "./components/AppHeader";
 import { LiquidGlass } from "./components/Glass";
 
@@ -62,6 +63,11 @@ export type RootStackParamList = {
   DeviceRemote: undefined;
   AgentDetail: { agentId: string };
   Changelog: undefined;
+  Assistant: undefined;
+  SettingsLLM: undefined;
+  SettingsMemory: undefined;
+  SettingsMCP: undefined;
+  SettingsSkills: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -120,7 +126,7 @@ function GlassTabBar({ state, descriptors, navigation }: any) {
   const pillX = useSharedValue(state.index * tabW);
   const gestureOffset = useSharedValue(0);
 
-  // 同步外部切换（如从页面内导航）
+  // 同步外部切换
   React.useEffect(() => {
     pillX.value = withSpring(state.index * tabW, { damping: 18, stiffness: 180 });
   }, [state.index]);
@@ -152,26 +158,29 @@ function GlassTabBar({ state, descriptors, navigation }: any) {
         position: "absolute", left: 16, right: 16,
         bottom: Math.max(insets.bottom, 8), height: DOCK_H,
       }} pointerEvents="box-none">
-        {/* 液态玻璃胶囊 */}
+        {/* 毛玻璃胶囊容器 */}
         <View style={{
           flex: 1, borderRadius: capsuleR, overflow: "hidden",
-          shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 24,
-          shadowOffset: { width: 0, height: 8 }, elevation: 12,
+          shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 20,
+          shadowOffset: { width: 0, height: 6 }, elevation: 10,
+          borderWidth: 0.5,
+          borderColor: "rgba(255,255,255,0.3)",
         }}>
-          <LiquidGlass blur={55} radiusValue={capsuleR} style={{ flex: 1 }} />
+          <LiquidGlass blur={50} radiusValue={capsuleR} style={{ flex: 1 }} />
         </View>
         {/* 滑动高亮胶囊 */}
         <Animated.View style={[{
-          position: "absolute", top: 6, left: 6,
-          width: tabW - 12, height: DOCK_H - 12,
-          borderRadius: (DOCK_H - 12) / 2,
-          backgroundColor: "rgba(255,255,255,0.2)",
+          position: "absolute", top: 5, left: 5,
+          width: tabW - 10, height: DOCK_H - 10,
+          borderRadius: (DOCK_H - 10) / 2,
+          backgroundColor: "rgba(255,255,255,0.25)",
         }, pillStyle]} />
         {/* Tab 按钮 */}
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row" }}>
           {state.routes.map((route: any, index: number) => {
             const focused = state.index === index;
             const icon = TAB_ICONS[route.name] ?? TAB_ICONS.Dashboard;
+            const label = route.name === "Me" ? "我" : (descriptors[route.key].options.title ?? route.name);
             return (
               <TouchableOpacity
                 key={route.key}
@@ -182,8 +191,20 @@ function GlassTabBar({ state, descriptors, navigation }: any) {
                 }}
                 style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
               >
-                <Ionicons name={focused ? icon.active : icon.inactive} size={22} color={focused ? "#fff" : "rgba(255,255,255,0.5)"} />
-                <Text style={{ fontSize: 10, fontWeight: focused ? "700" : "500", color: focused ? "#fff" : "rgba(255,255,255,0.5)", marginTop: 2 }}>{route.name === "Me" ? "我" : (descriptors[route.key].options.title ?? route.name)}</Text>
+                <Ionicons
+                  name={focused ? icon.active : icon.inactive}
+                  size={22}
+                  color={focused ? "#fff" : "rgba(255,255,255,0.55)"}
+                />
+                <Text style={{
+                  fontSize: 10,
+                  fontWeight: focused ? "700" : "500",
+                  color: focused ? "#fff" : "rgba(255,255,255,0.55)",
+                  marginTop: 2,
+                  textShadowColor: "rgba(0,0,0,0.3)",
+                  textShadowOffset: { width: 0, height: 1 },
+                  textShadowRadius: 2,
+                }}>{label}</Text>
                 {route.name === "Chat" && <ChatTabBadge />}
               </TouchableOpacity>
             );
@@ -203,7 +224,7 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.textFaint,
-        headerStyle: { backgroundColor: colors.bg },
+        headerStyle: { backgroundColor: colors.surface },
         headerTintColor: colors.text,
         tabBarStyle: { backgroundColor: colors.surface, borderTopWidth: 1, borderTopColor: colors.border },
         tabBarLabelStyle: { fontSize: 10, fontWeight: "600", marginTop: 2 },
@@ -346,6 +367,14 @@ function MainApp() {
           options={{
             headerShown: true,
             header: () => <AppHeader title="我的电脑" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="Assistant"
+          component={AssistantPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="AI 助手" showBack showAvatar={false} />,
           }}
         />
       </Stack.Navigator>

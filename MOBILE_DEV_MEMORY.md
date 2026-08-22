@@ -1,73 +1,110 @@
-# 合鸣移动端开发记忆
+# 合鸣开发记忆
 
-## 项目基本信息
+## 项目架构理解
 
-- **项目**：合鸣（Ensemble）移动端 - React Native Expo SDK 57
-- **仓库**：D:\MultiAgent
-- **分支**：feat/mobile-ui-xuank-mo-082（UI 重做保护分支）
-- **当前版本**：0.8.29 / versionCode 99
-- **服务器**：47.92.39.184:8787
+### 核心设计模式
+1. **AgentAdapter 统一接口**: 所有 Agent 通过 startTask → AsyncGenerator<AgentEvent> 接入
+2. **Hook 驱动循环**: preReasoning → LLM → postReasoning → 工具执行 → postToolResult → postCall
+3. **原子组压缩**: 上下文压缩以 assistant+tool_calls+tool_results 为单位，不切断配对
+4. **事件先落库再广播**: 保证断线重连不丢帧
 
-## 技能系统
+### 关键文件位置
+- Agent 适配器: `desktop/packages/server/src/adapters/`
+- 编排引擎: `desktop/packages/server/src/orchestration/`
+- 工具系统: `desktop/packages/server/src/tools/`
+- 记忆系统: `desktop/packages/server/src/memory/`
+- 前端页面: `desktop/packages/web/src/pages/`
+- 移动端页面: `mobile/src/pages/`
 
-- DSh 技能目录：`C:\Users\ADMIN\.agents\skills\`
-- 已安装技能：cocoloop（技能管理器）、anthropic-frontend-design（设计智能）
-- 设计技能工具：`python scripts/search.py "<query>" --domain <domain>`（必须实际运行，不能只读说明）
+### 配置目录
+- 本地版: `ensemble-local/config/` 和 `ensemble-local/data/`
+- 云端版: `ensemble-cloud/config/` 和 `ensemble-cloud/data/`
+- 主开发: `desktop/packages/server/data/`
 
-## 构建环境
+## 版本管理
 
-- **Node.js**：v24.15.0
-- **Android SDK**：D:\AndroidSDK（platform 36, build-tools 36.0.0）
-- **Java**：E:\JAVA21（构建时需设置 JAVA_HOME）
-- **Keystore**：debug.keystore（CN=Android Debug），**不要改签名 key**
-- **构建命令**：
-  ```
-  cd mobile
-  $env:JAVA_HOME='E:\JAVA21'
-  node scripts/build-release.cjs
-  ```
-- **prebuild 后**：需重新创建 `android/local.properties`（`sdk.dir=D:\\AndroidSDK`）
+### 两个独立版本
+- **本地版 (ensemble-local/)**: 完全离线，数据在本机
+- **云端版 (ensemble-cloud/)**: 连接云端，数据在服务器
 
-## APK 优化
+### 启动方式
+- 双击 `合鸣.bat` 选择版本
+- 或进入对应目录运行 `start.bat`
 
-- **当前版本**：0.8.29 / versionCode 99
-- **APK 大小**：98MB（从 190MB 优化，去掉 x86/x86_64 架构）
-- **架构配置**：`android/gradle.properties` → `reactNativeArchitectures=arm64-v8a,armeabi-v7a`
-- **注意**：`expo prebuild` 会重置 gradle.properties，prebuild 后需重新设置
+## 移动端关键记忆
 
-## 设计系统关键决策
+### 版本号管理
+- `mobile/app.json` 是唯一版本源
+- 构建用 `node scripts/build-release.cjs`
+- 不要裸跑 gradlew assembleRelease
 
-1. **主色是玄泉 #3B3F4A**（不是淡黏土 #8F7D6F）—— 对比度 10.5:1 vs 3.9:1
-2. **暖琥珀 #C4933F 做唯一 CTA 点缀** —— 六色全是中性色，必须有一个亮色
-3. **分隔线不用画线** —— 用色差区分层级（bg 白 / surface 极淡暖白）
-4. **文字层级**：纯黑标题 / 墨色正文 / 玄泉次级 —— 全 >= 4.5:1
-5. **液态玻璃只用于导航层** —— 不铺内容层（Apple 指导原则）
+### 数据模型
+- 1:1 会话在 conversations.participant_ids 存 JSON 数组
+- 判断好友必须双方同属任一 direct 会话
 
-## 已知技术限制
+### WS 信令
+- 入口必须只判断 `!env.event`，不能用 `!env.runId`
 
-1. **expo-blur BlurView + borderRadius = Android 白色矩形**（库的已知限制，无解）
-2. **AGP 9.x 只生成 v2 签名**（v1 不支持）
-3. **expo prebuild 会重建 android 目录**（signingConfig、local.properties 会丢失）
+## 桌面端关键记忆
 
-## 部署流程
+### CSP 配置
+- 开发模式需要放宽 CSP
+- Vite dev server 需要额外 CSP 规则
 
-1. 构建 APK：`node scripts/build-release.cjs`
-2. 验证签名：`apksigner verify --print-certs <apk>`
-3. Stage：复制到 `D:\MultiAgent\ensemble-vX.Y.Z.apk`
-4. 上传服务器：paramiko SFTP → docker cp 进 /data/apk/
-5. 更新 version.json（ASCII note，避免中文编码问题）
-6. 验证：`curl http://47.92.39.184:8787/api/app-version`
+### 登录流程
+- 登录依赖的 API 不能需要认证
+- /settings 需要添加到公开路径
 
-## 踩坑速查
+### 设备在线
+- 从 API 加载实际设备列表
+- 不要硬编码设备信息
 
-| 问题 | 原因 | 解法 |
-|---|---|---|
-| 技能不可见 | 装错目录 | 装到 ~/.agents/skills/ |
-| 改动没生效 | Windows \r\n | replace 用 /\r?\n/g |
-| APK 无法覆盖安装 | 签名 key 变了 | 不要改签名 key |
-| 玻璃白色矩形 | BlurView+borderRadius | 用纯 View 多层叠加 |
-| 分隔线太丑 | 纯黑线 | 用色差，不画线 |
-| 智能体不显示 | 未加载数据 + filter 空 rows | useEffect 加载 + 去掉 filter |
-| 版本号没更新 | prebuild 覆盖 | prebuild 后重新注入版本 |
-| APK 太大(190MB) | 包含 x86 架构 | gradle.properties 设 reactNativeArchitectures |
-| gradle.properties 被重置 | expo prebuild | prebuild 后重新设置 reactNativeArchitectures |
+## 服务器部署
+
+### 云端服务器
+- 地址: 47.92.39.184:8787
+- 数据库: Docker 命名卷 /data/ensemble.db
+- APK 托管: /data/apk/
+
+### 部署流程
+1. SSH 到服务器
+2. git fetch + reset
+3. docker compose up -d --build
+4. 验证 health + 关键端点
+
+## 踩坑记录
+
+### 1. CSP 阻止脚本加载
+- 开发模式和生产模式需要不同 CSP
+- Vite dev server 需要额外规则
+
+### 2. 登录请求发送到错误服务器
+- /settings 需要添加到公开路径
+- 登录流程依赖的 API 不能需要认证
+
+### 3. 头像 URL 构造错误
+- 相对路径需要代理
+- 开发模式和生产模式有差异
+
+### 4. APK 版本错乱
+- android/ 是 git-ignored 的 prebuild 产物
+- 必须用 build-release.cjs 构建
+
+## 2026-08-19 更新
+
+### 版本分离
+- 创建 ensemble-local/ 和 ensemble-cloud/ 两个独立目录
+- 使用软链接共享源代码
+- 配置和数据完全隔离
+
+### 移动端 v0.9.3
+- 毛玻璃 Dock 效果
+- AI 助手页面
+- 表情直接发送
+- 浅灰+白色配色
+
+### 桌面端 v0.8.0
+- Token 使用量图表
+- 设备在线状态
+- 日志换行修复
+- 隐私设置位置调整

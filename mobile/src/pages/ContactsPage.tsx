@@ -377,17 +377,39 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
     }
     if (row.kind === "device") {
       const online = row.subtitle.includes("在线");
+      const isDesktop = row.deviceIcon === "desktop-outline";
+      const isCurrentDevice = row.subtitle.includes("本机");
       return (
-        <View style={styles.row}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            if (isDesktop && online && !isCurrentDevice) {
+              navigation.navigate("ChatRoom", {
+                convId: "device-" + row.id,
+                title: row.name,
+              });
+            } else if (!isCurrentDevice) {
+              Alert.alert("设备离线", "该设备当前不在线，无法发送消息");
+            }
+          }}
+          activeOpacity={isDesktop && online && !isCurrentDevice ? 0.7 : 1}
+        >
           <View style={[styles.avatar, { backgroundColor: colors.surfaceAlt }]}>
-            <Ionicons name={row.deviceIcon} size={20} color={colors.textMuted} />
+            <Ionicons name={row.deviceIcon} size={20} color={isDesktop && online ? colors.primary : colors.textMuted} />
           </View>
           <View style={styles.rowInfo}>
             <Text style={styles.rowName}>{row.name}</Text>
-            <Text style={styles.rowSubtitle}>{row.subtitle}</Text>
+            <Text style={[styles.rowSubtitle, online && { color: colors.success }]}>
+              {row.subtitle}
+            </Text>
           </View>
-          <View style={[styles.onlineDot, { backgroundColor: online ? "#5F7A5A" : "#9A918A" }]} />
-        </View>
+          <View style={styles.deviceStatusContainer}>
+            <View style={[styles.onlineDot, { backgroundColor: online ? colors.success : colors.textFaint }]} />
+            {isDesktop && online && !isCurrentDevice && (
+              <Ionicons name="chatbubble-outline" size={18} color={colors.primary} style={styles.deviceMessageIcon} />
+            )}
+          </View>
+        </TouchableOpacity>
       );
     }
     if (row.kind === "agent") {
@@ -729,7 +751,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarText: { fontSize: 17, fontWeight: "700" },
-  onlineDot: { width: 8, height: 8, borderRadius: 4, marginLeft: "auto" },
+  onlineDot: { width: 10, height: 10, borderRadius: 5 },
+  deviceStatusContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginLeft: "auto",
+  },
+  deviceMessageIcon: {
+    marginLeft: spacing.xs,
+  },
   rowInfo: { flex: 1 },
   rowName: { color: colors.text, fontSize: fontSize.md, fontWeight: "500" },
   rowSubtitle: { color: colors.textMuted, fontSize: fontSize.xs, marginTop: 1 },

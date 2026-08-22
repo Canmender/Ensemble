@@ -236,12 +236,12 @@ export default function AgentsPage() {
           </Text>
         </View>
         {deleting === item.id ? (
-          <ActivityIndicator size="small" color="#B05038" />
+          <ActivityIndicator size="small" color={colors.danger} />
         ) : (
           <View
             style={[
               styles.statusDot,
-              { backgroundColor: item.enabled ? "#5F7A5A" : "#9A918A" },
+              { backgroundColor: item.enabled ? colors.success : colors.textFaint },
             ]}
           />
         )}
@@ -290,7 +290,7 @@ export default function AgentsPage() {
           </Text>
           <TouchableOpacity onPress={handleSave} disabled={saving}>
             {saving ? (
-              <ActivityIndicator size="small" color="#5F7A5A" />
+              <ActivityIndicator size="small" color={colors.primary} />
             ) : (
               <Text style={[styles.modalSave, saving && styles.modalSaveDisabled]}>
                 保存
@@ -307,7 +307,7 @@ export default function AgentsPage() {
               value={formData.name}
               onChangeText={(text) => setFormData({ ...formData, name: text })}
               placeholder="输入 Agent 名称"
-              placeholderTextColor="#9A918A"
+              placeholderTextColor={colors.textFaint}
             />
           </View>
 
@@ -358,7 +358,7 @@ export default function AgentsPage() {
                 setFormData({ ...formData, description: text })
               }
               placeholder="Agent 描述"
-              placeholderTextColor="#9A918A"
+              placeholderTextColor={colors.textFaint}
               multiline
               numberOfLines={3}
             />
@@ -405,7 +405,7 @@ export default function AgentsPage() {
                   setFormData({ ...formData, model: text })
                 }
                 placeholder="例如: claude-sonnet-4-20250514"
-                placeholderTextColor="#9A918A"
+                placeholderTextColor={colors.textFaint}
               />
             </View>
           )}
@@ -420,7 +420,7 @@ export default function AgentsPage() {
                   setFormData({ ...formData, systemPrompt: text })
                 }
                 placeholder="系统提示词"
-                placeholderTextColor="#9A918A"
+                placeholderTextColor={colors.textFaint}
                 multiline
                 numberOfLines={4}
               />
@@ -483,8 +483,8 @@ export default function AgentsPage() {
                 onValueChange={(value) =>
                   setFormData({ ...formData, enabled: value })
                 }
-                trackColor={{ false: "#F2EFEA", true: "#5F7A5A" }}
-                thumbColor={formData.enabled ? "#fff" : "#9A918A"}
+                trackColor={{ false: colors.surfaceAlt, true: colors.primary }}
+                thumbColor={formData.enabled ? colors.white : colors.textFaint}
               />
             </View>
           </View>
@@ -511,7 +511,7 @@ export default function AgentsPage() {
 
       {loading && (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="small" color="#5F7A5A" />
+          <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.loadingText}>加载中...</Text>
         </View>
       )}
@@ -579,13 +579,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   addButton: {
-    backgroundColor: "#5F7A5A",
+    backgroundColor: colors.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,
   },
   addButtonText: {
-    color: colors.text,
+    color: colors.white,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -793,8 +793,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   kindOptionActive: {
-    borderColor: "#5F7A5A",
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   kindText: {
     color: colors.textMuted,
@@ -813,8 +813,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   providerOptionActive: {
-    borderColor: "#5F7A5A",
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   providerText: {
     color: colors.textMuted,
@@ -844,7 +844,7 @@ const styles = StyleSheet.create({
     top: -8,
     width: 20,
     height: 20,
-    backgroundColor: "#5F7A5A",
+    backgroundColor: colors.primary,
     borderRadius: 10,
     marginLeft: -10,
   },
@@ -862,8 +862,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   toolChipActive: {
-    borderColor: "#5F7A5A",
-    backgroundColor: "rgba(16, 185, 129, 0.1)",
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySoft,
   },
   toolChipText: {
     color: colors.textMuted,

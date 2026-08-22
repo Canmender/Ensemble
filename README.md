@@ -3,6 +3,8 @@
 > 一个本地优先的多 Agent 协作平台。连接 Claude Code、Hermes、OpenCode 等 AI Agent，通过可视化编排让它们协同工作。
 
 [![Release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
+[![Mobile](https://img.shields.io/badge/Mobile-v0.9.3-blue)](#移动端)
+[![Desktop](https://img.shields.io/badge/Desktop-v0.8.0-green)](#桌面端)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passed-brightgreen)](#测试)
 
@@ -79,22 +81,45 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ---
 
+## 版本管理
+
+项目分为两个独立版本，共享同一套源代码，配置和数据完全隔离：
+
+| 版本 | 目录 | 用途 | 启动方式 |
+|------|------|------|----------|
+| **本地版** | `ensemble-local/` | 完全离线运行 | `合鸣.bat` → 本地版 |
+| **云端版** | `ensemble-cloud/` | 连接云端服务器 | `合鸣.bat` → 云端版 |
+
+详细说明见 [VERSION-MANAGEMENT.md](VERSION-MANAGEMENT.md)
+
 ## 项目结构
 
 ```
 .
-├── desktop/                    # 桌面应用
+├── 合鸣.bat                    # 版本选择启动器
+├── ensemble-local/             # 本地版（完全隔离）
+│   ├── .env                    # 本地配置
+│   ├── start.bat               # 启动脚本
+│   ├── packages/ → desktop/    # 源代码（软链接）
+│   ├── config/                 # 独立配置
+│   └── data/                   # 独立数据
+├── ensemble-cloud/             # 云端版（完全隔离）
+│   ├── .env                    # 云端配置
+│   ├── start.bat               # 启动脚本
+│   ├── packages/ → desktop/    # 源代码（软链接）
+│   ├── config/                 # 独立配置
+│   └── data/                   # 独立数据
+├── desktop/                    # 桌面应用（主开发目录）
 │   ├── packages/
 │   │   ├── shared/             # 共享类型 + Zod schema
-│   │   ├── server/             # 引擎核心（LLM/工具/编排/记忆/RAG）
-│   │   ├── web/                # 前端（React + Tailwind + ReactFlow）
-│   │   ├── desktop/            # Electron 壳
-│   │   └── cli/                # 命令行工具
+│   │   ├── server/             # 引擎核心
+│   │   ├── web/                # 前端
+│   │   └── desktop/            # Electron 壳
 │   └── docs/                   # 文档
 ├── mobile/                     # 手机端（Expo + React Native）
 ├── relay-server/               # 云端中继服务器
 ├── shared/                     # 共享通信协议
-└── nginx/                      # Nginx 反向代理配置
+└── docs/                       # 项目文档
 ```
 
 ---

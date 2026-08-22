@@ -26,7 +26,7 @@ import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.8.29";
+const APP_VERSION = nativeApplicationVersion ?? "0.9.0";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
@@ -54,12 +54,12 @@ export default function SettingsPage() {
 
   const statusColor =
     connectionState === "connected"
-      ? "#5F7A5A"
+      ? colors.success
       : connectionState === "connecting" || connectionState === "reconnecting"
-        ? "#A9873C"
+        ? colors.warning
         : connectionState === "error"
-          ? "#B05038"
-          : "#9A918A";
+          ? colors.danger
+          : colors.textFaint;
   const statusText =
     connectionState === "connected"
       ? "已连接云端"
@@ -72,12 +72,6 @@ export default function SettingsPage() {
             : "未连接";
 
   const menuItems = [
-    {
-      icon: "desktop-outline" as const,
-      title: "我的电脑",
-      desc: "连接中继，远程执行任务",
-      onPress: () => navigation.navigate("DeviceRemote"),
-    },
     {
       icon: "person-outline" as const,
       title: "个人信息",
@@ -121,6 +115,40 @@ export default function SettingsPage() {
     },
   ];
 
+  // AI 助手 & 高级设置区域
+  const advancedItems = [
+    {
+      icon: "sparkles" as const,
+      title: "AI 助手",
+      desc: "内置智能助手，随时提问",
+      onPress: () => navigation.navigate("Assistant"),
+    },
+    {
+      icon: "hardware-chip-outline" as const,
+      title: "LLM 提供商",
+      desc: "管理模型供应商配置",
+      onPress: () => navigation.navigate("SettingsLLM"),
+    },
+    {
+      icon: "brain-outline" as const,
+      title: "记忆管理",
+      desc: "查看和管理智能体记忆",
+      onPress: () => navigation.navigate("SettingsMemory"),
+    },
+    {
+      icon: "git-network-outline" as const,
+      title: "MCP 服务",
+      desc: "管理 MCP 工具服务器",
+      onPress: () => navigation.navigate("SettingsMCP"),
+    },
+    {
+      icon: "ribbon-outline" as const,
+      title: "技能管理",
+      desc: "查看和配置智能体技能",
+      onPress: () => navigation.navigate("SettingsSkills"),
+    },
+  ];
+
   return (
     <ScrollView style={styles.container}>
       {/* 顶部个人信息卡 */}
@@ -154,6 +182,23 @@ export default function SettingsPage() {
         {menuItems.map((item) => (
           <TouchableOpacity key={item.title} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
             <Ionicons name={item.icon} size={20} color={colors.primary} />
+            <View style={styles.menuInfo}>
+              <Text style={styles.menuTitle}>{item.title}</Text>
+              <Text style={styles.menuDesc}>{item.desc}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      {/* AI 助手 & 高级设置 */}
+      <View style={[styles.menu, { marginTop: spacing.md }]}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>AI 助手 & 高级设置</Text>
+        </View>
+        {advancedItems.map((item) => (
+          <TouchableOpacity key={item.title} style={styles.menuItem} onPress={item.onPress} activeOpacity={0.7}>
+            <Ionicons name={item.icon} size={20} color={colors.accent} />
             <View style={styles.menuInfo}>
               <Text style={styles.menuTitle}>{item.title}</Text>
               <Text style={styles.menuDesc}>{item.desc}</Text>
@@ -259,4 +304,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   logoutButtonText: { color: colors.danger, fontSize: fontSize.md, fontWeight: "600" },
+  sectionHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  sectionTitle: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    fontWeight: "600",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
 });
