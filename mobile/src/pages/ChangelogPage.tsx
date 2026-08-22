@@ -8,6 +8,24 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.7",
+    date: "2026-08-22",
+    changes: [
+      "私聊端到端加密（Beta）：1:1 文字消息 X3DH+双棘轮加密，服务器仅见密文",
+      "私钥存 Android Keystore 硬件加密，永不上传",
+      "双方都升级后才启用加密（灰度共存），解密失败显示占位不崩溃",
+    ],
+  },
+  {
+    version: "v0.9.6",
+    date: "2026-08-22",
+    changes: [
+      "断线重连后自动补拉：任务事件按 jobId 精确回填，运行/看板状态不再停留旧值",
+      "聊天消息按服务端 seq 增量同步，重连不丢消息、不错序",
+      "消息发送携带幂等 ID，弱网重试不再产生重复消息",
+    ],
+  },
+  {
     version: "v0.9.5",
     date: "2026-08-22",
     changes: [

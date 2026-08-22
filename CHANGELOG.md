@@ -171,6 +171,32 @@ v0.8.0 提交时 4 个新源文件未 `git add`（CHANGELOG 记录了功能但�
 - server 145 个单元测试全过
 - web 生产构建通过（TokenUsagePage 懒加载分包 388KB / gzip 111KB）
 
+## v0.9.7 (2026-08-22) — 私聊端到端加密（E2EE Beta）
+
+按 `desktop/docs/E2E-PROTOCOL.md` v1 规范实现的移动端侧：
+
+- **协议**：X3DH 会话建立 + Double Ratchet 棘轮（`@privacyresearch/libsignal-protocol-typescript`，与桌面端同库同线格式）；AES-256-CBC + HMAC-SHA256。
+- **密钥管理**：登录后懒注册（IK/SPK/100 OPK），密钥目录走 `/api/e2e/*`；私钥存 Expo SecureStore（Android Keystore 硬件加密）永不离机；OPK 余量 <20 自动补 100。
+- **收发接入**：1:1 用户会话纯文字消息加密发送；WS 实时、历史加载、重连补拉三路均自动解密；capability 缓存 ≤5 分钟，双方已注册才加密（灰度共存）。
+- **信封格式**：`{"e2e":1,"v":1,"ct":{"type":<1|3>,"body":"<base64>"}}`——libsignal body 是 binary string，base64 编码后过 JSON。
+- **健壮性**：解密失败显示 🔒 占位不崩溃；加密失败回退明文；群聊/附件仍明文（v1 范围外）。
+
+### 关键实现坑（node 实测 8/8 通过后落地）
+- **Buffer 内存池陷阱**：`Buffer.from(s).buffer` 返回内存池（8KB 级），必须 `slice(byteOffset, +byteLength)` 出独立 ArrayBuffer，否则整块池被加密（密文膨胀数百倍且对端无法解密）。
+- **RN 无 WebCrypto**：Hermes 没有 subtle，需 `@peculiar/webcrypto` 纯 JS 实现经 `setWebCrypto()` 注入 libsignal（仅 getRandomValues 不够，AES/HMAC 都走 subtle）。
+
+**版本**：mobile 0.9.6 → 0.9.7，versionCode 106 → 107
+
+## v0.9.6 (2026-08-22) — 重连补拉全量化：事件回填 + 聊天 seq 增量同步
+
+配合服务端 v0.8.3（chat_messages.seq + clientMsgId 幂等）的移动端消费侧：
+
+- **事件级精确回填**：断线重连后按本地 seq 游标调 `getRunEvents(afterSeq)`，按 `{seq, jobId, event}` 三元组归并进对应 job.events（游标=实时已见最大值，严格无重复）；同时兜底刷新 run/job 状态、补进断线期间新建的 job。
+- **聊天增量同步**：WS `chat.message` 携带服务端真实消息 ID 与单调 seq；重连补拉优先按 seq 过滤（无 seq 旧数据回退时间戳），合并后按 seq 排序，不丢消息不错序。
+- **发送幂等**：消息发送携带 clientMsgId（与乐观追加同 ID），弱网 3 次重试不再产生重复消息/重复推送；appendMessage 按 id 精确去重。
+
+**版本**：mobile 0.9.5 → 0.9.6，versionCode 105 → 106
+
 ## v0.9.5 (2026-08-22) — 通话质量与体验优化
 
 ### 语音/视频通话修复

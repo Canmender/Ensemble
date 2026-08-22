@@ -18,6 +18,10 @@ export interface ChatWsMessage {
   attachment?: MessageAttachment;
   replyTo?: MessageReply;
   mentions?: string[];
+  /** 服务端消息 ID（v0.8.3+，与历史接口 id 一致，用于去重合并） */
+  id?: string;
+  /** 会话内单调 seq（v0.8.3+，补拉游标） */
+  seq?: number;
 }
 
 export interface MentionEvent {
@@ -90,6 +94,9 @@ interface WsEnvelope {
     name?: string;
     kind?: string;
     online?: boolean;
+    /** chat.message：服务端消息 ID / 会话内单调 seq（v0.8.3+） */
+    id?: string;
+    seq?: number;
     event?: { type: string; tool?: string; input?: unknown; ts?: number };
   };
 }
@@ -355,6 +362,8 @@ export class WsLink {
             attachment: ev.attachment,
             replyTo: ev.replyTo,
             mentions: ev.mentions,
+            id: ev.id,
+            seq: ev.seq,
           };
           this.callbacks.onChatMessage?.(chatMsg);
           for (const cb of this.globalChatMessageCbs) {
