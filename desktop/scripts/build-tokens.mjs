@@ -78,12 +78,13 @@ export const DarkTheme: EnsembleTheme = {
 ${tsObject("dark")}
 };
 `;
-// 输出到移动端仓库目录（若存在；worktree 隔离时跳过不报错）
-const mobileDir = resolve(root, "../../mobile/src/design/generated");
+// 输出到移动端仓库目录。desktop 的上一级即仓库根（主 checkout 与 .claude/worktrees/* 均成立）；
+// 目录不存在（如独立检出 desktop）时报错并提示，不静默。
+const mobileDir = resolve(root, "../mobile/src/design/generated");
 try {
   mkdirSync(mobileDir, { recursive: true });
   writeFileSync(join(mobileDir, "tokens.ts"), ts);
   console.log(`✓ RN   → mobile/src/design/generated/tokens.ts`);
-} catch {
-  console.log(`· RN   → 跳过（mobile 目录不可达，移动端会话可按此格式自行生成）`);
+} catch (e) {
+  console.warn(`! RN   → mobile 目录写入失败（${mobileDir}）：${e.message}`);
 }
