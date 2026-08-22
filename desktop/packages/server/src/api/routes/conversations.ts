@@ -196,13 +196,15 @@ export function conversationsRouter(ctx: AppContext): Router {
 
       const before = typeof req.query.before === "string" ? req.query.before : undefined;
       const limit = Math.min(Math.max(Number(req.query.limit ?? 50) || 50, 1), 200);
+      // 增量补拉：afterSeq=N 仅返回 seq > N（服务端裁剪，配合客户端 seq 游标）
+      const afterSeq = req.query.afterSeq !== undefined ? Number(req.query.afterSeq) : undefined;
 
       // 用户-用户会话（runId = conv id）：消息双方共享，不做 userId 过滤（否则对方看不到自己的消息）
       // 共享历史：用户-用户会话 / 群聊（含 Agent 群、人+Agent 混合群）双方可见；direct agent 会话按归属过滤
       const shared = isUserConv(conv) || conv.type === "group";
       const all = shared
-        ? ctx.store.listChatMessages(conv.runId)
-        : ctx.store.listChatMessages(conv.runId, req.user?.id);
+        ? ctx.store.listChatMessages(conv.runId, undefined, afterSeq)
+        : ctx.store.listChatMessages(conv.runId, req.user?.id, afterSeq);
       const filtered = before ? all.filter((m) => m.ts < before) : all;
       // 已读回执：用户-用户会话返回各参与者最后已读时间（前端按接收者判断自己的消息是否已被读）
       const readers = isUserConv(conv) ? ctx.store.getConversationReads(conv.id) : [];

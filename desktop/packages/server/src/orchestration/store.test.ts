@@ -232,6 +232,31 @@ describe("Store chat messages", () => {
     expect(msgs[1].seq).toBe(2);
   });
 
+  it("listChatMessages afterSeq returns only newer messages (incremental pull)", () => {
+    const { store } = setup();
+    store.createTask(task("t1"));
+    store.createRun(run("r1", "t1"));
+
+    const msg = (id: string): ChatMessage => ({
+      id, runId: "r1", agentId: "u1", role: "user", content: "内容", ts: "2026-01-01T00:00:01.000Z",
+    });
+    store.createChatMessage(msg("m1")); // seq 1
+    store.createChatMessage(msg("m2")); // seq 2
+    store.createChatMessage(msg("m3")); // seq 3
+
+    // 游标 1 → 只回 m2/m3；游标 0（或无 seq 概念）→ 全量
+    expect(store.listChatMessages("r1", undefined, 1).map((m) => m.id)).toEqual(["m2", "m3"]);
+    expect(store.listChatMessages("r1", undefined, 0)).toHaveLength(3);
+    expect(store.listChatMessages("r1", undefined, undefined)).toHaveLength(3);
+    // 非法值安全降级为全量
+    expect(store.listChatMessages("r1", undefined, NaN)).toHaveLength(3);
+    // userId 过滤与 afterSeq 叠加：m1-m3 无 userId（共享，如 agent 消息）对任何用户可见；
+    // m4 归属 u2 → u2 游标 1 后 = 共享 m2/m3 + 自己的 m4；u3 无自有消息 → 仅共享 m2/m3
+    store.createChatMessage({ id: "m4", runId: "r1", agentId: "u2", role: "user", content: "c", ts: "2026-01-01T00:00:02.000Z", userId: "u2" });
+    expect(store.listChatMessages("r1", "u2", 1).map((m) => m.id)).toEqual(["m2", "m3", "m4"]);
+    expect(store.listChatMessages("r1", "u3", 1).map((m) => m.id)).toEqual(["m2", "m3"]);
+  });
+
   it("is idempotent on duplicate message id and does not burn ordering", () => {
     const { store } = setup();
     store.createTask(task("t1"));

@@ -124,7 +124,7 @@ export function chatRouter(ctx: AppContext): Router {
   );
 
   /**
-   * 获取群聊历史消息
+   * 获取群聊历史消息。可选 ?afterSeq=N：仅返回 seq > N 的增量（服务端裁剪，配合客户端 seq 游标）。
    */
   r.get(
     "/history/:runId",
@@ -133,13 +133,14 @@ export function chatRouter(ctx: AppContext): Router {
       const run = ctx.store.getRun(runId);
       if (!run) return fail(res, new Error("run not found"), 404);
 
-      const messages = ctx.store.listChatMessages(runId);
+      const afterSeq = req.query.afterSeq !== undefined ? Number(req.query.afterSeq) : undefined;
+      const messages = ctx.store.listChatMessages(runId, undefined, afterSeq);
       ok(res, { messages, status: run.status });
     }),
   );
 
   /**
-   * 获取群聊历史消息（移动端协议：GET /api/chat/:runId/messages）
+   * 获取群聊历史消息（移动端协议：GET /api/chat/:runId/messages）。同上支持 afterSeq。
    */
   r.get(
     "/:runId/messages",
@@ -148,7 +149,8 @@ export function chatRouter(ctx: AppContext): Router {
       const run = ctx.store.getRun(runId);
       if (!run) return fail(res, new Error("run not found"), 404);
 
-      const messages = ctx.store.listChatMessages(runId);
+      const afterSeq = req.query.afterSeq !== undefined ? Number(req.query.afterSeq) : undefined;
+      const messages = ctx.store.listChatMessages(runId, undefined, afterSeq);
       ok(res, { messages, status: run.status });
     }),
   );

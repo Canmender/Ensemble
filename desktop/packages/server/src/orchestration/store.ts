@@ -338,10 +338,16 @@ export class Store {
     this.stmts.deleteChatMessage.run(id);
   }
 
-  listChatMessages(runId: string, userId?: string): ChatMessage[] {
+  /** 拉取会话消息（按 seq 升序）。afterSeq：仅返回 seq 大于该值的消息（增量补拉，服务端裁剪） */
+  listChatMessages(runId: string, userId?: string, afterSeq?: number): ChatMessage[] {
+    const after = typeof afterSeq === "number" && Number.isFinite(afterSeq) && afterSeq >= 0 ? afterSeq : null;
     const rows = userId
-      ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') ORDER BY COALESCE(seq, rowid)").all(runId, userId) as any[])
-      : (this.stmts.listChatMessages.all(runId) as any[]);
+      ? after !== null
+        ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') AND COALESCE(seq, 0) > ? ORDER BY COALESCE(seq, rowid)").all(runId, userId, after) as any[])
+        : (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') ORDER BY COALESCE(seq, rowid)").all(runId, userId) as any[])
+      : after !== null
+        ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND COALESCE(seq, 0) > ? ORDER BY COALESCE(seq, rowid)").all(runId, after) as any[])
+        : (this.stmts.listChatMessages.all(runId) as any[]);
     return rows.map((r) => ({
       id: r.id,
       runId: r.run_id,
