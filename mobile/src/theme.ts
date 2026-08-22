@@ -24,48 +24,49 @@ const PURE = {
 } as const;
 
 export const colors = {
-  primary: PURE.xuan,
-  primaryDeep: PURE.black,
-  primarySoft: "#F0F0F0",
-  primaryBubble: PURE.xuan,
-  gradient: [PURE.xuan, PURE.ink] as const,
+  // 语义键 → token（与桌面端同值；旧视觉键映射到最近的语义 token）
+  primary: themeTokens.primary,
+  primaryDeep: themeTokens.fg,
+  primarySoft: themeTokens.surface1,
+  primaryBubble: themeTokens.primary,
+  gradient: [themeTokens.primary, themeTokens.fg] as const,
 
-  text: "#1A1A1A",
-  textEmphasis: PURE.black,
-  textMuted: "#555555",
-  textFaint: "#888888",
-  textHelper: PURE.taupe,
+  text: themeTokens.fg,
+  textEmphasis: themeTokens.fg,
+  textMuted: themeTokens.muted,
+  textFaint: themeTokens.muted,
+  textHelper: themeTokens.muted,
 
-  bg: PURE.lightGray,
-  surface: PURE.white,
-  surfaceAlt: "#F8F8F8",
-  border: "#E5E5E5",
+  bg: themeTokens.bg,
+  surface: themeTokens.surface,
+  surfaceAlt: themeTokens.surface1,
+  border: themeTokens.border,
 
-  accent: PURE.amber,
-  clay: PURE.clay,
-  accentSoft: "#F5F0E8",
-  surfaceTint: "#F8F8F8",
+  accent: themeTokens.accent,
+  clay: themeTokens.accent,
+  accentSoft: themeTokens.surface1,
+  surfaceTint: themeTokens.surface1,
 
-  danger: "#E74C3C",
-  warning: PURE.amber,
+  danger: themeTokens.destructive,
+  warning: themeTokens.warning,
   success: "#27AE60",
 
-  inputBg: PURE.white,
-  bubbleOther: "#F0F0F0",
-  timeBadge: PURE.darkGray,
+  inputBg: themeTokens.surface,
+  bubbleOther: themeTokens.surface1,
+  timeBadge: themeTokens.muted,
 
   white: PURE.white,
   black: PURE.black,
   scrim: "rgba(0,0,0,0.5)",
 
-  glassHighlight: PURE.white,
+  glassHighlight: themeTokens.surface,
   glassShadow: PURE.black,
 
   // Tab bar
-  tabBg: PURE.white,
-  tabActive: PURE.xuan,
-  tabInactive: "#999999",
-  tabBorder: "#E5E5E5",
+  tabBg: themeTokens.surface,
+  tabActive: themeTokens.primary,
+  tabInactive: themeTokens.muted,
+  tabBorder: themeTokens.border,
 } as const;
 
 export const spacing = { xxs:2, xs:4, sm:8, md:12, lg:16, xl:20, xxl:24, xxxl:32, huge:40 } as const;
