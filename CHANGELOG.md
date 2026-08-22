@@ -2,6 +2,36 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.2 (2026-08-22) — 桌面版双工作区完美分离
+
+### 架构调整：告别浏览器版，原生桌面双版本
+- **原生启动**：本地版/云端版均改为直接拉起 Electron 原生窗口（随机端口同源托管），
+  不再经过 tsx+vite 浏览器流程；`合鸣.bat` 与两个变体入口统一走
+  `desktop/launch-desktop.bat`
+- **工作区按版本分区**：userData 分区到 `editions/local` 与 `editions/cloud`——
+  数据库、config、secrets.json、Chromium 存储（登录态/localStorage）全部隔离，
+  彻底解决旧方案同源 localhost:5173 登录态互相污染的问题
+- **两版可同时运行**：单实例锁随 userData 分区作用域，本地版与云端版并存互不干扰
+  （AUMI 亦按版本区分，任务栏分组独立）
+- **版本驱动前端模式**：主进程经 additionalArguments 注入版本号，preload 暴露
+  `window.desktop.edition`；modeOverride 运行时优先——本地版强制 local（免登录），
+  云端版强制 multi（进登录页），同一构建产物两版行为正确
+- **历史数据迁移**：首次以本地版分区启动时，自动迁移旧 userData 根下的
+  config/data/secrets.json；云端版不迁移（业务数据在云端）
+- **无参启动**：沿用上次选择（记录在 edition.txt），默认本地版
+
+### 其他
+- 修复 CSP：connect-src 缺失分号导致 img-src 被吞（冒烟测试日志发现）
+- 新增 `pnpm start:local / start:cloud / dev:local / dev:cloud` 脚本
+- VERSION-MANAGEMENT.md 重写为原生桌面现实（移除过时的软链接/浏览器描述）
+
+### 验证
+- 双版本分别冒烟启动：各自分区目录生成、历史迁移执行、窗口加载、WS 连接正常
+- 两版随机端口（51999 / 12962）互不冲突
+- pnpm -r typecheck 全过
+
+**版本**：desktop 0.8.1 → 0.8.2
+
 ## v0.8.1 (2026-08-22) — 修复构建：重建 v0.8.0 未入库源码
 
 ### 问题

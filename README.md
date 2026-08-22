@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
 [![Mobile](https://img.shields.io/badge/Mobile-v0.9.3-blue)](#移动端)
-[![Desktop](https://img.shields.io/badge/Desktop-v0.8.1-green)](#桌面端)
+[![Desktop](https://img.shields.io/badge/Desktop-v0.8.2-green)](#桌面端)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passed-brightgreen)](#测试)
 
@@ -83,7 +83,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ## 版本管理
 
-项目分为两个独立版本，共享同一套源代码，配置和数据完全隔离：
+项目分为两个独立版本的**原生桌面应用**（Electron），共享同一套源代码；
+工作区按版本分区（数据库/配置/密钥/登录态各自独立），互不污染，可同时运行：
 
 | 版本 | 目录 | 用途 | 启动方式 |
 |------|------|------|----------|

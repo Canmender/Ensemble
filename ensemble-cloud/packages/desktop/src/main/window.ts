@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, ipcMain, app, shell, session } from "electron";
 import { join } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 import { IPC } from "../shared/ipc";
+import { EDITION_LABEL, type Edition } from "./edition";
 
 /** 读取持久化的云端主机（多端协作时允许跨域到云端 REST/WS） */
 function readCloudHost(): string {
@@ -16,7 +17,7 @@ function readCloudHost(): string {
   }
 }
 
-export function createWindow(loadUrl: string): BrowserWindow {
+export function createWindow(loadUrl: string, edition: Edition): BrowserWindow {
   const _ch = readCloudHost();
   const connectSrcCloud = _ch ? ("http://" + _ch + " ws://" + _ch + " ") : "";
   const isDev = !!process.env.RENDERER_URL;
@@ -25,7 +26,7 @@ export function createWindow(loadUrl: string): BrowserWindow {
     height: 860,
     minWidth: 960,
     minHeight: 600,
-    title: "合鸣",
+    title: `合鸣 · ${EDITION_LABEL[edition]}`,
     backgroundColor: "#f6f7f9",
     autoHideMenuBar: true,
     webPreferences: {
@@ -33,6 +34,8 @@ export function createWindow(loadUrl: string): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // 把版本注入 renderer 进程 argv，preload 据此暴露 window.desktop.edition
+      additionalArguments: [`--ensemble-edition=${edition}`],
     },
   });
 
@@ -48,14 +51,14 @@ export function createWindow(loadUrl: string): BrowserWindow {
       ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; " +
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; " +
         "style-src 'self' 'unsafe-inline'; " +
-        "connect-src 'self' ws://127.0.0.1:* ws://localhost:* http://localhost:* " + connectSrcCloud + 
+        "connect-src 'self' ws://127.0.0.1:* ws://localhost:* http://localhost:* " + connectSrcCloud + "; " +
         "img-src 'self' data:; " +
         "object-src 'none'; " +
         "base-uri 'self'"
       : "default-src 'self'; " +
         "script-src 'self'; " +
         "style-src 'self' 'unsafe-inline'; " +
-        "connect-src 'self' ws://127.0.0.1:* " + connectSrcCloud + 
+        "connect-src 'self' ws://127.0.0.1:* " + connectSrcCloud + "; " +
         "img-src 'self' data:; " +
         "object-src 'none'; " +
         "base-uri 'self'";

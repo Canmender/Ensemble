@@ -2,12 +2,19 @@ import { app, BrowserWindow, dialog, Menu, nativeImage, Tray } from "electron";
 import { join } from "node:path";
 import { startLocalServer } from "./server";
 import { createWindow, registerIpc } from "./window";
+import { applyEditionWorkspace, EDITION_LABEL, resolveEdition, type Edition } from "./edition";
 import { logger } from "@ensemble/server";
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let closeServer: (() => Promise<void>) | undefined;
 let isQuitting = false;
+
+// ---------- 版本分区（本地版/云端版）----------
+// 必须在单实例锁与 app.ready 之前执行：userData 分区到 editions/<edition>，
+// 数据库/配置/密钥/浏览器存储按版本隔离；锁随 userData 作用域，两版可同时运行。
+const edition: Edition = resolveEdition();
+applyEditionWorkspace(edition);
 
 const isDev = !app.isPackaged || !!process.env.RENDERER_URL;
 
@@ -17,7 +24,7 @@ app.commandLine.appendSwitch("enable-gpu-rasterization");
 // 零拷贝：GPU 直接渲染到屏幕缓冲区，减少内存拷贝
 app.commandLine.appendSwitch("enable-zero-copy");
 
-// ---------- 单实例锁（防多开，激活已运行窗口） ----------
+// ---------- 单实例锁（防多开，激活已运行窗口；按版本隔离，见上方分区注释） ----------
 if (!app.requestSingleInstanceLock()) {
   // 已有实例在运行：立即退出（不继续初始化，避免双实例）
   app.quit();
@@ -64,10 +71,10 @@ function createTray(): void {
     : join(__dirname, "../../build/icon.png");
   const icon = nativeImage.createFromPath(iconPath);
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon);
-  tray.setToolTip("合鸣");
+  tray.setToolTip(`合鸣 · ${EDITION_LABEL[edition]}`);
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: "显示合鸣", click: () => showMainWindow() },
+      { label: `显示合鸣（${EDITION_LABEL[edition]}）`, click: () => showMainWindow() },
       { type: "separator" },
       {
         label: "退出",
@@ -88,12 +95,12 @@ function showMainWindow(): void {
 }
 
 app.whenReady().then(async () => {
-  // 原生窗口行为（Windows）
-  app.setAppUserModelId("com.ensemble.system");
+  // 原生窗口行为（Windows）；AUMI 按版本区分，任务栏分组/跳转列表互不混淆
+  app.setAppUserModelId(`com.ensemble.system.${edition}`);
 
   try {
     const url = await bootstrap();
-    mainWindow = createWindow(url);
+    mainWindow = createWindow(url, edition);
     mainWindow.on("close", (e) => {
       // 关闭窗口即退出（不残留后台）；若托盘退出则直接关
       if (!isQuitting) isQuitting = true;
@@ -123,7 +130,7 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0 && !isDev) {
       void bootstrap().then((url) => {
-        mainWindow = createWindow(url);
+        mainWindow = createWindow(url, edition);
       });
     }
   });
