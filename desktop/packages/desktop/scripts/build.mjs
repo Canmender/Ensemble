@@ -9,7 +9,7 @@ const sharedSrc = resolve(root, "../shared/src/index.ts");
 const common = {
   bundle: true,
   platform: "node",
-  external: ["electron", "node-llama-cpp"],
+  external: ["electron"],
   alias: {
     "@ensemble/server": serverSrc,
     "@ensemble/shared": sharedSrc,

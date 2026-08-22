@@ -10,6 +10,7 @@ asar: true
 files:
   - dist/**
   - package.json
+  - "!node_modules/**"
 win:
   icon: build/icon.png
   target:

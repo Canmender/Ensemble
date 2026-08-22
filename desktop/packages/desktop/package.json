@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/desktop",
-  "version": "0.8.11",
+  "version": "0.8.16",
   "private": true,
   "description": "合鸣 桌面应用（Electron 壳）",
   "main": "./dist/main/index.cjs",
@@ -21,8 +21,7 @@
   },
   "dependencies": {
     "@ensemble/server": "workspace:*",
-    "@ensemble/shared": "workspace:*",
-    "node-llama-cpp": "^3.0.0"
+    "@ensemble/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
