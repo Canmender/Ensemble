@@ -49,3 +49,10 @@ export const DarkTheme: EnsembleTheme = {
   success: "#34D399",
   warning: "#FBBF24",
 };
+
+/** 弹簧动画参数（damping/stiffness），与 web 端 CSS 曲线近似对应 */
+export const springs = {
+  universal: { damping: 25, stiffness: 250 },
+  snappy: { damping: 15, stiffness: 400 },
+  gentleEntry: { damping: 30, stiffness: 200 },
+} as const;

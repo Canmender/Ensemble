@@ -65,9 +65,14 @@ const tsObject = (theme) =>
     const hex = semRef(semantic[theme][name]);
     return `  ${name.replace(/-([a-z])/g, (_, c) => c.toUpperCase())}: "${hex}",`;
   }).join("\n");
+const springEntries = Object.entries(tokens.primitive.spring)
+  .filter(([k, v]) => !k.startsWith("$") && v?.damping != null)
+  .map(([k, v]) => `  ${k}: { damping: ${v.damping}, stiffness: ${v.stiffness} },`)
+  .join("\n");
+const camelNames = names.map((n) => n.replace(/-([a-z])/g, (_, c) => c.toUpperCase()));
 const ts = `// 由 desktop/scripts/build-tokens.mjs 从 design/tokens.json 自动生成 —— 手改无效
 export interface EnsembleTheme {
-${names.map((n) => `  ${n.replace(/-([a-z])/g, (_, c) => c.toUpperCase())}: string;`).join("\n")}
+${camelNames.map((n) => `  ${n}: string;`).join("\n")}
 }
 
 export const LightTheme: EnsembleTheme = {
@@ -77,6 +82,11 @@ ${tsObject("light")}
 export const DarkTheme: EnsembleTheme = {
 ${tsObject("dark")}
 };
+
+/** 弹簧动画参数（damping/stiffness），与 web 端 CSS 曲线近似对应 */
+export const springs = {
+${springEntries}
+} as const;
 `;
 // 输出到移动端仓库目录。desktop 的上一级即仓库根（主 checkout 与 .claude/worktrees/* 均成立）；
 // 目录不存在（如独立检出 desktop）时报错并提示，不静默。
