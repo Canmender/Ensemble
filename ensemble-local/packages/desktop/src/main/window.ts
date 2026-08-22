@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, app, shell, session } from "electron";
+import { BrowserWindow, dialog, ipcMain, app, shell, session, net } from "electron";
 import { join } from "node:path";
 import { readFileSync, existsSync } from "node:fs";
 import { IPC } from "../shared/ipc";
@@ -100,6 +100,24 @@ export function createWindow(loadUrl: string, edition: Edition): BrowserWindow {
 
 export function registerIpc(): void {
   ipcMain.handle(IPC.appVersion, () => app.getVersion());
+
+  // 云端地址连通性测试：主进程发起（渲染层 CSP 白名单在窗口创建时固化，
+  // 首启引导输入的新地址不在其中，故经 IPC 由主进程探测）
+  ipcMain.handle(IPC.testCloudHost, async (_e, rawHost: unknown) => {
+    const host = typeof rawHost === "string" ? rawHost.trim().replace(/\/+$/, "") : "";
+    if (!host) return { ok: false, error: "地址为空" };
+    const base = /^https?:\/\//i.test(host) ? host : `http://${host}`;
+    try {
+      const res = await net.fetch(`${base}/api/health`, { signal: AbortSignal.timeout(6000) });
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+      const json = (await res.json()) as { data?: { status?: string } };
+      if (json?.data?.status === "ok") return { ok: true };
+      return { ok: false, error: "响应不是合鸣服务器" };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message || "连接失败" };
+    }
+  });
+
   ipcMain.handle(IPC.openConfigDir, async () => {
     const dir = app.getPath("userData");
     await shell.openPath(dir);

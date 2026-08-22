@@ -167,7 +167,6 @@ CREATE INDEX IF NOT EXISTS idx_runs_task ON runs(task_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run ON run_events(run_id);
 CREATE INDEX IF NOT EXISTS idx_chat_run ON chat_messages(run_id);
-CREATE INDEX IF NOT EXISTS idx_chat_run_seq ON chat_messages(run_id, seq);
 CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run_agent ON jobs(run_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run_job ON run_events(run_id, job_id);
@@ -283,6 +282,7 @@ function migrateUserColumns(db: DatabaseSync): void {
   }
   // chat_messages.seq（会话内单调序号：可靠排序 / 断线补拉游标）。
   // 旧库补列；存量行按 (ts, rowid) 回填——时间戳同毫秒不稳定，rowid 作次级键保证确定性。
+  // 注意：seq 索引必须在补列之后创建（INIT_SQL 阶段旧库尚无该列）。
   const cmSeqCols = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
   if (!cmSeqCols.some((c) => c.name === "seq")) {
     db.exec("ALTER TABLE chat_messages ADD COLUMN seq INTEGER");
@@ -295,4 +295,5 @@ function migrateUserColumns(db: DatabaseSync): void {
         AND (c2.ts < chat_messages.ts OR (c2.ts = chat_messages.ts AND c2.rowid <= chat_messages.rowid))
     )`);
   }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_chat_run_seq ON chat_messages(run_id, seq)");
 }

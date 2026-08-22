@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   Bot, Brain, HelpCircle, LayoutDashboard, MessageSquare, Monitor, Moon, Settings, Sun, Users,
@@ -31,6 +31,7 @@ const RegisterPage = lazy(() => import("./pages/RegisterPage"));
 const ModeLandingPage = lazy(() => import("./pages/ModeLandingPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const TokenUsagePage = lazy(() => import("./pages/TokenUsagePage"));
+const CloudSetupPage = lazy(() => import("./pages/CloudSetupPage"));
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
@@ -121,6 +122,27 @@ export default function App() {
   const [serverOk, setServerOk] = useState<boolean | null>(null);
   const [agentCount, setAgentCount] = useState(0);
   const [showAssistant, setShowAssistant] = useState(false);
+
+  // 云端版首启引导：未配置云端地址时先走连接向导（顶部读取，避免 hooks 顺序问题）
+  const forcedTop = getForcedMode();
+  const storeMode = useMode();
+  const isMultiGuest = (forcedTop ?? storeMode) === "multi" && state.status === "guest";
+  const [cloudReady, setCloudReady] = useState<boolean | null>(null);
+
+  const checkCloudConfigured = useCallback(async (): Promise<void> => {
+    try {
+      const res = await fetch("/api/settings");
+      const json = (await res.json()) as { data?: { cloudHost?: string } };
+      setCloudReady(!!json?.data?.cloudHost);
+    } catch {
+      setCloudReady(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isMultiGuest) return;
+    void checkCloudConfigured();
+  }, [isMultiGuest, checkCloudConfigured]);
 
   useEffect(() => {
     wsClient.connect();
@@ -241,8 +263,17 @@ export default function App() {
     );
   }
   
-  // 云端模式：未登录则跳转登录页
+  // 云端模式：未登录则跳转登录页（云端版首启：先完成地址配置向导）
   if (state.status === "guest") {
+    if (isMultiGuest && cloudReady !== true) {
+      return (
+        <ErrorBoundary>
+          <Suspense fallback={<PageLoading />}>
+            {cloudReady === null ? <PageLoading /> : <CloudSetupPage onDone={() => void checkCloudConfigured()} />}
+          </Suspense>
+        </ErrorBoundary>
+      );
+    }
     if (!onAuthPage) return <Navigate to="/login" replace />;
     return (
       <ErrorBoundary>

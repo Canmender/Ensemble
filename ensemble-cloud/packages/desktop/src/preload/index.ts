@@ -15,6 +15,9 @@ contextBridge.exposeInMainWorld("desktop", {
   /** 当前版本：local=本地版 / cloud=云端版 */
   edition,
   editionLabel: EDITION_LABEL[edition],
+  /** 云端地址连通性测试（主进程 net.fetch，绕开渲染层 CSP） */
+  testCloudHost: (host: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke(IPC.testCloudHost, host),
   /** 工具执行确认对话框（P2 工具安全用） */
   confirmTool: (tool: string, args: unknown): Promise<boolean> =>
     ipcRenderer.invoke(IPC.confirmTool, { tool, args }),
