@@ -316,6 +316,67 @@ function AttachmentView({ att, content }: { att: MessageAttachment; content?: st
   );
 }
 
+/**
+ * 消息气泡变体（调研《UI组件层调研》：气泡表面 ≠ 消息容器）。
+ * - mine：自己发言，主色实心
+ * - theirs：他人/系统发言，muted 表面
+ * - agent：群聊中 agent 发言，按身份 tint 区分（身份色从 agentId 稳定散列）
+ * - ai-ghost：AI 助手消息趋向无框全宽 ghost 形态（弱化表面、强调内容）
+ */
+type BubbleVariant = "mine" | "theirs" | "agent" | "ai-ghost";
+
+/** agentId → 身份 tint 色（稳定散列到固定色板；与调研建议的多 agent 身份色一致） */
+const AGENT_TINTS = [
+  "bg-violet-500/10 text-violet-600 dark:text-violet-300",
+  "bg-sky-500/10 text-sky-600 dark:text-sky-300",
+  "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
+  "bg-amber-500/10 text-amber-600 dark:text-amber-300",
+  "bg-rose-500/10 text-rose-600 dark:text-rose-300",
+];
+export function agentTint(agentId: string): string {
+  let h = 0;
+  for (let i = 0; i < agentId.length; i++) h = (h * 31 + agentId.charCodeAt(i)) >>> 0;
+  return AGENT_TINTS[h % AGENT_TINTS.length];
+}
+
+/** Bubble 表面：内容载体，按变体着形。children 即消息内容区。 */
+function Bubble({ variant, tint, children }: {
+  variant: BubbleVariant;
+  tint?: string;
+  children: React.ReactNode;
+}) {
+  if (variant === "ai-ghost") {
+    // AI 助手 ghost 形态：无框全宽、左侧细线标识来源，视觉重心在内容
+    return (
+      <div className={cls("w-full rounded-xl border-l-2 px-4 py-2.5", tint ?? "border-primary bg-muted/5")}>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <div
+      className={cls(
+        "relative max-w-[70%] rounded-2xl px-4 py-2.5",
+        variant === "mine" && "bg-primary text-primary-fg rounded-br-md",
+        variant === "theirs" && "bg-muted/20 text-fg rounded-bl-md",
+        variant === "agent" && cls("rounded-bl-md", tint ?? agentTint("agent")),
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** 判定消息的气泡变体（Message 容器层调用；分层接口对移动端同样适用） */
+function bubbleVariantOf(msg: ChatMessage, contact: Contact, meId?: string): BubbleVariant {
+  if (msg.sender === "user") return "mine";
+  // AI 助手 ghost：agent 会话（1:1 与智能体对话）中的助手回复
+  if (contact.type === "agent") return "ai-ghost";
+  // 群聊中的 agent 发言 → 身份 tint；其余（用户会话对方 / 设备）→ theirs
+  if (contact.type === "group" && msg.agentId && msg.agentId !== meId) return "agent";
+  return "theirs";
+}
+
 /** 语音消息气泡：显示时长 + 播放按钮（播放移动端上传的 m4a，[语音 Xs] 内容） */
 function VoiceBubble({ url, durationText, isUser }: { url?: string; durationText?: string; isUser: boolean }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -1216,82 +1277,83 @@ export default function ChatPage() {
                   </div>
                 </div>
               ) : (
-                messages.map((msg) => (
+                messages.map((msg) => {
+                  const variant = bubbleVariantOf(msg, activeContact, me?.id);
+                  const tint = variant === "agent" && msg.agentId ? agentTint(msg.agentId) : undefined;
+                  const isMine = msg.sender === "user";
+                  return (
                   <div
                     key={msg.id}
                     className={cls(
                       "group relative flex",
-                      msg.sender === "user" ? "justify-end" : "justify-start",
+                      isMine ? "justify-end" : "justify-start",
                     )}
                   >
-                    <div
-                      className={cls(
-                        "relative max-w-[70%] rounded-2xl px-4 py-2.5",
-                        msg.sender === "user"
-                          ? "bg-primary text-primary-fg rounded-br-md"
-                          : "bg-muted/20 text-fg rounded-bl-md",
-                      )}
-                    >
+                    <div className="flex items-start gap-2 min-w-0">
                       {multiSelect && (
                         <button
                           onClick={() => toggleSelectMsg(msg.id)}
-                          className={cls("absolute -left-8 top-1/2 -translate-y-1/2 flex h-5 w-5 items-center justify-center rounded-full border transition-colors",
+                          className={cls("self-center flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
                             selectedMsgs.has(msg.id) ? "border-primary bg-primary text-primary-fg" : "border-muted bg-surface")}
                         >
                           {selectedMsgs.has(msg.id) && "✓"}
                         </button>
                       )}
-                      {msg.deleted ? (
-                        <div className="text-sm italic opacity-60">消息已撤回</div>
-                      ) : (
-                        <>
-                          {msg.replyTo && (
-                            <div className={cls("mb-1 rounded-md px-2 py-1 text-xs opacity-80 border-l-2", msg.sender === "user" ? "border-primary-fg/60 bg-primary-fg/10" : "border-primary bg-primary/5")}>
-                              <div className="font-medium">{msg.replyTo.senderName || "引用"}：</div>
-                              <div className="truncate max-w-full">{msg.replyTo.content}</div>
-                            </div>
-                          )}
-                          {(activeContact.type === "group" || activeContact.type === "user") && msg.agentId && msg.agentId !== "user" && msg.agentId !== me?.id && (
-                            <div className="mb-1 text-[11px] font-semibold text-violet-600">
-                              {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
-                            </div>
-                          )}
-                          {msg.attachment && <AttachmentView att={msg.attachment} content={msg.content} />}
-                          {msg.content && <div className="whitespace-pre-wrap text-sm leading-relaxed">{renderContent(msg.content)}</div>}
-                        </>
-                      )}
-                      <div className={cls(
-                        "mt-1 flex items-center gap-2",
-                        msg.sender === "user" ? "justify-end" : "justify-start",
-                      )}>
-                        <span className={cls(
-                          "text-[10px]",
-                          msg.sender === "user" ? "text-primary-fg/70" : "text-muted",
-                        )}>
-                          {new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                        {!msg.deleted && (
+                      {/* Bubble 表面 */}
+                      <Bubble variant={variant} tint={tint}>
+                        {msg.deleted ? (
+                          <div className="text-sm italic opacity-60">消息已撤回</div>
+                        ) : (
                           <>
-                            <button onClick={() => startQuote(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="引用回复">引用</button>
-                            <button onClick={() => openForward(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="转发">转发</button>
+                            {msg.replyTo && (
+                              <div className={cls("mb-1 rounded-md px-2 py-1 text-xs opacity-80 border-l-2", isMine ? "border-primary-fg/60 bg-primary-fg/10" : "border-current/30 bg-black/5")}>
+                                <div className="font-medium">{msg.replyTo.senderName || "引用"}：</div>
+                                <div className="truncate max-w-full">{msg.replyTo.content}</div>
+                              </div>
+                            )}
+                            {(activeContact.type === "group" || activeContact.type === "user") && msg.agentId && msg.agentId !== "user" && msg.agentId !== me?.id && (
+                              <div className={cls("mb-1 text-[11px] font-semibold", variant === "ai-ghost" ? "text-muted" : "opacity-90")}>
+                                {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
+                              </div>
+                            )}
+                            {msg.attachment && <AttachmentView att={msg.attachment} content={msg.content} />}
+                            {msg.content && <div className={cls("whitespace-pre-wrap leading-relaxed", variant === "ai-ghost" ? "text-sm text-fg" : "text-sm")}>{renderContent(msg.content)}</div>}
                           </>
                         )}
-                        {msg.sender === "user" && !msg.deleted && activeContact?.convId && (
-                          <button
-                            onClick={() => void recallMessage(msg)}
-                            className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
-                            title="撤回消息"
-                          >
-                            撤回
-                          </button>
-                        )}
-                        {msg.sender === "user" && peerReadTs !== undefined && msg.timestamp <= peerReadTs && (
-                          <span className="text-[10px] font-semibold text-primary">已读</span>
-                        )}
-                      </div>
+                        <div className={cls(
+                          "mt-1 flex items-center gap-2",
+                          isMine ? "justify-end" : "justify-start",
+                        )}>
+                          <span className={cls(
+                            "text-[10px]",
+                            isMine ? "text-primary-fg/70" : "text-muted",
+                          )}>
+                            {new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          {!msg.deleted && (
+                            <>
+                              <button onClick={() => startQuote(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="引用回复">引用</button>
+                              <button onClick={() => openForward(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="转发">转发</button>
+                            </>
+                          )}
+                          {isMine && !msg.deleted && activeContact?.convId && (
+                            <button
+                              onClick={() => void recallMessage(msg)}
+                              className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
+                              title="撤回消息"
+                            >
+                              撤回
+                            </button>
+                          )}
+                          {isMine && peerReadTs !== undefined && msg.timestamp <= peerReadTs && (
+                            <span className="text-[10px] font-semibold text-primary">已读</span>
+                          )}
+                        </div>
+                      </Bubble>
                     </div>
                   </div>
-                ))
+                  );
+                })
               )}
               {/* 群聊运行中提示 */}
               {activeContact.type === "group" && groupLive?.status === "running" && (
