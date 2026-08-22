@@ -17,6 +17,9 @@ import { ContactInfoDialog } from "../components/ContactInfoDialog";
 import { FriendsDialog } from "../components/FriendsDialog";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
+import {
+  canEncryptWith, encryptMessage, decryptMessage, isE2eContent, DECRYPT_FAILED_PLACEHOLDER,
+} from "../lib/e2e";
 import { useRunStore } from "../store/runs";
 import { loadRunDetail } from "../lib/loadRunDetail";
 import { useAuth } from "../lib/auth";
@@ -355,6 +358,29 @@ export default function ChatPage() {
   const [singleMessages, setSingleMessages] = useState<Record<string, ChatMessage[]>>({});
   // 企业级会话历史（conversations API，原始数据；方向/昵称在渲染时解析）
   const [convHistory, setConvHistory] = useState<Record<string, Array<{ id: string; content: string; agentId?: string; role: string; ts: string; attachment?: MessageAttachment; deleted?: boolean; replyTo?: { id: string; content: string } }>>>({});
+
+  // ---- E2E 解密缓存（1:1 用户私聊；信封 content → 明文）----
+  // 渲染层查表：命中显示明文，未命中显示占位并触发异步解密回填
+  const [e2ePlain, setE2ePlain] = useState<Record<string, string>>({});
+  const e2eDecrypting = useRef(new Set<string>());
+  function resolveE2e(peerId: string | undefined, content: string): string {
+    if (!peerId || !isE2eContent(content)) return content;
+    const hit = e2ePlain[content];
+    if (hit !== undefined) return hit;
+    if (!e2eDecrypting.current.has(content)) {
+      e2eDecrypting.current.add(content);
+      void decryptMessage(peerId, content).then((plain) => {
+        setE2ePlain((prev) => ({ ...prev, [content]: plain }));
+        e2eDecrypting.current.delete(content);
+      });
+    }
+    return DECRYPT_FAILED_PLACEHOLDER;
+  }
+  // 当前用户会话的对端 id（1:1 direct 会话参与者中非自己的那个）
+  const e2ePeerId = useMemo(() => {
+    if (activeContact?.type !== "user") return undefined;
+    return activeContact.participantIds?.find((p) => p !== me?.id);
+  }, [activeContact?.type, activeContact?.id, activeContact?.participantIds, me?.id]);
   // 各参与者最后已读时间（已读回执）
   const [convReaders, setConvReaders] = useState<Record<string, Array<{ userId: string; readTs?: string }>>>({});
   const [users, setUsers] = useState<UserInfo[]>([]);
@@ -513,7 +539,7 @@ export default function ChatPage() {
       const history: ChatMessage[] = rawHistory.map((m) => ({
         id: m.id,
         contactId: activeContact.id,
-        content: m.content,
+        content: resolveE2e(e2ePeerId, m.content),
         sender: isUserConv
           ? (m.agentId === me?.id ? "user" as const : "assistant" as const)
           : (m.role === "user" ? "user" as const : "assistant" as const),
@@ -533,7 +559,7 @@ export default function ChatPage() {
       const live: ChatMessage[] = deduped.map((m, i) => ({
         id: `live-${i}`,
         contactId: activeContact.id,
-        content: m.content,
+        content: resolveE2e(e2ePeerId, m.content),
         sender: m.agentId === me?.id || m.agentId === "user" ? "user" as const : "assistant" as const,
         agentId: m.agentId,
         senderName: isUserConv && m.agentId ? userName(usersById, m.agentId) : undefined,
@@ -560,7 +586,7 @@ export default function ChatPage() {
       }));
     }
     return singleMessages[activeContact?.id ?? ""] ?? [];
-  }, [activeContact?.type, activeContact?.id, activeContact?.convId, groupMessages, singleMessages, convHistory, me?.id, usersById]);
+  }, [activeContact?.type, activeContact?.id, activeContact?.convId, groupMessages, singleMessages, convHistory, me?.id, usersById, e2ePeerId, e2ePlain]);
 
   // 加载联系人
   useEffect(() => {
@@ -620,6 +646,12 @@ export default function ChatPage() {
       }
     });
   }, [loadConvHistory]);
+
+  // E2E 懒注册：登录用户首次进入聊天页时生成/上传密钥（幂等；失败静默，收发自动回退明文）
+  useEffect(() => {
+    if (authState.status !== "authenticated") return;
+    void import("../lib/e2e").then((m) => m.ensureEnrolled()).catch(() => {});
+  }, [authState.status]);
 
   // 切换联系人：订阅 WebSocket + 加载历史消息
   useEffect(() => {
@@ -853,6 +885,19 @@ export default function ChatPage() {
     };
 
     try {
+      // 1:1 用户私聊 E2E：双方都已注册密钥 → 加密信封作为 content（协议 §4）
+      const peerId = activeContact.participantIds?.find((p) => p !== me?.id);
+      let contentToSend = text;
+      if (activeContact.type === "user" && peerId && !draftAttachment) {
+        try {
+          if (await canEncryptWith(peerId)) {
+            contentToSend = await encryptMessage(peerId, text);
+          }
+        } catch {
+          /* 建会话/加密失败 → 回退明文，不阻断消息 */
+        }
+      }
+
       if (activeContact.convId) {
         // 企业级会话（群聊 / 用户-用户）：落库 + 广播
         const store = useRunStore.getState();
@@ -863,7 +908,7 @@ export default function ChatPage() {
           attachment: draftAttachment as { type: "image" | "file"; name: string; size: number; mime?: string; url: string } | undefined,
         });
         void api.post(`/conversations/${activeContact.convId}/messages`, {
-          content: text,
+          content: contentToSend,
           ...(draftAttachment ? { attachment: draftAttachment } : {}),
           ...(replyTo ? { replyTo: { id: replyTo.id, content: replyTo.content.slice(0, 120) } } : {}),
           mentions: parseMentions(text, activeContact.participantIds ?? []),
@@ -883,7 +928,7 @@ export default function ChatPage() {
           participantIds: activeContact.participantIds,
         });
         await api.post(`/conversations/${conv.id}/messages`, {
-          content: text,
+          content: contentToSend,
           ...(draftAttachment ? { attachment: draftAttachment } : {}),
           ...(replyTo ? { replyTo: { id: replyTo.id, content: replyTo.content.slice(0, 120) } } : {}),
           mentions: parseMentions(text, activeContact.participantIds ?? []),

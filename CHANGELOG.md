@@ -2,6 +2,26 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.7 (2026-08-22) — 联机方向③续：E2E 桌面客户端接线
+
+按 E2E-PROTOCOL.md 完成桌面端加解密全链路：
+
+- **lib/e2e.ts**：libsignal 封装模块——localStorage 协议存储适配器（identity/prekey/
+  signed-prekey/session）、`ensureEnrolled()` 懒注册（IK+SPK+OPK×100，幂等）、
+  capability 缓存（5 分钟 TTL）、`encryptMessage()/decryptMessage()` 信封收发、
+  OPK 余量低于 20 自动补充 100。
+- **ChatPage 接线**：
+  - 发送：1:1 用户私聊且双方已注册密钥 → content 换成加密信封；建会话失败自动
+    回退明文（灰度共存，不阻断）
+  - 接收/历史：渲染层解密缓存（信封 → 明文查表，未命中异步解密回填）；
+    解密失败显示「🔒 无法解密的消息」占位，绝不报错
+  - 进入聊天页触发懒注册（登录用户，静默）
+- **自测脚本 scripts/e2e-selftest.mjs**：Node 下用真实 libsignal+WebCrypto 复刻
+  封装调用序列——X3DH 建会话（PreKeyWhisperMessage type 3）→ 中文往返
+  （WhisperMessage type 1）→ 连续多棘轮步进，全部通过。
+
+**版本**：desktop 0.8.6 → 0.8.7
+
 ## v0.8.6 (2026-08-22) — 联机方向①：双安装包（electron-builder）
 
 - **双包并行**：新增 `electron-builder.cloud.yml`，与默认 yml 的差异仅为
