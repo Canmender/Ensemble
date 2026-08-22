@@ -76,37 +76,43 @@ function createWriteRateLimiter(windowMs: number = 60_000, max: number = 60) {
   return middleware;
 }
 
+/**
+ * CORS 源白名单判定：
+ * - 本机开发端口（localhost / 127.0.0.1 任意端口，Vite dev server 等）
+ * - 云端部署自身地址（ctx.env.cloudHost，供浏览器版跨域直连云端）
+ * 其余一律不回 CORS 头（浏览器侧被同源策略拦截；非浏览器客户端不受影响）。
+ */
+export function isAllowedOrigin(origin: string, cloudHost?: string): boolean {
+  if (!/^https?:\/\//i.test(origin)) return false;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return true;
+  const ch = cloudHost?.trim().replace(/\/+$/, "");
+  if (ch && origin.toLowerCase() === `http://${ch.toLowerCase()}`) return true;
+  return false;
+}
+
 export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express.Express {
   const app = express();
-  
-  // CORS 中间件：允许跨域请求（桌面端开发模式需要）
+
+  // CORS 中间件：仅白名单源（本机开发端口 + 云端自身地址）
   app.use((req, res, next) => {
     const origin = req.headers.origin;
-    // 允许本地开发服务器和云端服务器
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://localhost:8787',
-      'http://127.0.0.1:8787'
-    ];
-    
-    if (origin && (allowedOrigins.includes(origin) || origin.startsWith('http://'))) {
+    if (origin && isAllowedOrigin(origin, ctx.env.cloudHost)) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
       res.setHeader('Access-Control-Allow-Credentials', 'true');
       res.setHeader('Access-Control-Max-Age', '86400');
     }
-    
+
     // 处理预检请求
     if (req.method === 'OPTIONS') {
       res.status(200).end();
       return;
     }
-    
+
     next();
   });
-  
+
   // 25MB：支持聊天图片/文件的 base64 上传（膨胀 ~33%，20MB 文件上限）
   app.use(express.json({ limit: "150mb" }));
 

@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
 [![Mobile](https://img.shields.io/badge/Mobile-v0.9.3-blue)](#移动端)
-[![Desktop](https://img.shields.io/badge/Desktop-v0.8.2-green)](#桌面端)
+[![Desktop](https://img.shields.io/badge/Desktop-v0.8.9-green)](#桌面端)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passed-brightgreen)](#测试)
 
@@ -98,19 +98,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 .
 ├── 合鸣.bat                    # 版本选择启动器
-├── ensemble-local/             # 本地版（完全隔离）
-│   ├── .env                    # 本地配置
-│   ├── start.bat               # 启动脚本
-│   ├── packages/ → desktop/    # 源代码（软链接）
-│   ├── config/                 # 独立配置
-│   └── data/                   # 独立数据
-├── ensemble-cloud/             # 云端版（完全隔离）
-│   ├── .env                    # 云端配置
-│   ├── start.bat               # 启动脚本
-│   ├── packages/ → desktop/    # 源代码（软链接）
-│   ├── config/                 # 独立配置
-│   └── data/                   # 独立数据
-├── desktop/                    # 桌面应用（主开发目录）
+├── ensemble-local/             # 本地版入口（start.bat → 原生桌面 local）
+├── ensemble-cloud/             # 云端版入口（start.bat → 原生桌面 cloud）
+├── desktop/                    # 桌面应用（主开发目录 + 原生启动）
+│   ├── launch-desktop.bat      # 统一启动入口（构建并拉起 Electron）
 │   ├── packages/
 │   │   ├── shared/             # 共享类型 + Zod schema
 │   │   ├── server/             # 引擎核心

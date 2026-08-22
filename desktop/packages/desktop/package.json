@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/desktop",
-  "version": "0.8.7",
+  "version": "0.8.9",
   "private": true,
   "description": "合鸣 桌面应用（Electron 壳）",
   "main": "./dist/main/index.cjs",
@@ -27,7 +27,7 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "cross-env": "^7.0.3",
-    "electron": "^43.0.0",
+    "electron": "43.3.0",
     "electron-builder": "^26.0.0",
     "esbuild": "^0.28.0",
     "typescript": "^5.5.0"

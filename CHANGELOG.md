@@ -2,6 +2,18 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.9 (2026-08-22) — 联机收尾：CORS 收紧 + 变体拷贝出库
+
+- **CORS 收紧**：移除「任意 http:// origin 放行」的兜底（安全审计遗留项），
+  改为白名单判定 `isAllowedOrigin()`——本机任意端口（开发用 Vite/8787）+
+  云端自身地址（env.cloudHost）。新增 4 个单元测试覆盖。
+- **变体 packages 拷贝出库**：`ensemble-local/packages/`、`ensemble-cloud/packages/`
+  从 git 移除并 gitignore（约 -400 文件）。v0.8.2 起两版已统一从 `desktop/`
+  启动原生 Electron，双份源码拷贝是纯维护负担（每轮改动要手动同步三处）；
+  变体目录仅保留 start.bat 入口。README 项目结构同步更正。
+
+**版本**：desktop 0.8.8 → 0.8.9
+
 ## v0.8.8 (2026-08-22) — E2E 信封 base64 编码修复（双端互通前置）
 
 移动端联调前审查发现信封编码缺陷，桌面端同步修正：
