@@ -8,7 +8,7 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
-    version: "v0.9.1",
+    version: "v0.9.4",
     date: "2026-08-22",
     changes: [
       "新增视频通话：扩展栏「视频通话」发起，远端全屏 + 本地画中画",
