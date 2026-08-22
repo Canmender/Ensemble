@@ -2,6 +2,20 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.10 (2026-08-22) — 聊天历史 afterSeq 增量补拉（服务端裁剪）
+
+- `listChatMessages` 新增 afterSeq 参数：SQL 层 `COALESCE(seq, 0) > N` 裁剪，
+  非法值（NaN/负数）安全降级为全量。
+- 三个历史端点透传 `?afterSeq=`：GET /api/chat/:runId/messages、
+  /api/chat/history/:runId、/api/conversations/:id/messages——客户端凭本地
+  seq 游标只拉增量，长会话不再全量传输。与 userId 过滤正确叠加
+  （无 userId 的共享消息对所有参与者可见）。
+- 配合移动端 wslink seq 游标（v0.9.6 已就绪的消费侧）。
+
+**验证**：server typecheck 通过，157 测试全过（新增游标/降级/叠加用例）。
+
+**版本**：desktop 0.8.9 → 0.8.10
+
 ## v0.8.9 (2026-08-22) — 联机收尾：CORS 收紧 + 变体拷贝出库
 
 - **CORS 收紧**：移除「任意 http:// origin 放行」的兜底（安全审计遗留项），
