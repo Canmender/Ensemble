@@ -8,6 +8,17 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.1",
+    date: "2026-08-22",
+    changes: [
+      "新增视频通话：扩展栏「视频通话」发起，远端全屏 + 本地画中画",
+      "通话中支持静音 / 开关摄像头 / 前后摄像头翻转",
+      "语音通话新增静音按钮",
+      "摄像头不可用时自动降级为语音通话",
+      "修复 AI 助手接口调用方式与设置页图标名",
+    ],
+  },
+  {
     version: "v0.8.21",
     date: "2026-08-17",
     changes: [

@@ -26,7 +26,7 @@ import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.9.0";
+const APP_VERSION = nativeApplicationVersion ?? "0.9.1";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
@@ -130,7 +130,7 @@ export default function SettingsPage() {
       onPress: () => navigation.navigate("SettingsLLM"),
     },
     {
-      icon: "brain-outline" as const,
+      icon: "library-outline" as const,
       title: "记忆管理",
       desc: "查看和管理智能体记忆",
       onPress: () => navigation.navigate("SettingsMemory"),

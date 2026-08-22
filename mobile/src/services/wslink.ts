@@ -33,6 +33,8 @@ export interface CallSignal {
   kind: "offer" | "answer" | "candidate" | "hangup" | "accept" | "reject" | "calling";
   sdp?: string;
   candidate?: unknown;
+  /** 视频通话标记（随 offer 携带；缺省为语音通话） */
+  video?: boolean;
   from?: { userId: string; name?: string };
   target?: { userId: string };
 }

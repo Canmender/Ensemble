@@ -1108,7 +1108,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         </View>
       )}
 
-      {/* 「+」扩展栏：语音通话 / 相册 / 视频 / 文件 */}
+      {/* 「+」扩展栏：语音通话 / 视频通话 / 相册 / 视频 / 文件 */}
       {showExtend && (
         <View style={styles.extendBar}>
           {canSendAttachment && (
@@ -1124,6 +1124,21 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                 <Ionicons name="call" size={24} color={colors.success} />
               </View>
               <Text style={styles.extendLabel}>语音通话</Text>
+            </TouchableOpacity>
+          )}
+          {canSendAttachment && (
+            <TouchableOpacity
+              style={styles.extendItem}
+              onPress={() => {
+                const peer = callPeer(conv);
+                if (peer) void startCall(peer, { video: true });
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.extendIcon}>
+                <Ionicons name="videocam" size={24} color={colors.success} />
+              </View>
+              <Text style={styles.extendLabel}>视频通话</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.extendItem} onPress={pickImage} disabled={!canSendAttachment || uploading || isSending} activeOpacity={0.7}>

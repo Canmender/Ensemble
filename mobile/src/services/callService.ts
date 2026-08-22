@@ -1,8 +1,9 @@
 /**
- * 语音通话服务 —— WebRTC + 云端 WS 信令
+ * 通话服务 —— WebRTC + 云端 WS 信令（语音 / 视频）
  *
- * 流程：主叫拉麦克风→建PC→createOffer→setLocal→发offer；被叫响铃→接听→setRemote(offer)→createAnswer→回answer；
- *       ICE 双向经信令交换；远端音频由原生自动播放；挂断/拒接经信令通知对端。
+ * 流程：主叫拉媒体→建PC→createOffer→setLocal→发offer（视频通话随 offer 带 video:true）；
+ *       被叫响铃→接听→按 offer 类型拉媒体→setRemote(offer)→createAnswer→回answer；
+ *       ICE 双向经信令交换；远端流经 callStore 供 CallModal 渲染 RTCView；挂断/拒接经信令通知对端。
  */
 import { Platform, PermissionsAndroid } from "react-native";
 import { RTCPeerConnection, RTCSessionDescription, RTCIceCandidate, mediaDevices, registerGlobals, type MediaStream, type MediaStreamTrack } from "react-native-webrtc";
@@ -40,6 +41,8 @@ let selfUserId = "";
 let selfName = "";
 /** 主叫方 */
 let isCaller = false;
+/** 本次通话是否为视频（主叫随 offer 发出；被叫自 offer 读出） */
+let pendingVideo = false;
 /** 是否已主动释放（避免 pc.close() 触发的 connected 关闭事件错误地把结束原因覆盖） */
 let intentionalEnd = false;
 /** 暂存的 incoming offer.sdp（接听时用） */
@@ -55,24 +58,45 @@ function signal(kind: CallSignal["kind"], extra?: Partial<CallSignal>): void {
   wsLink.sendCall(currentPeer.userId, { kind, ...extra });
 }
 
-/** 拉取本地麦克风（Android 先请求录音权限） */
-async function getLocalAudio(): Promise<MediaStream> {
+/** 请求单个 Android 权限 */
+async function ensurePermission(permission: typeof PermissionsAndroid.PERMISSIONS.RECORD_AUDIO | typeof PermissionsAndroid.PERMISSIONS.CAMERA, title: string, message: string): Promise<void> {
+  if (Platform.OS !== "android") return;
+  const granted = await PermissionsAndroid.request(permission, { title, message, buttonPositive: "允许", buttonNegative: "拒绝" });
+  if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+    throw new Error(`未授予${title.replace(/^.*需要/, "")}权限`);
+  }
+}
+
+/** 拉取本地媒体（音频必需；视频通话再拉摄像头，失败自动降级为语音） */
+async function getLocalMedia(wantVideo: boolean): Promise<{ stream: MediaStream; video: boolean }> {
   if (Platform.OS === "android") {
-    try {
-      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO, {
-        title: "语音通话需要麦克风",
-        message: "合鸣语音通话需要使用你的麦克风，以便在通话中发送你的声音。",
-        buttonPositive: "允许",
-        buttonNegative: "拒绝",
-      });
-      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-        throw new Error("未授予麦克风权限");
-      }
-    } catch (e) {
-      if (e instanceof Error && e.message === "未授予麦克风权限") throw e;
+    await ensurePermission(
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      "通话需要麦克风",
+      "合鸣通话需要使用你的麦克风，以便在通话中发送你的声音。",
+    );
+    if (wantVideo) {
+      await ensurePermission(
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        "视频通话需要摄像头",
+        "合鸣视频通话需要使用你的摄像头，以便在通话中发送你的画面。",
+      );
     }
   }
-  return mediaDevices.getUserMedia({ audio: true });
+  try {
+    const stream = await mediaDevices.getUserMedia({
+      audio: true,
+      video: wantVideo ? { facingMode: "user" } : false,
+    });
+    return { stream, video: wantVideo };
+  } catch (e) {
+    if (!wantVideo) throw e;
+    // 摄像头不可用（拒绝/被占用/无摄像头）→ 降级为语音通话，同步 store 状态
+    useCallStore.getState().setVideo(false);
+    useCallStore.getState().setCamOn(false);
+    const stream = await mediaDevices.getUserMedia({ audio: true });
+    return { stream, video: false };
+  }
 }
 
 /** 停止待接听超时定时器 */
@@ -92,8 +116,9 @@ function createPC(): RTCPeerConnection {
     }
   };
   peer.ontrack = (event: { streams?: MediaStream[] }) => {
-    // 远端音频流到达后原生自动播放；保留引用防 GC
-    void event.streams;
+    // 远端流交给 store，CallModal 用 RTCView 渲染（音频由原生自动播放）
+    const stream = event.streams?.[0];
+    if (stream) useCallStore.getState().setMedia({ remoteStream: stream });
   };
   peer.oniceconnectionstatechange = (arg: unknown) => {
     const st = peer.iceConnectionState;
@@ -111,11 +136,10 @@ function createPC(): RTCPeerConnection {
   return peer;
 }
 
-/** 加入本地音频到 PC */
-function attachLocalAudio(peer: RTCPeerConnection): void {
+/** 加入本地媒体到 PC */
+function attachLocalMedia(peer: RTCPeerConnection): void {
   if (!localStream) return;
-  const tracks = localStream.getAudioTracks();
-  for (const t of tracks) peer.addTrack(t, localStream);
+  for (const t of localStream.getTracks()) peer.addTrack(t, localStream);
 }
 
 /** 释放资源（不触发结束回调） */
@@ -129,7 +153,9 @@ function release(): void {
   pc = null;
   currentPeer = null;
   isCaller = false;
+  pendingVideo = false;
   pendingCandidates.length = 0;
+  useCallStore.getState().setMedia({ localStream: null, remoteStream: null });
 }
 
 /** 更新 store 为结束态并释放 */
@@ -140,23 +166,28 @@ function handleEnded(reason?: string): void {
   useCallStore.getState().ended(wasMissed ? (reason || "对方未接听") : (reason || "通话已结束"));
 }
 
-/** 主叫发起 */
-export async function startCall(peer: CallPeer): Promise<void> {
+/** 主叫发起（opts.video 为 true 时发起视频通话） */
+export async function startCall(peer: CallPeer, opts?: { video?: boolean }): Promise<void> {
   const st = useCallStore.getState();
   if (st.phase !== "idle" && st.phase !== "ended") return;
   release();
   pendingOffer = null;
   currentPeer = peer;
   isCaller = true;
-  st.startCall(peer);
+  pendingVideo = !!opts?.video;
+  st.startCall(peer, pendingVideo);
   try {
-    localStream = await getLocalAudio();
+    const got = await getLocalMedia(pendingVideo);
+    localStream = got.stream;
+    pendingVideo = got.video;
+    if (got.video) useCallStore.getState().setMedia({ localStream: localStream });
+    else useCallStore.getState().setVideo(false); // 摄像头降级 → 呼叫方 UI 回到语音态
     if (!currentPeer) return;
     const peerConn = createPC();
-    attachLocalAudio(peerConn);
+    attachLocalMedia(peerConn);
     const offer = await peerConn.createOffer();
     await peerConn.setLocalDescription(offer);
-    signal("offer", { sdp: offer.sdp });
+    signal("offer", { sdp: offer.sdp, video: pendingVideo || undefined });
     st.ringing();
     startCallTimer("对方未接听");
   } catch (e) {
@@ -187,7 +218,8 @@ export function onIncomingOffer(fromUserId: string, fromName: string | undefined
   currentPeer = { userId: fromUserId, name: fromName };
   isCaller = false;
   pendingOffer = call.sdp ?? null;
-  st.incoming(currentPeer);
+  pendingVideo = !!call.video;
+  st.incoming(currentPeer, pendingVideo);
   startCallTimer("对方未接听");
 }
 
@@ -198,10 +230,12 @@ export async function acceptCall(): Promise<void> {
   try {
     clearCallTimer();
     useCallStore.getState().accepted();
-    localStream = await getLocalAudio();
+    const got = await getLocalMedia(pendingVideo);
+    localStream = got.stream;
+    if (got.video) useCallStore.getState().setMedia({ localStream: localStream });
     if (!currentPeer) return;
     const peerConn = createPC();
-    attachLocalAudio(peerConn);
+    attachLocalMedia(peerConn);
     await peerConn.setRemoteDescription(new RTCSessionDescription({ type: "offer", sdp: pendingOffer }));
     // 补投接听前缓存的候选
     for (const c of pendingCandidates) {
@@ -227,6 +261,36 @@ export function rejectCall(): void {
 export function hangup(): void {
   signal("hangup");
   handleEnded();
+}
+
+/** 静音/取消静音麦克风，返回切换后的状态 */
+export function toggleMic(): boolean {
+  const next = !useCallStore.getState().micOn;
+  if (localStream) {
+    for (const t of localStream.getAudioTracks()) {
+      try { t.enabled = next; } catch {}
+    }
+  }
+  useCallStore.getState().setMicOn(next);
+  return next;
+}
+
+/** 开/关摄像头（视频通话），返回切换后的状态 */
+export function toggleCam(): boolean {
+  const next = !useCallStore.getState().camOn;
+  if (localStream) {
+    for (const t of localStream.getVideoTracks()) {
+      try { t.enabled = next; } catch {}
+    }
+  }
+  useCallStore.getState().setCamOn(next);
+  return next;
+}
+
+/** 前后摄像头切换（视频通话） */
+export function switchCamera(): void {
+  const track = localStream?.getVideoTracks()[0] as unknown as { _switchCamera?: () => void } | undefined;
+  try { track?._switchCamera?.(); } catch {}
 }
 
 /** 设置本机身份 */

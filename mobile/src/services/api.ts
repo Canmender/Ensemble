@@ -378,6 +378,11 @@ class ApiService {
 
   // ========== Agent API ==========
 
+  /** 内置 AI 助手对话（服务端不可用时页面回退本地回答） */
+  async assistantChat(message: string): Promise<ApiResponse<{ reply?: string }>> {
+    return this.request<{ reply?: string }>("POST", "/api/assistant/chat", { message });
+  }
+
   /** 获取所有 Agent */
   async getAgents(): Promise<ApiResponse<AgentConfig[]>> {
     return this.request<AgentConfig[]>("GET", "/api/agents");
