@@ -464,44 +464,59 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   // 断线重连后增量补拉当前会话新消息（只拉最后一条消息之后的）
   const prevConnRef = useRef(connectionState);
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  /** 增量补拉：以最后一条消息时间戳为游标，拉取断线窗口内的新消息并按 id 去重合并 */
+  const catchupNewMessages = useCallback(async () => {
+    const lastMsg = messagesRef.current[messagesRef.current.length - 1];
+    if (!lastMsg) return;
+    const lastTs = lastMsg.ts;
+    try {
+      const res = await api.getConversationMessages(convId, undefined, 100);
+      if (res.data) {
+        const newMsgs = res.data.messages
+          .filter((m) => m.ts > lastTs)
+          .map((m) => ({
+            id: m.id,
+            role: m.role,
+            content: m.content,
+            agentName: m.agentId,
+            attachment: m.attachment,
+            replyTo: m.replyTo,
+            mentions: m.mentions,
+            deleted: m.deleted,
+            ts: m.ts,
+          }));
+        if (newMsgs.length > 0) {
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
+            return fresh.length > 0 ? [...prev, ...fresh] : prev;
+          });
+        }
+      }
+    } finally {
+      void api.markConversationRead(convId);
+    }
+  }, [convId]);
+
+  // 连接状态由断转连（socket.io/中继层信号）→ 增量补拉
   useEffect(() => {
     const prev = prevConnRef.current;
     prevConnRef.current = connectionState;
     if (connectionState === "connected" && prev !== "connected") {
-      // 增量拉取：用最后一条消息的时间戳作为 before 游标
-      const lastTs = messages.length > 0 ? messages[messages.length - 1].ts : undefined;
-      if (lastTs) {
-        void (async () => {
-          const res = await api.getConversationMessages(convId, undefined, 100);
-          if (res.data) {
-            const newMsgs = res.data.messages
-              .filter((m) => m.ts > lastTs)
-              .map((m) => ({
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                agentName: m.agentId,
-                attachment: m.attachment,
-                replyTo: m.replyTo,
-                mentions: m.mentions,
-                deleted: m.deleted,
-                ts: m.ts,
-              }));
-            if (newMsgs.length > 0) {
-              setMessages((prev) => {
-                const existingIds = new Set(prev.map((m) => m.id));
-                const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
-                return fresh.length > 0 ? [...prev, ...fresh] : prev;
-              });
-            }
-          }
-          void api.markConversationRead(convId);
-        })();
-      } else {
-        void loadMessages();
-      }
+      if (messagesRef.current.length > 0) void catchupNewMessages();
+      else void loadMessages();
     }
-  }, [connectionState, loadMessages, convId, messages]);
+  }, [connectionState, catchupNewMessages, loadMessages]);
+
+  // WS 层（wsLink）重连成功 → 同样增量补拉。
+  // 云端模式下 handleWsState 不回写 deviceStore.connectionState，
+  // 仅靠上面的状态监听会漏掉「WS 断了但中继还连着」的窗口。
+  useEffect(() => wsLink.onResync(() => { void catchupNewMessages(); }), [catchupNewMessages]);
 
   useEffect(() => {
     if (messages.length > 0) {

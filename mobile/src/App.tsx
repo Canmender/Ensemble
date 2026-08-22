@@ -15,6 +15,7 @@ import { checkAndPromptUpdate, bootstrapUpdate } from "./services/appUpdate";
 import { UpdateManager } from "./components/UpdateManager";
 import { CallModal } from "./components/CallModal";
 import { bootstrapCallService, setCallIdentityAndReload } from "./services/callService";
+import { bootstrapResync } from "./services/resync";
 import { wsLink } from "./services/wslink";
 import { api } from "./services/api";
 import { useAuthGate } from "./store/authGateStore";
@@ -432,6 +433,7 @@ export default function App() {
         await connectionService.connectToCloud();
         const me = await api.getMe();
         bootstrapCallService();
+        bootstrapResync();
         if (me.data) {
           setGate("in");
           setCallIdentityAndReload(me.data.id, me.data.displayName ?? me.data.username);

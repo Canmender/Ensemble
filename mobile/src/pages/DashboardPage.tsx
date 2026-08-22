@@ -16,6 +16,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useTaskStore } from "../store/taskStore";
 import { connectionService } from "../services/connection";
 import { api } from "../services/api";
+import { wsLink } from "../services/wslink";
 import { colors, radius, elevation } from "../theme";
 
 type ConnectionQuality = "excellent" | "good" | "poor" | "unknown";
@@ -60,6 +61,9 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
       console.error("[DashboardPage] Fetch data failed:", err);
     }
   }, [connectionState, setTasks, setRuns, setAgents]);
+
+  // WS 断线重连成功 → 刷新看板数据（找回断线窗口内变化的任务/运行状态）
+  useEffect(() => wsLink.onResync(() => { void fetchData(); }), [fetchData]);
 
   /** Measure connection quality via health endpoint */
   const measureConnectionQuality = useCallback(async () => {
