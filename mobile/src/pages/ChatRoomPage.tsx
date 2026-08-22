@@ -17,6 +17,7 @@ import {
   Alert,
   Modal,
   PanResponder,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -31,6 +32,8 @@ import { useMeStore } from "../store/meStore";
 import { wsLink } from "../services/wslink";
 import Animated from "react-native-reanimated";
 import { useLayoutSpringGentle } from "../utils/motion";
+import { bubbleVariantOf, bubbleStyles } from "../components/bubble";
+import { GlassSurface } from "../components/GlassSurface";
 import { startCall } from "../services/callService";
 import { encryptFor, decryptFrom } from "../services/e2e/e2eService";
 import { EmptyState } from "../components/ui";
@@ -994,6 +997,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     }
     const senderName = item.agentName ? resolveSenderName(item.agentName) : "";
     const senderAvatar = item.agentName ? usersById.get(item.agentName)?.avatarUrl : undefined;
+    // Bubble/Message 分层（对齐桌面 v0.8.15）：variant+tint 在此算好传给表面样式
+    const isDirectAgent = !!conv && !conv.runId.startsWith("conv_") && !isGroup;
+    const { variant, tint } = bubbleVariantOf(isUser, item.agentName ?? "", isDirectAgent, item.role);
+    const bs = bubbleStyles(variant, tint);
     return (
       <Animated.View layout={bubbleLayoutSpring} style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
         {/* 多选模式：点击选中/取消 */}
@@ -1006,11 +1013,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             />
           </TouchableOpacity>
         )}
-        {!isUser && (
+        {!isUser && variant !== "ai-ghost" && (
           <Avatar name={senderName} avatarUrl={senderAvatar} size={32} />
         )}
         <TouchableOpacity
-          style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}
+          style={[styles.bubble, bs.surface]}
           activeOpacity={0.6}
           delayLongPress={350}
           onLongPress={() => setMenuMsg(item)}
@@ -1027,12 +1034,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                   </Text>
                 </View>
               )}
-              {!isUser && item.agentName && (
-                <Text style={styles.bubbleAgentName}>{resolveSenderName(item.agentName)}</Text>
+              {!isUser && variant !== "ai-ghost" && item.agentName && (
+                <Text style={[styles.bubbleAgentName, bs.nameText]}>{resolveSenderName(item.agentName)}</Text>
               )}
               {item.attachment && renderAttachment(item.attachment, isUser, item.content)}
               {!!item.content && (
-                <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
+                <Text style={[styles.bubbleText, bs.text]}>
                   {item.content.split(/(@[\p{L}\p{N}_]{1,20})/gu).map((part, i) =>
                     /^@[\p{L}\p{N}_]{1,20}$/u.test(part) ? (
                       <Text key={i} style={[styles.mentionText, isUser && styles.mentionTextUser]}>{part}</Text>
@@ -1256,16 +1263,18 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         />
       )}
 
-      {/* 输入栏 */}
-      <View style={[styles.inputBar, { paddingBottom: keyboardHeight + spacing.md }]}>
-        <TouchableOpacity
-          style={styles.emojiBtn}
-          onPress={() => { setShowEmoji((v) => !v); if (showExtend) setShowExtend(false); }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name={showEmoji ? "close-circle" : "happy-outline"} size={24} color={showEmoji ? colors.primary : colors.text} />
-        </TouchableOpacity>
-        {showVoiceRecorder ? (
+      {/* 输入栏 —— 玻璃浮层（iOS26+ 原生液态玻璃；Android/其他 半透明浮面。
+          不用 BlurTargetView 包裹模式：与键盘动态 bottom 避让叠加会反复重建模糊纹理） */}
+      <GlassSurface radius={radius.xl} intensity="bar" fallback={Platform.OS !== "ios"} style={[styles.inputDock, { bottom: keyboardHeight }]}>
+        <View style={styles.inputBar}>
+          <TouchableOpacity
+            style={styles.emojiBtn}
+            onPress={() => { setShowEmoji((v) => !v); if (showExtend) setShowExtend(false); }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name={showEmoji ? "close-circle" : "happy-outline"} size={24} color={showEmoji ? colors.primary : colors.text} />
+          </TouchableOpacity>
+          {showVoiceRecorder ? (
           /* 按住说话 */
           <VoiceRecorder
             onSend={(url, dur) => {
@@ -1322,7 +1331,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         >
           <Ionicons name={showVoiceRecorder ? "keypad" : "mic"} size={24} color={showVoiceRecorder ? colors.primary : colors.text} />
         </TouchableOpacity>
-      </View>
+        </View>
+      </GlassSurface>
 
       {/* @提及选择列表（输入框上方弹出） */}
       {showMentionPicker && mentionableParticipants.length > 0 && (
@@ -1668,14 +1678,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   draftName: { color: colors.textMuted, fontSize: fontSize.sm, flex: 1 },
+  inputDock: {
+    position: "absolute",
+    left: spacing.sm,
+    right: spacing.sm,
+  },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
     padding: spacing.sm + 2,
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
     gap: spacing.xs,
   },
   attachBtn: { width: 36, height: 40, alignItems: "center", justifyContent: "center" },
