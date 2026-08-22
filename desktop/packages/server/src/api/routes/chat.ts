@@ -155,13 +155,14 @@ export function chatRouter(ctx: AppContext): Router {
 
   /**
    * 群聊发送消息（fire-and-forget，回复通过 WS 实时推送）。
-   * 移动端协议：POST /api/chat/:runId/messages { content }
+   * 移动端协议：POST /api/chat/:runId/messages { content, clientMsgId? }
+   * clientMsgId：客户端生成的幂等 ID——超时重发不会产生重复消息/重复推送。
    */
   r.post(
     "/:runId/messages",
     asyncH(async (req, res) => {
       const runId = String(req.params.runId);
-      const { content } = req.body ?? {};
+      const { content, clientMsgId } = req.body ?? {};
       const run = ctx.store.getRun(runId);
       if (!run) return fail(res, new Error("run not found"), 404);
       if (typeof content !== "string" || !content.trim()) {
@@ -169,7 +170,9 @@ export function chatRouter(ctx: AppContext): Router {
       }
 
       ctx.engine.addSteering(runId, content);
-      ctx.engine.broadcastChatMessage(runId, undefined, "user", "user", content);
+      ctx.engine.broadcastChatMessage(runId, undefined, "user", "user", content, undefined, {
+        id: typeof clientMsgId === "string" && clientMsgId ? clientMsgId.slice(0, 128) : undefined,
+      });
       ok(res, { sent: true });
     }),
   );

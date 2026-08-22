@@ -99,7 +99,8 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   reply_to TEXT,
   mentions TEXT,
   deleted  INTEGER NOT NULL DEFAULT 0,
-  ts       TEXT NOT NULL
+  ts       TEXT NOT NULL,
+  seq      INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS conversations (
@@ -166,6 +167,7 @@ CREATE INDEX IF NOT EXISTS idx_runs_task ON runs(task_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run ON run_events(run_id);
 CREATE INDEX IF NOT EXISTS idx_chat_run ON chat_messages(run_id);
+CREATE INDEX IF NOT EXISTS idx_chat_run_seq ON chat_messages(run_id, seq);
 CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run_agent ON jobs(run_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run_job ON run_events(run_id, job_id);
@@ -278,5 +280,19 @@ function migrateUserColumns(db: DatabaseSync): void {
   const crCols = db.prepare("PRAGMA table_info(conversation_reads)").all() as Array<{ name: string }>;
   if (!crCols.some((c) => c.name === "read_ts")) {
     db.exec("ALTER TABLE conversation_reads ADD COLUMN read_ts TEXT");
+  }
+  // chat_messages.seq（会话内单调序号：可靠排序 / 断线补拉游标）。
+  // 旧库补列；存量行按 (ts, rowid) 回填——时间戳同毫秒不稳定，rowid 作次级键保证确定性。
+  const cmSeqCols = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmSeqCols.some((c) => c.name === "seq")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN seq INTEGER");
+  }
+  const nullSeq = db.prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE seq IS NULL").get() as { n: number };
+  if (nullSeq.n > 0) {
+    db.exec(`UPDATE chat_messages SET seq = (
+      SELECT COUNT(*) FROM chat_messages c2
+      WHERE c2.run_id = chat_messages.run_id
+        AND (c2.ts < chat_messages.ts OR (c2.ts = chat_messages.ts AND c2.rowid <= chat_messages.rowid))
+    )`);
   }
 }

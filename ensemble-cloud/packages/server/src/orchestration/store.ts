@@ -46,6 +46,7 @@ export class Store {
     getRunEvents: ReturnType<DatabaseSync["prepare"]>;
     // Chat messages
     createChatMessage: ReturnType<DatabaseSync["prepare"]>;
+    nextChatSeq: ReturnType<DatabaseSync["prepare"]>;
     listChatMessages: ReturnType<DatabaseSync["prepare"]>;
     deleteChatMessage: ReturnType<DatabaseSync["prepare"]>;
     // Workflows
@@ -93,9 +94,10 @@ export class Store {
       nextJobSeq: db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM jobs WHERE run_id = ?"),
       insertRunEvent: db.prepare("INSERT INTO run_events (run_id, seq, job_id, user_id, event_json, ts) VALUES (?, ?, ?, ?, ?, ?)"),
       getRunEvents: db.prepare("SELECT seq, job_id, event_json FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq"),
-      // Chat messages
-      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
-      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY ts"),
+      // Chat messages（INSERT OR IGNORE：clientMsgId 幂等投递；seq 由服务端按会话分配）
+      createChatMessage: db.prepare("INSERT OR IGNORE INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts, seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+      nextChatSeq: db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM chat_messages WHERE run_id = ?"),
+      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY COALESCE(seq, rowid)"),
       deleteChatMessage: db.prepare("UPDATE chat_messages SET deleted = 1 WHERE id = ?"),
       // Workflows
       listWorkflows: db.prepare("SELECT * FROM workflows ORDER BY name"),
@@ -321,8 +323,14 @@ export class Store {
   }
 
   // ---------- Chat messages ----------
-  createChatMessage(msg: ChatMessage): void {
-    this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts);
+  /**
+   * 落库一条群聊消息：服务端分配会话内单调 seq；INSERT OR IGNORE 幂等。
+   * @returns 分配的 seq；id 重复（clientMsgId 幂等命中）时返回 null，调用方应跳过推送
+   */
+  createChatMessage(msg: ChatMessage): number | null {
+    const seq = (this.stmts.nextChatSeq.get(msg.runId) as { s: number }).s + 1;
+    const info = this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts, seq);
+    return info.changes > 0 ? seq : null;
   }
 
   /** 撤回消息：标记 deleted（保留原始内容，前端显示「已撤回」） */
@@ -332,12 +340,13 @@ export class Store {
 
   listChatMessages(runId: string, userId?: string): ChatMessage[] {
     const rows = userId
-      ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') ORDER BY ts").all(runId, userId) as any[])
+      ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') ORDER BY COALESCE(seq, rowid)").all(runId, userId) as any[])
       : (this.stmts.listChatMessages.all(runId) as any[]);
     return rows.map((r) => ({
       id: r.id,
       runId: r.run_id,
       jobId: r.job_id ?? undefined,
+      seq: r.seq ?? undefined,
       agentId: r.agent_id,
       role: r.role,
       content: r.content,

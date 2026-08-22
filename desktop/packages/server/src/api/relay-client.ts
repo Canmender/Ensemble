@@ -37,6 +37,11 @@ export class RelayClient {
   private messageHandlers: MessageHandler[] = [];
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 10;
+  /** 用户主动断开：true 时不再任何自动重连 */
+  private userDisconnected = false;
+  /** 自愈重连：内建重连耗尽（reconnect_failed）后接管，长期断网恢复后自动回线上 */
+  private selfHealTimer: ReturnType<typeof setTimeout> | null = null;
+  private selfHealAttempt = 0;
 
   /** 配置中继客户端 */
   configure(config: RelayConfig): void {
@@ -51,9 +56,10 @@ export class RelayClient {
       return false;
     }
 
-    if (this.socket?.connected) {
-      this.disconnect();
-    }
+    this.userDisconnected = false;
+    this.cancelSelfHeal();
+    // 无条件清理旧 socket：包括已断开但仍在后台自动重连的实例，避免双 socket 竞争
+    this.destroySocket();
 
     logger.info(`[Relay] 连接到中继服务器: ${this.config.url}`);
 
@@ -93,15 +99,42 @@ export class RelayClient {
     }
   }
 
-  /** 断开连接 */
+  /** 断开连接（用户主动）：停止一切自动重连 */
   disconnect(): void {
+    this.userDisconnected = true;
+    this.cancelSelfHeal();
+    this.destroySocket();
+    logger.info("[Relay] 已断开连接");
+  }
+
+  /** 销毁当前 socket 与监听器 */
+  private destroySocket(): void {
     if (this.socket) {
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
     this.reconnectAttempts = 0;
-    logger.info("[Relay] 已断开连接");
+  }
+
+  private cancelSelfHeal(): void {
+    if (this.selfHealTimer) {
+      clearTimeout(this.selfHealTimer);
+      this.selfHealTimer = null;
+    }
+  }
+
+  /** 自愈重连：指数递增间隔（30s 起步，封顶 5 分钟），成功后由 connect 事件归零 */
+  private scheduleSelfHeal(): void {
+    if (this.userDisconnected || !this.config) return;
+    this.cancelSelfHeal();
+    this.selfHealAttempt += 1;
+    const delaySec = Math.min(30 * this.selfHealAttempt, 300);
+    logger.info(`[Relay] 自愈重连：${delaySec}s 后第 ${this.selfHealAttempt} 次尝试`);
+    this.selfHealTimer = setTimeout(() => {
+      this.selfHealTimer = null;
+      void this.connect();
+    }, delaySec * 1000);
   }
 
   /** 发送消息到指定设备 */
@@ -166,6 +199,7 @@ export class RelayClient {
     this.socket.on("connect", () => {
       logger.info("[Relay] 已连接到中继服务器");
       this.reconnectAttempts = 0;
+      this.selfHealAttempt = 0;
 
       // 注册设备
       this.registerDevice();
@@ -174,6 +208,11 @@ export class RelayClient {
     // 连接断开
     this.socket.on("disconnect", (reason) => {
       logger.warn(`[Relay] 连接断开: ${reason}`);
+      // 服务端主动踢下线时 socket.io 不会自动重连，这里手动恢复
+      if (reason === "io server disconnect" && !this.userDisconnected) {
+        logger.info("[Relay] 服务端断开，尝试重新连接");
+        this.socket?.connect();
+      }
     });
 
     // 重连尝试
@@ -182,9 +221,10 @@ export class RelayClient {
       logger.info(`[Relay] 重连尝试 ${attempt}/${this.maxReconnectAttempts}`);
     });
 
-    // 重连失败
+    // 重连失败（内建重连耗尽）→ 转入自愈模式，长期断网恢复后自动回线上
     this.socket.on("reconnect_failed", () => {
-      logger.error("[Relay] 重连失败");
+      logger.error("[Relay] 内建重连耗尽，转入自愈模式");
+      this.scheduleSelfHeal();
     });
 
     // 设备注册成功

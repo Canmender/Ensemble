@@ -25,11 +25,11 @@ export function runsRouter(ctx: AppContext): Router {
     ok(res, { jobs });
   });
 
-  /** 事件历史（WS 断线重连后 afterSeq 补拉） */
+  /** 事件历史（WS 断线重连后 afterSeq 补拉；兼容移动端历史参数名 since） */
   r.get("/:id/events", (req, res) => {
     const run = ctx.store.getRun(req.params.id);
     if (!run) return fail(res, new Error(`run not found: ${req.params.id}`), 404);
-    const afterSeq = Number(req.query.afterSeq ?? 0) || 0;
+    const afterSeq = Number(req.query.afterSeq ?? req.query.since ?? 0) || 0;
     const events = ctx.store.getRunEvents(run.id, afterSeq);
     ok(res, { events, lastSeq: events.length ? events[events.length - 1].seq : afterSeq });
   });

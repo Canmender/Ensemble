@@ -123,6 +123,8 @@ export interface MessageReply {
 export interface ChatMessage {
   id: string;
   runId: string;
+  /** 会话内单调递增序号（服务端分配）：可靠排序与断线补拉游标 */
+  seq?: number;
   userId?: string;
   jobId?: string;
   agentId: string;

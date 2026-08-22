@@ -363,7 +363,7 @@ export class OrchestrationEngine {
     return this.store.getLatestJobForAgent(runId, agentId)?.sessionId;
   }
 
-  /** 持久化并广播一条群聊消息 */
+  /** 持久化并广播一条群聊消息（opts.id = 客户端幂等 ID；重复投递静默丢弃，不重复推送） */
   broadcastChatMessage(
     runId: string,
     jobId: string | undefined,
@@ -371,10 +371,12 @@ export class OrchestrationEngine {
     role: "user" | "assistant",
     content: string,
     attachment?: MessageAttachment,
+    opts?: { id?: string },
   ): void {
     const run = this.store.getRun(runId);
-    this.store.createChatMessage({
-      id: newId("msg"),
+    const id = opts?.id ?? newId("msg");
+    const seq = this.store.createChatMessage({
+      id,
       runId,
       jobId,
       agentId,
@@ -384,6 +386,8 @@ export class OrchestrationEngine {
       userId: run?.userId,
       ts: new Date().toISOString(),
     });
+    // 幂等命中（同 clientMsgId 重发）：消息已在库，跳过会话元数据更新与广播
+    if (seq === null) return;
     // 更新关联会话元数据：lastMessage；agent 回复增加未读计数
     const conv = this.store.getConversationByRunId(runId);
     if (conv) {
@@ -396,6 +400,8 @@ export class OrchestrationEngine {
       agentId,
       content,
       attachment,
+      id,
+      seq,
     });
   }
 

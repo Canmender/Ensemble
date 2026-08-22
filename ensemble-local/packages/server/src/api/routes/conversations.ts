@@ -221,7 +221,7 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (conv.type === "group" && conv.groupMuted && !isGroupAdmin(conv, req.user?.id)) {
         return fail(res, new Error("群已开启全体禁言"), 403);
       }
-      const body = (req.body ?? {}) as { content?: unknown; attachment?: unknown; replyTo?: unknown };
+      const body = (req.body ?? {}) as { content?: unknown; attachment?: unknown; replyTo?: unknown; clientMsgId?: unknown };
       const content = typeof body.content === "string" ? body.content.trim() : "";
       const attachment = parseAttachment(body.attachment);
       const replyTo = parseReply(body.replyTo);
@@ -238,8 +238,10 @@ export function conversationsRouter(ctx: AppContext): Router {
         const senderId = req.user?.id ?? "user";
         // 解析 @提及：@昵称 或 @用户名 → 参与者 ID
         const mentions = parseMentions(content, conv.participantIds, senderId, ctx.store);
-        const msgId = newId("msg");
-        ctx.store.createChatMessage({
+        // 客户端幂等 ID：超时重发不产生重复消息、不重复推送
+        const clientMsgId = typeof body.clientMsgId === "string" && body.clientMsgId ? body.clientMsgId.slice(0, 128) : undefined;
+        const msgId = clientMsgId ?? newId("msg");
+        const seq = ctx.store.createChatMessage({
           id: msgId,
           runId: conv.runId,
           jobId: undefined,
@@ -252,6 +254,11 @@ export function conversationsRouter(ctx: AppContext): Router {
           userId: req.user?.id,
           ts: now(),
         });
+        if (seq === null) {
+          // 幂等命中：消息已在库，直接确认，不重复推送/计未读
+          ok(res, { sent: true, msgId, duplicate: true });
+          return;
+        }
         ctx.store.updateConversationMeta(conv.id, previewText(content, attachment), now());
         // 推送参与者（除发送者）+ 未读。接收者 = 归属用户 + participants（创建者不在 participants 里）
         // runId = conv.runId（conv id），客户端据此把实时消息关联到会话
@@ -267,6 +274,8 @@ export function conversationsRouter(ctx: AppContext): Router {
             attachment,
             replyTo,
             mentions: mentions.length > 0 ? mentions : undefined,
+            id: msgId,
+            seq,
           }, conv.runId);
           ctx.store.incrementUnread(conv.id, pid);
           // @提及通知：被@的用户额外收到 chat.mention 事件（优先级更高，始终弹通知）
@@ -295,7 +304,9 @@ export function conversationsRouter(ctx: AppContext): Router {
       }
 
       ctx.engine.addSteering(conv.runId, content);
-      ctx.engine.broadcastChatMessage(conv.runId, undefined, "user", "user", content);
+      ctx.engine.broadcastChatMessage(conv.runId, undefined, "user", "user", content, undefined, {
+        id: typeof body.clientMsgId === "string" && body.clientMsgId ? body.clientMsgId.slice(0, 128) : undefined,
+      });
       ok(res, { sent: true, msgId: undefined });
     }),
   );

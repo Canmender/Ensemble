@@ -210,7 +210,7 @@ describe("Store run events and seq allocation", () => {
 // ── Chat messages ───────────────────────────────────────────────────────────
 
 describe("Store chat messages", () => {
-  it("creates and lists messages in ts order", () => {
+  it("assigns monotonic seq and lists messages in insertion (seq) order", () => {
     const { store } = setup();
 
     store.createTask(task("t1"));
@@ -219,12 +219,33 @@ describe("Store chat messages", () => {
     const msg = (id: string, role: "user" | "assistant", ts: string): ChatMessage => ({
       id, runId: "r1", jobId: "j1", agentId: role, role, content: "内容", ts,
     });
-    store.createChatMessage(msg("m1", "assistant", "2026-01-01T00:00:02.000Z"));
-    store.createChatMessage(msg("m2", "user", "2026-01-01T00:00:01.000Z"));
+    // 故意乱序 ts：排序以服务端分配顺序（seq）为准，时间戳不可靠（调研结论）
+    const s1 = store.createChatMessage(msg("m1", "assistant", "2026-01-01T00:00:02.000Z"));
+    const s2 = store.createChatMessage(msg("m2", "user", "2026-01-01T00:00:01.000Z"));
+    expect(s1).toBe(1);
+    expect(s2).toBe(2);
 
     const msgs = store.listChatMessages("r1");
     expect(msgs).toHaveLength(2);
-    expect(msgs[0].id).toBe("m2"); // ts 升序
+    expect(msgs[0].id).toBe("m1"); // 入库顺序
+    expect(msgs[0].seq).toBe(1);
+    expect(msgs[1].seq).toBe(2);
+  });
+
+  it("is idempotent on duplicate message id and does not burn ordering", () => {
+    const { store } = setup();
+    store.createTask(task("t1"));
+    store.createRun(run("r1", "t1"));
+
+    const msg = (id: string): ChatMessage => ({
+      id, runId: "r1", agentId: "u1", role: "user", content: "内容", ts: "2026-01-01T00:00:01.000Z",
+    });
+    expect(store.createChatMessage(msg("m1"))).toBe(1);
+    // 同 id 重发（超时重试场景）：忽略，返回 null
+    expect(store.createChatMessage(msg("m1"))).toBeNull();
+    // 后续新消息 seq 连续递增，不受被忽略的插入影响
+    expect(store.createChatMessage(msg("m2"))).toBe(2);
+    expect(store.listChatMessages("r1")).toHaveLength(2);
   });
 
   it("shared run history is not filtered by owner (user-to-user conv)", () => {
