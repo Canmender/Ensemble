@@ -113,7 +113,7 @@
 **版本**：0.7.74 → 0.7.75，versionCode 63 → 64
 
 
-- 通话 ICE 配置支持 TURN（自 `server.config.js` 读取，凭据不入库），已部署 coturn 到云服务器 `47.92.39.184`（UDP/TCP 3478，中继 49160-49200）。
+- 通话 ICE 配置支持 TURN（自 `server.config.js` 读取，凭据不入库），已部署 coturn 到云服务器 `<SERVER_IP>`（UDP/TCP 3478，中继 49160-49200）。
 - **需在阿里云安全组放行入方向 UDP 3478 + UDP 49160-49200（+TCP 3478）**，否则跨网络手机无法连通 TURN。
 
 **版本**：0.7.73 → 0.7.74，versionCode 62 → 63

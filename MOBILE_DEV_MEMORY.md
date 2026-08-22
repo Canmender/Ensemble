@@ -62,7 +62,7 @@
 ## 服务器部署
 
 ### 云端服务器
-- 地址: 47.92.39.184:8787
+- 地址: <SERVER_IP>:8787
 - 数据库: Docker 命名卷 /data/ensemble.db
 - APK 托管: /data/apk/
 

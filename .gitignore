@@ -57,3 +57,7 @@ TencentDB-Agent-Memory/
 # reference IM codebases and scratch
 IM/
 image/
+
+# 本地部署/运维脚本与真实配置（含敏感信息，绝不入仓库 —— 见隐私约定）
+/*.py
+/ensemble-cloud/start.local.bat

@@ -86,7 +86,7 @@ app.use(
 // vite.config.ts
 proxy: {
   "/cloud-api/api": {
-    target: "http://47.92.39.184:8787",
+    target: "http://<SERVER_IP>:8787",
     changeOrigin: true,
     rewrite: (path) => path.replace(/^\/cloud-api\/api/, "/api"),
   },
@@ -118,7 +118,7 @@ proxy: {
 // vite.config.ts
 proxy: {
   "/uploads": {
-    target: "http://47.92.39.184:8787",
+    target: "http://<SERVER_IP>:8787",
     changeOrigin: true,
   },
 }

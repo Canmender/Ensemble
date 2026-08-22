@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+// 云端代理目标：从环境变量读取（勿硬编码真实 IP，见隐私约定），未设置时回退本地
+const cloudOrigin = process.env.CLOUD_API_ORIGIN ?? "http://localhost:8787";
+
 // 开发期把 /api 与 /ws 代理到后端
 export default defineConfig({
   plugins: [react()],
@@ -18,15 +21,15 @@ export default defineConfig({
         ws: true,
       },
       // 代理云端服务器请求（避免 CORS 问题）
-      // /cloud-api/api/* -> http://47.92.39.184:8787/api/*
+      // /cloud-api/api/* -> $CLOUD_API_ORIGIN/api/*
       "/cloud-api/api": {
-        target: "http://47.92.39.184:8787",
+        target: cloudOrigin,
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/cloud-api\/api/, "/api"),
       },
       // 代理云端服务器的上传文件（头像等）
       "/uploads": {
-        target: "http://47.92.39.184:8787",
+        target: cloudOrigin,
         changeOrigin: true,
       },
     },

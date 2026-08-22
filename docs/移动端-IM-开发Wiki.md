@@ -114,7 +114,7 @@
 
 - 「多端协作」切到云端：`connectionService.connectToCloud()` → `connect(CLOUD_SERVER.host, 8787)`，配置 `connectedDevice` 指向云端，REST/WS/下载/更新全部走云端服务器
 - 局域网模式：直连桌面端发现的 IP；下载/更新同样走 `connectedDevice`
-- 云服务器：`47.92.39.184`，容器 `ensemble-server`，数据在 `/data/ensemble.db`（Docker 命名卷，须 `docker cp` 访问）
+- 云服务器：`<SERVER_IP>`，容器 `ensemble-server`，数据在 `/data/ensemble.db`（Docker 命名卷，须 `docker cp` 访问）
 
 ---
 
