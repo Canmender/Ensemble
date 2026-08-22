@@ -4,7 +4,7 @@
 
 [![Release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
 [![Mobile](https://img.shields.io/badge/Mobile-v0.9.3-blue)](#移动端)
-[![Desktop](https://img.shields.io/badge/Desktop-v0.8.0-green)](#桌面端)
+[![Desktop](https://img.shields.io/badge/Desktop-v0.8.1-green)](#桌面端)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passed-brightgreen)](#测试)
 

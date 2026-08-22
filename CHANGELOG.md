@@ -2,6 +2,28 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.1 (2026-08-22) — 修复构建：重建 v0.8.0 未入库源码
+
+### 问题
+v0.8.0 提交时 4 个新源文件未 `git add`（CHANGELOG 记录了功能但代码从未进入任何分支），导致 HEAD 无法编译：
+- `web/src/lib/modeOverride.ts`（构建期强制模式）
+- `web/src/components/AssistantPanel.tsx`（产品助手面板）
+- `web/src/pages/TokenUsagePage.tsx`（Token 用量图表页）
+- `server/src/api/routes/assistant.ts`（产品助手 API）
+
+### 重建内容
+- **modeOverride**：读取 `VITE_FORCE_MODE`（local/multi），云端版/本地版启动时跳过首启模式选择页。
+- **产品助手**：`GET /api/assistant/status` 探测可用性；`POST /api/assistant/ask` 以 chat 模式（maxRounds=1）跑内置助手 agent 一问一答，事件驱动等待回复（60s 超时）。面板含预设问题、加载态、Enter 发送。
+- **Token 用量页**：新增 `GET /api/tokens/stats` 聚合 jobs.usage_json；页面渲染饼图（按 Agent 占比）+ 折线图（按日输入/输出趋势）+ 汇总卡片 + 明细表（recharts，懒加载分包）。
+- **App.tsx**：补 `Monitor` 图标导入（本地模式侧栏）。
+- **根 package.json**：移除引用已删除 `@ensemble/cli` 的 `smoke`/`cli` 脚本；版本 0.8.0 → 0.8.1。
+- 同步以上文件到 `ensemble-local/`、`ensemble-cloud/` 两份运行时拷贝。
+
+### 验证
+- `pnpm -r typecheck` 全过（shared / web / server / desktop）
+- server 145 个单元测试全过
+- web 生产构建通过（TokenUsagePage 懒加载分包 388KB / gzip 111KB）
+
 ## v0.8.0 (2026-08-19) — 版本分离与云端开发
 
 ### 架构调整
