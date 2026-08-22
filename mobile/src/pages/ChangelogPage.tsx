@@ -8,6 +8,15 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.6",
+    date: "2026-08-22",
+    changes: [
+      "断线重连后自动补拉：任务事件按 jobId 精确回填，运行/看板状态不再停留旧值",
+      "聊天消息按服务端 seq 增量同步，重连不丢消息、不错序",
+      "消息发送携带幂等 ID，弱网重试不再产生重复消息",
+    ],
+  },
+  {
     version: "v0.9.5",
     date: "2026-08-22",
     changes: [

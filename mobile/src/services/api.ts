@@ -151,14 +151,24 @@ export interface Conversation {
   groupAdmins?: string[];
 }
 
+/** 运行事件响应条目：服务端落库行的包装（seq 单调递增，jobId 用于归并到 job） */
+export interface RunEventEntry {
+  seq: number;
+  jobId?: string;
+  event: AgentEvent;
+}
+
 /** 运行事件响应 */
 export interface RunEventsResponse {
   runId: string;
-  events: AgentEvent[];
+  events: RunEventEntry[];
   total: number;
   /** 服务端当前最大 seq（本地补拉游标可更新到该值） */
   lastSeq?: number;
 }
+
+/** 聊天消息行：服务端 v0.8.3 起带会话内单调 seq */
+export type ChatMessageRow = ChatMessage & { seq?: number };
 
 /** 技能信息 */
 export interface SkillInfo {
@@ -524,13 +534,13 @@ class ApiService {
   }
 
   /** 获取群聊消息 */
-  async getChatMessages(runId: string): Promise<ApiResponse<ChatMessage[]>> {
-    return this.request<ChatMessage[]>(`GET`, "/api/chat/" + runId + "/messages");
+  async getChatMessages(runId: string): Promise<ApiResponse<ChatMessageRow[]>> {
+    return this.request<ChatMessageRow[]>(`GET`, "/api/chat/" + runId + "/messages");
   }
 
-  /** 发送群聊消息（fire-and-forget，回复通过 WS 实时推送） */
-  async sendChatMessage(runId: string, content: string): Promise<ApiResponse<{ sent: boolean }>> {
-    return this.request<{ sent: boolean }>("POST", "/api/chat/" + runId + "/messages", { content });
+  /** 发送群聊消息（fire-and-forget，回复通过 WS 实时推送；clientMsgId 幂等防重发） */
+  async sendChatMessage(runId: string, content: string, clientMsgId?: string): Promise<ApiResponse<{ sent: boolean }>> {
+    return this.request<{ sent: boolean }>("POST", "/api/chat/" + runId + "/messages", clientMsgId ? { content, clientMsgId } : { content });
   }
 
   // ========== 用户 API ==========
@@ -626,9 +636,9 @@ class ApiService {
     convId: string,
     before?: string,
     limit = 50,
-  ): Promise<ApiResponse<{ messages: ChatMessage[]; total: number; readers?: Array<{ userId: string; readTs?: string }> }>> {
+  ): Promise<ApiResponse<{ messages: ChatMessageRow[]; total: number; readers?: Array<{ userId: string; readTs?: string }> }>> {
     const qs = before ? `?before=${encodeURIComponent(before)}&limit=${limit}` : `?limit=${limit}`;
-    return this.request<{ messages: ChatMessage[]; total: number; readers?: Array<{ userId: string; readTs?: string }> }>(
+    return this.request<{ messages: ChatMessageRow[]; total: number; readers?: Array<{ userId: string; readTs?: string }> }>(
       "GET",
       `/api/conversations/${convId}/messages${qs}`,
     );
@@ -654,18 +664,22 @@ class ApiService {
     );
   }
 
+  /** 发送会话消息（fire-and-forget，回复经 WS 推送）。
+   *  clientMsgId：客户端幂等 ID——重试复用同一 ID，服务端 INSERT OR IGNORE 保证不重复入库/推送。 */
   async sendConversationMessage(
     convId: string,
     content: string,
     attachment?: MessageAttachment,
     replyTo?: MessageReply,
     mentions?: string[],
-  ): Promise<ApiResponse<{ sent: boolean; msgId?: string }>> {
+    clientMsgId?: string,
+  ): Promise<ApiResponse<{ sent: boolean; msgId?: string; duplicate?: boolean }>> {
     const body: Record<string, unknown> = { content };
     if (attachment) body.attachment = attachment;
     if (replyTo) body.replyTo = replyTo;
     if (mentions && mentions.length > 0) body.mentions = mentions;
-    return this.request<{ sent: boolean; msgId?: string }>(
+    if (clientMsgId) body.clientMsgId = clientMsgId;
+    return this.request<{ sent: boolean; msgId?: string; duplicate?: boolean }>(
       "POST", "/api/conversations/" + convId + "/messages", body,
     );
   }

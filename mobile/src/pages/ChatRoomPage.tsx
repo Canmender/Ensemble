@@ -56,10 +56,13 @@ type MessageItem = {
   mentions?: string[];
   deleted?: boolean;
   ts: string;
+  /** 会话内单调 seq（服务端 v0.8.3+；补拉游标） */
+  seq?: number;
 };
 
-/** 相邻去重：WS 回显 + 乐观追加会产生相同消息（如群聊/agent 会话里自己的发言），按 content + role 合并 */
+/** 追加消息：按 id 精确去重（WS 回显/乐观追加/补拉合并），相邻同 content+role 兜底合并 */
 function appendMessage(list: MessageItem[], msg: MessageItem): MessageItem[] {
+  if (msg.id && list.some((m) => m.id === msg.id)) return list;
   const last = list[list.length - 1];
   if (last && last.content === msg.content && last.role === msg.role) return list;
   const next = [...list, msg];
@@ -342,6 +345,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           mentions: m.mentions,
           deleted: m.deleted,
           ts: m.ts,
+          seq: m.seq,
         })),
       );
       setHasMore(histRes.data.messages.length >= 20);
@@ -424,7 +428,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           const isSelf = msg.agentId === "user";
           setMessages((prev) =>
             appendMessage(prev, {
-              id: `${msg.agentId}-${Date.now()}`,
+              // 服务端真实消息 ID（v0.8.3+）：与乐观追加/历史接口同源，按 id 精确去重
+              id: msg.id ?? `${msg.agentId}-${Date.now()}`,
               role: isSelf ? "user" : "assistant",
               content: msg.content,
               agentName: msg.agentId,
@@ -432,6 +437,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               replyTo: msg.replyTo,
               mentions: msg.mentions,
               ts: new Date().toISOString(),
+              seq: msg.seq,
             }),
           );
           // 正在看当前会话：收到消息即时重新标记已读（对方实时看到「已读」）
@@ -469,16 +475,19 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     messagesRef.current = messages;
   }, [messages]);
 
-  /** 增量补拉：以最后一条消息时间戳为游标，拉取断线窗口内的新消息并按 id 去重合并 */
+  /** 增量补拉：优先按会话内单调 seq 过滤（v0.8.3+），旧消息无 seq 时回退时间戳比较；按 id 去重合并 */
   const catchupNewMessages = useCallback(async () => {
-    const lastMsg = messagesRef.current[messagesRef.current.length - 1];
-    if (!lastMsg) return;
-    const lastTs = lastMsg.ts;
+    const cur = messagesRef.current;
+    if (cur.length === 0) return;
+    const seqList = cur.map((m) => m.seq).filter((s): s is number => typeof s === "number");
+    const useSeq = seqList.length > 0;
+    const maxSeq = useSeq ? Math.max(...seqList) : 0;
+    const lastTs = cur[cur.length - 1].ts;
     try {
       const res = await api.getConversationMessages(convId, undefined, 100);
       if (res.data) {
         const newMsgs = res.data.messages
-          .filter((m) => m.ts > lastTs)
+          .filter((m) => (useSeq ? (m.seq ?? 0) > maxSeq : m.ts > lastTs))
           .map((m) => ({
             id: m.id,
             role: m.role,
@@ -489,12 +498,20 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             mentions: m.mentions,
             deleted: m.deleted,
             ts: m.ts,
+            seq: m.seq,
           }));
         if (newMsgs.length > 0) {
           setMessages((prev) => {
             const existingIds = new Set(prev.map((m) => m.id));
             const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
-            return fresh.length > 0 ? [...prev, ...fresh] : prev;
+            if (fresh.length === 0) return prev;
+            // 补拉窗口内可能有多条，按 seq/ts 归位排序后合并
+            const merged = [...prev, ...fresh];
+            merged.sort((a, b) => {
+              if (typeof a.seq === "number" && typeof b.seq === "number") return a.seq - b.seq;
+              return a.ts.localeCompare(b.ts);
+            });
+            return merged;
           });
         }
       }
@@ -539,7 +556,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     lastSendRef.current = { content: text, ts: Date.now() };
     setIsSending(true);
     setSendError(null);
-    const tempId = `u-${Date.now()}`;
+    // 临时 ID 同时作为 clientMsgId：服务端以它幂等入库，WS 回显带同一 ID → 按 id 精确去重
+    const tempId = `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const mentions = parseMentions(text);
     // 乐观追加（临时 ID）
     setMessages((prev) =>
@@ -569,6 +587,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           draftAttachment ?? undefined,
           quoting ?? undefined,
           mentions.length > 0 ? mentions : undefined,
+          tempId,
         );
         if (res.error) {
           lastError = res.error;

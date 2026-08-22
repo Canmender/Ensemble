@@ -2,6 +2,16 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.9.6 (2026-08-22) — 重连补拉全量化：事件回填 + 聊天 seq 增量同步
+
+配合服务端 v0.8.3（chat_messages.seq + clientMsgId 幂等）的移动端消费侧：
+
+- **事件级精确回填**：断线重连后按本地 seq 游标调 `getRunEvents(afterSeq)`，按 `{seq, jobId, event}` 三元组归并进对应 job.events（游标=实时已见最大值，严格无重复）；同时兜底刷新 run/job 状态、补进断线期间新建的 job。
+- **聊天增量同步**：WS `chat.message` 携带服务端真实消息 ID 与单调 seq；重连补拉优先按 seq 过滤（无 seq 旧数据回退时间戳），合并后按 seq 排序，不丢消息不错序。
+- **发送幂等**：消息发送携带 clientMsgId（与乐观追加同 ID），弱网 3 次重试不再产生重复消息/重复推送；appendMessage 按 id 精确去重。
+
+**版本**：mobile 0.9.5 → 0.9.6，versionCode 105 → 106
+
 ## v0.9.5 (2026-08-22) — 通话质量与体验优化
 
 ### 语音/视频通话修复
