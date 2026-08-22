@@ -29,6 +29,8 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useUnreadStore } from "../store/unreadStore";
 import { useMeStore } from "../store/meStore";
 import { wsLink } from "../services/wslink";
+import Animated from "react-native-reanimated";
+import { useLayoutSpringGentle } from "../utils/motion";
 import { startCall } from "../services/callService";
 import { encryptFor, decryptFrom } from "../services/e2e/e2eService";
 import { EmptyState } from "../components/ui";
@@ -973,6 +975,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     );
   };
 
+  // 消息气泡布局转场弹簧（顶层调用 hooks；系统减弱动态时为 undefined）
+  const bubbleLayoutSpring = useLayoutSpringGentle();
+
   const renderMessage = ({ item }: { item: MessageItem }) => {
     const isUser = isMyMessage(item);
     const isGroup = conv && !conv.runId.startsWith("conv_");
@@ -990,7 +995,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     const senderName = item.agentName ? resolveSenderName(item.agentName) : "";
     const senderAvatar = item.agentName ? usersById.get(item.agentName)?.avatarUrl : undefined;
     return (
-      <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
+      <Animated.View layout={bubbleLayoutSpring} style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
         {/* 多选模式：点击选中/取消 */}
         {selectMode && (
           <TouchableOpacity onPress={() => toggleSelect(item.id)} style={styles.selectCheck} hitSlop={8}>
@@ -1050,7 +1055,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             ) : null}
           </View>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     );
   };
 

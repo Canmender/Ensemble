@@ -14,6 +14,7 @@ import { RTCView } from "react-native-webrtc";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useCallStore } from "../store/callStore";
 import { acceptCall, rejectCall, hangup, toggleMic, toggleCam, toggleSpeaker, switchCamera } from "../services/callService";
+import { GlassSurface } from "./GlassSurface";
 import { Avatar } from "./Avatar";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
@@ -106,16 +107,19 @@ export function CallModal() {
                 </View>
               </View>
             )}
-            {/* 本端画中画（关摄像头时显示头像占位），避让顶部信息区 */}
+            {/* 本端画中画（关摄像头时显示头像占位），避让顶部信息区。
+                玻璃边框浮层（GlassSurface：iOS26 原生液态玻璃 / Android 真模糊 / 降级半透明） */}
             <View style={[st.pip, { top: insets.top + 76 }]}>
-              {localUrl && camOn && !!localStream && localStream.getVideoTracks().length > 0 ? (
-                <RTCView streamURL={localUrl!} style={st.pipVideo} objectFit="cover" mirror />
-              ) : (
-                <View style={st.pipOff}>
-                  <Avatar name={name} size={36} />
-                  <Text style={st.pipOffText}>摄像头已关闭</Text>
-                </View>
-              )}
+              <GlassSurface radius={radius.lg} intensity="panel" style={st.pipVideo} fallback={!!(localUrl && camOn && !!localStream && localStream.getVideoTracks().length > 0)}>
+                {localUrl && camOn && !!localStream && localStream.getVideoTracks().length > 0 ? (
+                  <RTCView streamURL={localUrl!} style={st.pipVideo} objectFit="cover" mirror />
+                ) : (
+                  <View style={st.pipOff}>
+                    <Avatar name={name} size={36} />
+                    <Text style={st.pipOffText}>摄像头已关闭</Text>
+                  </View>
+                )}
+              </GlassSurface>
             </View>
           </>
         )}
