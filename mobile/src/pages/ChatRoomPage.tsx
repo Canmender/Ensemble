@@ -31,6 +31,7 @@ import { useMeStore } from "../store/meStore";
 import { wsLink } from "../services/wslink";
 import Animated from "react-native-reanimated";
 import { useLayoutSpringGentle } from "../utils/motion";
+import { bubbleVariantOf, bubbleStyles } from "../components/bubble";
 import { startCall } from "../services/callService";
 import { encryptFor, decryptFrom } from "../services/e2e/e2eService";
 import { EmptyState } from "../components/ui";
@@ -994,6 +995,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     }
     const senderName = item.agentName ? resolveSenderName(item.agentName) : "";
     const senderAvatar = item.agentName ? usersById.get(item.agentName)?.avatarUrl : undefined;
+    // Bubble/Message 分层（对齐桌面 v0.8.15）：variant+tint 在此算好传给表面样式
+    const isDirectAgent = !!conv && !conv.runId.startsWith("conv_") && !isGroup;
+    const { variant, tint } = bubbleVariantOf(isUser, item.agentName ?? "", isDirectAgent, item.role);
+    const bs = bubbleStyles(variant, tint);
     return (
       <Animated.View layout={bubbleLayoutSpring} style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
         {/* 多选模式：点击选中/取消 */}
@@ -1006,11 +1011,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             />
           </TouchableOpacity>
         )}
-        {!isUser && (
+        {!isUser && variant !== "ai-ghost" && (
           <Avatar name={senderName} avatarUrl={senderAvatar} size={32} />
         )}
         <TouchableOpacity
-          style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}
+          style={[styles.bubble, bs.surface]}
           activeOpacity={0.6}
           delayLongPress={350}
           onLongPress={() => setMenuMsg(item)}
@@ -1027,12 +1032,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                   </Text>
                 </View>
               )}
-              {!isUser && item.agentName && (
-                <Text style={styles.bubbleAgentName}>{resolveSenderName(item.agentName)}</Text>
+              {!isUser && variant !== "ai-ghost" && item.agentName && (
+                <Text style={[styles.bubbleAgentName, bs.nameText]}>{resolveSenderName(item.agentName)}</Text>
               )}
               {item.attachment && renderAttachment(item.attachment, isUser, item.content)}
               {!!item.content && (
-                <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
+                <Text style={[styles.bubbleText, bs.text]}>
                   {item.content.split(/(@[\p{L}\p{N}_]{1,20})/gu).map((part, i) =>
                     /^@[\p{L}\p{N}_]{1,20}$/u.test(part) ? (
                       <Text key={i} style={[styles.mentionText, isUser && styles.mentionTextUser]}>{part}</Text>
