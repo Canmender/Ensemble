@@ -30,6 +30,7 @@ import { useUnreadStore } from "../store/unreadStore";
 import { useMeStore } from "../store/meStore";
 import { wsLink } from "../services/wslink";
 import { startCall } from "../services/callService";
+import { encryptFor, decryptFrom } from "../services/e2e/e2eService";
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { EmojiPicker } from "../components/EmojiPicker";
@@ -252,6 +253,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     return items;
   }, [conv, usersById, agentsById, meId]);
 
+  // E2E 标记：1:1 用户会话且已知对方 userId 时启用加密/解密
+  const e2ePeer = useMemo(() => callPeer(conv), [conv, usersById, meId]);
+
   // @提及：输入框输入时检测 @，显示/隐藏 picker，支持按名称过滤；同时保存草稿
   const onInputChange = useCallback((text: string) => {
     setInputText(text);
@@ -334,8 +338,22 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       api.getMe(),
     ]);
     if (histRes.data) {
+      // E2E 解密：1:1 用户会话中，仅对端消息可解密（自己发的密文无对应私钥，保持本地版本）
+      const rawMsgs = histRes.data.messages;
+      const isE2e = !!e2ePeer;
+      const decryptedMsgs = isE2e
+        ? await Promise.all(
+            rawMsgs.map(async (m) => {
+              const content =
+                m.role === "assistant" && m.agentId === e2ePeer.userId
+                  ? await decryptFrom(e2ePeer.userId, m.content)
+                  : m.content;
+              return { ...m, content };
+            }),
+          )
+        : rawMsgs;
       setMessages(
-        histRes.data.messages.map((m) => ({
+        decryptedMsgs.map((m) => ({
           id: m.id,
           role: m.role,
           content: m.content,
@@ -370,9 +388,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       }
     }
     void api.markConversationRead(convId);
-  }, [convId]);
-
-  // 加载更多消息（滚动到顶部时调用，保持视口位置）
+  }, [convId, e2ePeer]);
   const loadMoreMessages = useCallback(async () => {
     if (loadingMore || !hasMore || messages.length === 0) return;
     setLoadingMore(true);
@@ -419,19 +435,22 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     });
   }, [loadMessages, convId]);
 
-  // WS 实时：新消息推送到当前会话
+  // WS 实时：新消息推送到当前会话（E2E 消息异步解密后追加）
   useEffect(() => {
     const unsub = wsLink.on({
-      onChatMessage: (msg) => {
+      onChatMessage: async (msg) => {
         if (msg.runId === activeRunIdRef.current) {
-          // agent 会话中用户发言会被广播回发送者（agentId="user"），与乐观追加去重；agentId 非 "user" 视为对方消息
           const isSelf = msg.agentId === "user";
+          let content = msg.content;
+          // E2E 解密：仅 1:1 用户会话中来自 peer 的消息（自己发的密文无法解，保持本地版本）
+          if (e2ePeer && !isSelf && msg.agentId === e2ePeer.userId) {
+            try { content = await decryptFrom(e2ePeer.userId, msg.content); } catch {}
+          }
           setMessages((prev) =>
             appendMessage(prev, {
-              // 服务端真实消息 ID（v0.8.3+）：与乐观追加/历史接口同源，按 id 精确去重
               id: msg.id ?? `${msg.agentId}-${Date.now()}`,
               role: isSelf ? "user" : "assistant",
-              content: msg.content,
+              content,
               agentName: msg.agentId,
               attachment: msg.attachment,
               replyTo: msg.replyTo,
@@ -440,13 +459,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               seq: msg.seq,
             }),
           );
-          // 正在看当前会话：收到消息即时重新标记已读（对方实时看到「已读」）
           void api.markConversationRead(convId);
         }
       },
     });
     return unsub;
-  }, [convId]);
+  }, [convId, e2ePeer]);
 
   // 已读回执实时更新：对方读了会话 → 更新已读状态
   useEffect(() => {
@@ -486,20 +504,28 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     try {
       const res = await api.getConversationMessages(convId, undefined, 100);
       if (res.data) {
-        const newMsgs = res.data.messages
-          .filter((m) => (useSeq ? (m.seq ?? 0) > maxSeq : m.ts > lastTs))
-          .map((m) => ({
-            id: m.id,
-            role: m.role,
-            content: m.content,
-            agentName: m.agentId,
-            attachment: m.attachment,
-            replyTo: m.replyTo,
-            mentions: m.mentions,
-            deleted: m.deleted,
-            ts: m.ts,
-            seq: m.seq,
-          }));
+        const filtered = res.data.messages.filter((m) => (useSeq ? (m.seq ?? 0) > maxSeq : m.ts > lastTs));
+        const newMsgs = await Promise.all(
+          filtered.map(async (m) => {
+            let content = m.content;
+            // E2E 解密：仅 1:1 用户会话中来自 peer 的消息
+            if (e2ePeer && m.role === "assistant" && m.agentId === e2ePeer.userId) {
+              try { content = await decryptFrom(e2ePeer.userId, m.content); } catch {}
+            }
+            return {
+              id: m.id,
+              role: m.role,
+              content,
+              agentName: m.agentId,
+              attachment: m.attachment,
+              replyTo: m.replyTo,
+              mentions: m.mentions,
+              deleted: m.deleted,
+              ts: m.ts,
+              seq: m.seq,
+            };
+          }),
+        );
         if (newMsgs.length > 0) {
           setMessages((prev) => {
             const existingIds = new Set(prev.map((m) => m.id));
@@ -518,7 +544,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     } finally {
       void api.markConversationRead(convId);
     }
-  }, [convId]);
+  }, [convId, e2ePeer]);
 
   // 连接状态由断转连（socket.io/中继层信号）→ 增量补拉
   useEffect(() => {
@@ -577,13 +603,24 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     setShowMentionPicker(false);
     setTimeout(() => inputRef.current?.focus(), 80);
 
+    // E2E 加密：1:1 用户会话纯文字消息（无附件）且双方均已注册时加密；失败回退明文
+    let wireContent = text;
+    if (e2ePeer && text && !draftAttachment) {
+      try {
+        const encrypted = await encryptFor(e2ePeer.userId, text);
+        if (encrypted) wireContent = encrypted;
+      } catch {
+        /* 加密失败不中断发送：灰度共存，明文送达 */
+      }
+    }
+
     // 重试逻辑：最多 3 次，间隔递增
     let lastError: string | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const res = await api.sendConversationMessage(
           convId,
-          text,
+          wireContent,
           draftAttachment ?? undefined,
           quoting ?? undefined,
           mentions.length > 0 ? mentions : undefined,
@@ -610,7 +647,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     // 3 次都失败
     setSendError(lastError || "发送失败，请重试");
     setIsSending(false);
-  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages, parseMentions]);
+  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages, parseMentions, e2ePeer]);
 
   // 撤回消息（长按自己的消息触发）
   const recallMessage = useCallback(

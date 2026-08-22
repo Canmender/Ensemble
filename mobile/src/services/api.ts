@@ -782,6 +782,40 @@ class ApiService {
     return this.request<SkillInfo[]>("GET", "/api/skills");
   }
 
+  // ========== E2E 密钥目录 ==========
+
+  /** 注册/轮换身份密钥包（登录后懒注册；重复注册 = 轮换） */
+  async registerE2eIdentity(input: {
+    identityKey: string;
+    signedPreKeyId: number;
+    signedPreKey: string;
+    signedPreKeySignature: string;
+    oneTimePreKeys: Array<{ id: number; key: string }>;
+  }): Promise<ApiResponse<{ registered: boolean }>> {
+    return this.request<{ registered: boolean }>("PUT", "/api/e2e/register", input);
+  }
+
+  /** 取对端密钥包（OPK 取走即删；发起会话用） */
+  async getE2eBundle(userId: string): Promise<ApiResponse<{
+    identityKey: string;
+    signedPreKeyId: number;
+    signedPreKey: string;
+    signedPreKeySignature: string;
+    oneTimePreKey?: { id: number; key: string };
+  }>> {
+    return this.request("GET", `/api/e2e/bundle/${userId}`);
+  }
+
+  /** 追加补充一次性预密钥 */
+  async addE2eOneTimePreKeys(keys: Array<{ id: number; key: string }>): Promise<ApiResponse<{ remaining: number }>> {
+    return this.request<{ remaining: number }>("POST", "/api/e2e/opks", { oneTimePreKeys: keys });
+  }
+
+  /** 对端是否已启用端到端加密（capability 缓存由 e2eService 管理） */
+  async getE2eCapability(userId: string): Promise<ApiResponse<{ enrolled: boolean }>> {
+    return this.request<{ enrolled: boolean }>(`GET`, `/api/e2e/capability/${userId}`);
+  }
+
   // ========== Health API ==========
 
   /** 健康检查 */

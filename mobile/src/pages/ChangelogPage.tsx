@@ -8,6 +8,15 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.7",
+    date: "2026-08-22",
+    changes: [
+      "私聊端到端加密（Beta）：1:1 文字消息 X3DH+双棘轮加密，服务器仅见密文",
+      "私钥存 Android Keystore 硬件加密，永不上传",
+      "双方都升级后才启用加密（灰度共存），解密失败显示占位不崩溃",
+    ],
+  },
+  {
     version: "v0.9.6",
     date: "2026-08-22",
     changes: [

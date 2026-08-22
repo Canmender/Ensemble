@@ -1,8 +1,15 @@
-import { registerRootComponent } from 'expo';
+/**
+ * 合鸣移动端入口
+ * 先初始化全局 polyfills（Node.js Buffer），再挂载 App。
+ * WebCrypto 由 @peculiar/webcrypto 在 e2eService 内注入 libsignal，无需全局 polyfill。
+ */
+import { Buffer } from "buffer";
+import "process";
 
-import App from './App';
+// Node.js 全局 polyfill：部分依赖（如 libsignal 生态）期望全局 Buffer
+(globalThis as any).Buffer = Buffer;
 
-// registerRootComponent calls AppRegistry.registerComponent('main', () => App);
-// It also ensures that whether you load the app in Expo Go or in a native build,
-// the environment is set up appropriately
+import { registerRootComponent } from "expo";
+import App from "./App";
+
 registerRootComponent(App);

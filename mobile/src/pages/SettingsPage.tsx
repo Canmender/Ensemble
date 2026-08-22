@@ -26,7 +26,7 @@ import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.9.6";
+const APP_VERSION = nativeApplicationVersion ?? "0.9.7";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();

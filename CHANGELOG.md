@@ -2,6 +2,22 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.9.7 (2026-08-22) — 私聊端到端加密（E2EE Beta）
+
+按 `desktop/docs/E2E-PROTOCOL.md` v1 规范实现的移动端侧：
+
+- **协议**：X3DH 会话建立 + Double Ratchet 棘轮（`@privacyresearch/libsignal-protocol-typescript`，与桌面端同库同线格式）；AES-256-CBC + HMAC-SHA256。
+- **密钥管理**：登录后懒注册（IK/SPK/100 OPK），密钥目录走 `/api/e2e/*`；私钥存 Expo SecureStore（Android Keystore 硬件加密）永不离机；OPK 余量 <20 自动补 100。
+- **收发接入**：1:1 用户会话纯文字消息加密发送；WS 实时、历史加载、重连补拉三路均自动解密；capability 缓存 ≤5 分钟，双方已注册才加密（灰度共存）。
+- **信封格式**：`{"e2e":1,"v":1,"ct":{"type":<1|3>,"body":"<base64>"}}`——libsignal body 是 binary string，base64 编码后过 JSON。
+- **健壮性**：解密失败显示 🔒 占位不崩溃；加密失败回退明文；群聊/附件仍明文（v1 范围外）。
+
+### 关键实现坑（node 实测 8/8 通过后落地）
+- **Buffer 内存池陷阱**：`Buffer.from(s).buffer` 返回内存池（8KB 级），必须 `slice(byteOffset, +byteLength)` 出独立 ArrayBuffer，否则整块池被加密（密文膨胀数百倍且对端无法解密）。
+- **RN 无 WebCrypto**：Hermes 没有 subtle，需 `@peculiar/webcrypto` 纯 JS 实现经 `setWebCrypto()` 注入 libsignal（仅 getRandomValues 不够，AES/HMAC 都走 subtle）。
+
+**版本**：mobile 0.9.6 → 0.9.7，versionCode 106 → 107
+
 ## v0.9.6 (2026-08-22) — 重连补拉全量化：事件回填 + 聊天 seq 增量同步
 
 配合服务端 v0.8.3（chat_messages.seq + clientMsgId 幂等）的移动端消费侧：
