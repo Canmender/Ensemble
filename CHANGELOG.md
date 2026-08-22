@@ -2,6 +2,26 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.6 (2026-08-22) — 联机方向①：双安装包（electron-builder）
+
+- **双包并行**：新增 `electron-builder.cloud.yml`，与默认 yml 的差异仅为
+  产品名（`合鸣云端版` vs `合鸣本地版`）与内置 edition 标识（`resources/edition.txt`）。
+  两包可并行安装，桌面图标和 AUMI 独立分组。
+- **安装包自动锁定版本**：主进程 `resolveEdition` 优先级链条新增 `readResourcesEdition()`
+  （打包 app 读 `process.resourcesPath/edition.txt`），双击启动即识别版本，无需 bat 或命令行参数。
+- **`pnpm package:local` / `package:cloud`**：分别出本地版/云端版 NSIS 安装包；
+  旧 `pnpm package` 保留（默认本地版）。
+- **asar + dist-only 打包**：esbuild 已将 server/shared 全量打进 main bundle，
+  安装包仅含 `dist/` + `package.json`，不带 node_modules（node-llama-cpp 为未使用 external）。
+- **产物命名**：`合鸣-本地版-0.8.6-setup.exe` / `合鸣-云端版-0.8.6-setup.exe`。
+
+### 已知限制
+- 本轮因网络环境未能实测 electron-builder 产物下载（winCodeSign/nsis 下载阻塞），
+  配置参照 electron-builder 文档 + 官方推荐值；在可正常访问 GitHub 的环境首次打包
+  约需下载 ~200MB 工具链（一次性）。
+
+**版本**：desktop 0.8.5 → 0.8.6
+
 ## v0.8.5 (2026-08-22) — 联机方向③：E2E 加密（协议规范 + 服务端密钥目录）
 
 依据《IM端到端加密协议调研》选型（X3DH + Double Ratchet），本轮交付协议层：

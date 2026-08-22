@@ -23,13 +23,15 @@ function readMarker(): Edition | null {
 }
 
 /**
- * 解析本次运行的版本：--ensemble-edition= → ENSEMBLE_EDITION → 上次选择 → 默认 local。
+ * 解析本次运行的版本：--ensemble-edition= → ENSEMBLE_EDITION → 安装包内置版本
+ * （打包时写入 resources/edition.txt，区分本地版/云端版安装包）→ 上次选择 → 默认 local。
  * 必须在 app.ready 与单实例锁之前调用；解析后把本次选择写回 marker（无参启动时沿用）。
  */
 export function resolveEdition(): Edition {
   const edition =
     parseEditionArg(process.argv) ??
     parseEditionValue(process.env.ENSEMBLE_EDITION) ??
+    readResourcesEdition() ??
     readMarker() ??
     "local";
   try {
@@ -38,6 +40,16 @@ export function resolveEdition(): Edition {
     /* marker 写失败不阻断启动 */
   }
   return edition;
+}
+
+/** 打包安装包内置的固定版本标识（resources/edition.txt，由 electron-builder extraResources 注入） */
+function readResourcesEdition(): Edition | null {
+  try {
+    if (!app.isPackaged) return null;
+    return parseEditionValue(readFileSync(join(process.resourcesPath, "edition.txt"), "utf8"));
+  } catch {
+    return null;
+  }
 }
 
 /**

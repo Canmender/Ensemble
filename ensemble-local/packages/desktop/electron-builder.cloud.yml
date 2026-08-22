@@ -1,0 +1,27 @@
+# 合鸣 · 云端版 安装包配置（electron-builder --config electron-builder.cloud.yml）
+# 与本地版的唯一差异：产品名/appId 与内置 edition 标识（resources/edition.txt = cloud）；
+# 工作区仍按 editions/cloud 分区隔离（见 src/main/edition.ts），两包可并存。
+appId: com.ensemble.system.cloud
+productName: 合鸣云端版
+directories:
+  output: release
+asar: true
+files:
+  - dist/**
+  - package.json
+win:
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: 合鸣-云端版-${version}-setup.exe
+extraResources:
+  - from: ../web/dist
+    to: dist
+  - from: build/icon.png
+    to: icon.png
+  - from: build/edition-cloud.txt
+    to: edition.txt
