@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync } from "node:fs";
-import { openDb, type DatabaseSync } from "../db/sqlite";
+import { openDb } from "../db/sqlite";
 import { PluginHost } from "./kernel";
 import { PerUserPluginManager, USER_TIMER_CAP, type CandidatePlugin } from "./per-user";
 import { PluginUserKv } from "./user-kv";
@@ -14,7 +14,7 @@ import { PluginUserKv } from "./user-kv";
  * - timer 闸门：每用户累计 scheduled 超上限时 enable 拒绝
  */
 
-function makeDb(): DatabaseSync {
+function makeDb(): ReturnType<typeof openDb> {
   return openDb(join(mkdtempSync(join(tmpdir(), "peruser-test-")), "t.db"));
 }
 
@@ -34,7 +34,7 @@ const tickPlugin: CandidatePlugin = {
 };
 
 describe("PerUserPluginManager 多租户隔离", () => {
-  let db: DatabaseSync;
+  let db: ReturnType<typeof openDb>;
   let host: PluginHost;
   let mgr: PerUserPluginManager;
 

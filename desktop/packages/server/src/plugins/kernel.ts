@@ -61,6 +61,9 @@ interface ServiceEntry {
   owner: string;
 }
 
+/** 异步瀑布默认超时（《性能工程》§三：异步监听器 3s） */
+export const ASYNC_LISTENER_TIMEOUT_MS = 3_000;
+
 export class PluginHost {
   private states = new Map<string, PluginState>();
   private services = new Map<string, ServiceEntry>();
@@ -211,11 +214,16 @@ export class PluginHost {
    * 短路语义与同步版一致：返回非 undefined 即决策；调 next() 委托下游；
    * 全部委托完走 fallback（调用方实现默认行为，如确认超时拒绝）。
    * 单监听器异常视为未处理，交给下游（不中断管线）。
+   *
+   * 性能闸门（《性能工程》§三）：timeoutMs 内整条管线必须完成（含 fallback），
+   * 超时放弃等待并走 fallback——防"挂起不返回"的监听器拖死调用方
+   * （如 chat 管线被坏插件阻塞）。已启动的监听器无法强杀，只能不再等它。
    */
   async waterfallAsync<TIn, TOut>(
     event: string,
     payload: TIn,
     fallback: () => Promise<TOut> | TOut,
+    timeoutMs = ASYNC_LISTENER_TIMEOUT_MS,
   ): Promise<TOut> {
     const chain = this.listeners.filter((l) => l.event === event);
     const dispatch = async (i: number): Promise<unknown> => {
@@ -232,7 +240,51 @@ export class PluginHost {
         return dispatch(i + 1);
       }
     };
-    return (await dispatch(0)) as TOut;
+    // 超时竞速：监听器链挂起时放弃等待、走 fallback 兜底
+    return (await Promise.race([
+      dispatch(0),
+      new Promise<TOut>((resolve) => {
+        const t = setTimeout(() => {
+          console.warn(`[plugins] waterfall ${event} timed out after ${timeoutMs}ms, using fallback`);
+          resolve(fallback());
+        }, timeoutMs);
+        t.unref?.();
+      }),
+    ])) as TOut;
+  }
+
+  /**
+   * 异步瀑布的"决策链限时"变体：仅对监听器链计时，超时后直接返回 undefined
+   * （由调用方决定默认行为）。与 waterfallAsync 的区别：fallback 不在竞速分支里——
+   * fallback 自身可以等很久（如 HITL 的 WS 弹窗分钟级等待）。
+   */
+  async decideAsync<TIn>(
+    event: string,
+    payload: TIn,
+    timeoutMs = ASYNC_LISTENER_TIMEOUT_MS,
+  ): Promise<{ decided: boolean; result: unknown }> {
+    const chain = this.listeners.filter((l) => l.event === event);
+    const dispatch = async (i: number): Promise<unknown> => {
+      if (i >= chain.length) return undefined;
+      try {
+        const result = await chain[i].fn(payload, (result?: unknown) =>
+          result !== undefined ? result : dispatch(i + 1),
+        );
+        if (result !== undefined) return result;
+        return dispatch(i + 1);
+      } catch (e) {
+        console.warn(`[plugins] listener for ${event} threw: ${String(e)}`);
+        return dispatch(i + 1);
+      }
+    };
+    const result = await Promise.race([
+      dispatch(0),
+      new Promise<undefined>((resolve) => {
+        const t = setTimeout(() => resolve(undefined), timeoutMs);
+        t.unref?.();
+      }),
+    ]);
+    return { decided: result !== undefined, result };
   }
 
   private getService<T>(name: string): T {

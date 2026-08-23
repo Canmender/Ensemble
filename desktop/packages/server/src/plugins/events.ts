@@ -73,16 +73,12 @@ export class EventBus implements EventSink {
   }
 
   /**
-   * HITL 工具确认瀑布：监听器返回 {approved} 即短路决策（含拒绝，false 也算——
-   * 因为包在对象里）；全部未处理（undefined）→ fallback（hub.requestConfirm 等用户）。
-   * 决策对象在此解包为布尔。
+   * HITL 工具确认：插件策略链限时决策（3s，防坏策略挂起工具调用），
+   * 无决策/超时 → fallback（WS 弹窗等用户，分钟级不受此限）。
+   * 监听器返回 {approved} 即决策（含拒绝，false 也算——包在对象里）。
    */
   async requestToolConfirm(payload: ToolConfirmRequestPayload, fallback: () => Promise<boolean>): Promise<boolean> {
-    const decision = await this.host.waterfallAsync<ToolConfirmRequestPayload, { approved: boolean } | undefined>(
-      "tool/confirm",
-      payload,
-      () => undefined,
-    );
-    return decision ? decision.approved : fallback();
+    const { decided, result } = await this.host.decideAsync<ToolConfirmRequestPayload>("tool/confirm", payload);
+    return decided ? (result as { approved: boolean }).approved : fallback();
   }
 }

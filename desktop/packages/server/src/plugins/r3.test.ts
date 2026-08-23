@@ -32,6 +32,28 @@ describe("EventBus tool/confirm 异步短路", () => {
     expect(fallbackCalled).toBe(false);
   });
 
+  it("挂起的监听器被硬超时砍掉，fallback 兜底（性能闸门）", async () => {
+    const host = new PluginHost();
+    const bus = new EventBus(host);
+    await host.register({
+      name: "hanging-policy",
+      install: (ctx) => ctx.on("tool/confirm", () => new Promise<undefined>(() => {})), // 永不返回
+    });
+    const result = await bus.requestToolConfirm({ runId: "r", tool: "exec", args: {} }, async () => true);
+    expect(result).toBe(true); // 3s 超时后走 WS 弹窗 fallback
+  });
+
+  it("decideAsync 限时决策：超时返回未决策而非误判", async () => {
+    const host = new PluginHost();
+    await host.register({
+      name: "slow",
+      install: (ctx) => ctx.on("tool/confirm", () => new Promise<{ approved: boolean }>((r) => setTimeout(() => r({ approved: true }), 500))),
+    });
+    const { decided, result } = await host.decideAsync("tool/confirm", {}, 50);
+    expect(decided).toBe(false); // 50ms 内没答完 → 未决策（不是拒绝）
+    void result;
+  });
+
   it("无监听器走 fallback（WS 弹窗等用户）", async () => {
     const host = new PluginHost();
     const bus = new EventBus(host);
