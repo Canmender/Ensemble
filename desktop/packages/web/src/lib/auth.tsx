@@ -99,7 +99,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })();
     }
     clearSessionToken();
-    setState({ status: "local" });
+    // 登出后回未登录态：multi 模式下由 App 重定向到 /login（切换账号）；
+    // 不能设 "local"——那会让云端版绕过登录直接进主界面。
+    setState({ status: getMode() === "multi" ? "guest" : "local" });
     window.location.href = "/";
   };
 

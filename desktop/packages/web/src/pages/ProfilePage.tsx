@@ -1,21 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Camera, ArrowLeft, Check } from "lucide-react";
+import { Camera, ArrowLeft, Check, LogOut, RefreshCw } from "lucide-react";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Avatar } from "../components/Avatar";
 import { Button, Card, Input, Label, cls, showToast } from "../components/ui";
 
-/** 个人信息页：头像 / 昵称 / 用户名 / ID，可改昵称、传头像 */
+/** 个人信息页：头像 / 昵称 / 用户名 / ID，可改昵称、传头像；底部退出登录（切换账号） */
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { state, login } = useAuth();
+  const { state, login, logout } = useAuth();
   const user = state.user;
 
   const [me, setMe] = useState<{ displayName?: string; username: string; avatarUrl?: string; id: string; role?: string } | null>(null);
   const [nickname, setNickname] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -114,6 +115,33 @@ export default function ProfilePage() {
           </Button>
         </div>
       </Card>
+
+      {/* 退出登录 / 切换账号（仅登录用户可见；本地模式无账号体系） */}
+      {state.status === "authenticated" && (
+        <Card className="mt-4 p-5">
+          {confirmLogout ? (
+            <div className="space-y-3">
+              <p className="text-sm text-fg">确定要退出当前账号吗？</p>
+              <p className="text-xs text-muted">退出后需重新登录才能同步云端数据；本机端到端加密密钥保留，重新登录后历史消息仍可解密。</p>
+              <div className="flex gap-2">
+                <Button variant="primary" className="flex-1 !bg-destructive hover:!bg-destructive/90" onClick={logout}>
+                  <LogOut className="h-4 w-4" /> 退出登录
+                </Button>
+                <Button variant="secondary" onClick={() => setConfirmLogout(false)}>取消</Button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setConfirmLogout(true)}
+              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none"
+            >
+              <LogOut className="h-4 w-4" />
+              退出登录
+              <span className="ml-auto text-xs text-muted">切换账号入口</span>
+            </button>
+          )}
+        </Card>
+      )}
     </div>
   );
 }
