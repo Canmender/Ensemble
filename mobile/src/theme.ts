@@ -119,6 +119,8 @@ export interface Palette {
   primaryDeep: string;
   primarySoft: string;
   primaryBubble: string;
+  /** 主色上的文字色（按钮/徽章内文字） */
+  primaryFg: string;
   gradient: readonly [string, string];
 
   text: string;
@@ -167,6 +169,7 @@ function buildPalette(): Palette {
     primaryDeep: activeTokens.fg,
     primarySoft: activeTokens.surface1,
     primaryBubble: activeTokens.primary,
+    primaryFg: activeTokens.primaryFg,
     gradient: [activeTokens.primary, activeTokens.fg] as const,
 
     text: activeTokens.fg,

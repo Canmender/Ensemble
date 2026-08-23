@@ -53,6 +53,8 @@ import { EmojiPicker } from "../components/EmojiPicker";
 import { SmartMenu } from "../components/SmartMenu";
 import { VoiceRecorder } from "../components/VoiceRecorder";
 import { VoiceMessage } from "../components/VoiceMessage";
+import { PluginCardView } from "../components/PluginCardView";
+import { isPluginCard } from "@ensemble/shared";
 import { timeAgo } from "../utils/timeAgo";
 import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
@@ -949,7 +951,16 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     [downloading],
   );
 
-  const renderAttachment = (att: MessageAttachment, isUser: boolean, content?: string) => {
+  const renderAttachment = (att: MessageAttachment, isUser: boolean, content?: string, pluginId?: string) => {
+    if (att.type === "plugin-card") {
+      // U1 插件卡片：isPluginCard 守卫校验 cardVersion/actions；不合法显示占位（永不白屏）
+      if (att.card && isPluginCard(att)) {
+        return <PluginCardView card={att.card} pluginId={pluginId || att.card.cardType} />;
+      }
+      return (
+        <Text style={[styles.bubbleText, isUser && { color: "#fff" }]}>卡片数据异常</Text>
+      );
+    }
     if (att.type === "image") {
       // 图片完整显示，点击全屏查看（全屏界面可下载）
       return (
@@ -1059,7 +1070,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               {!isUser && variant !== "ai-ghost" && item.agentName && (
                 <Text style={[styles.bubbleAgentName, bs.nameText]}>{resolveSenderName(item.agentName)}</Text>
               )}
-              {item.attachment && renderAttachment(item.attachment, isUser, item.content)}
+              {item.attachment && renderAttachment(item.attachment, isUser, item.content, item.agentName)}
               {!!item.content && (
                 <Text style={[styles.bubbleText, bs.text]}>
                   {item.content.split(/(@[\p{L}\p{N}_]{1,20})/gu).map((part, i) =>

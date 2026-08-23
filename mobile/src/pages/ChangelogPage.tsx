@@ -8,6 +8,15 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.11",
+    date: "2026-08-23",
+    changes: [
+      "插件卡片渲染接入（U1）：投票卡片可点击选项即时计票，票数条实时显示",
+      "五种卡片模板（投票/列表/统计/进度/图文）+ 未知类型折叠框降级，永不白屏",
+      "同步桌面端插件化基座（R0-R4 + 卡片协议 v1 定稿）",
+    ],
+  },
+  {
     version: "v0.9.10",
     date: "2026-08-23",
     changes: [

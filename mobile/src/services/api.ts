@@ -391,6 +391,24 @@ class ApiService {
 
   // ========== Agent API ==========
 
+  /**
+   * 插件卡片动作（U1）：POST /api/users/me/plugins/<pluginId>/actions/<action>。
+   * endpoint 为卡片里的相对路径（如 "/actions/vote"），此处归一化掉可选的
+   * /actions 前缀后拼接（服务端路由固定为 .../actions/:action）。
+   */
+  async pluginCardAction(
+    pluginId: string,
+    endpoint: string,
+    body?: Record<string, unknown>,
+  ): Promise<ApiResponse<Record<string, unknown>>> {
+    const verb = endpoint.replace(/^\/+/, "").replace(/^actions\//, "");
+    return this.request<Record<string, unknown>>(
+      "POST",
+      `/api/users/me/plugins/${encodeURIComponent(pluginId)}/actions/${encodeURIComponent(verb)}`,
+      body,
+    );
+  }
+
   /** 内置 AI 助手对话（服务端不可用时页面回退本地回答） */
   async assistantChat(message: string): Promise<ApiResponse<{ reply?: string }>> {
     return this.request<{ reply?: string }>("POST", "/api/assistant/chat", { message });

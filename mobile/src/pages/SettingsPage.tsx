@@ -27,7 +27,7 @@ import { nativeApplicationVersion } from "expo-application";
 import { colors, spacing, radius, fontSize, elevation, useTheme, setThemeMode } from "../theme";
 import type { ThemeMode } from "../theme";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.9.10";
+const APP_VERSION = nativeApplicationVersion ?? "0.9.11";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();

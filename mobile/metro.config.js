@@ -26,6 +26,18 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     // 提供空实现满足静态解析
     return { type: "empty" };
   }
+  // shared 源码（watchFolders 内）的裸名依赖（zod 等）：metro 以 originModulePath
+  // 向上找 node_modules，找不到 mobile 的平面安装。统一重定向到 mobile 的 node_modules。
+  if (!moduleName.startsWith(".") && !moduleName.startsWith("@ensemble/") && !path.isAbsolute(moduleName)) {
+    const fallback = path.resolve(__dirname, "node_modules", moduleName);
+    if (require("fs").existsSync(fallback)) {
+      return context.resolveRequest(
+        { ...context, originModulePath: path.resolve(__dirname, "index.ts") },
+        moduleName,
+        platform,
+      );
+    }
+  }
   return context.resolveRequest(context, moduleName, platform);
 };
 
