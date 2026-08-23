@@ -5,11 +5,33 @@ import type { AppContext } from "../../context";
 import { ok } from "./helpers";
 
 /**
- * 移动端应用更新检查（公开端点，无需认证）。
- * 读取 apkDir/version.json（部署脚本写入），返回最新版本信息供应用内更新判断。
+ * 应用更新检查（公开端点，无需认证）。
+ * GET /api/app-version        → 移动端 APK 更新（apkDir/version.json，部署脚本写入）
+ * GET /api/app-version/desktop → 桌面端安装包更新（apkDir/desktop.json，部署时与 setup.exe 同放 apkDir）
  */
 export function appVersionRouter(ctx: AppContext): Router {
   const r = Router();
+
+  r.get("/desktop", (_req, res) => {
+    res.set("Cache-Control", "no-store");
+    const file = join(ctx.apkDir, "desktop.json");
+    try {
+      const data = JSON.parse(readFileSync(file, "utf8")) as {
+        version?: string;
+        url?: string;
+        note?: string;
+        force?: boolean;
+      };
+      ok(res, {
+        version: data.version ?? "",
+        url: data.url ?? "",
+        note: data.note ?? "",
+        force: data.force ?? false,
+      });
+    } catch {
+      ok(res, { version: "", url: "", note: "", force: false });
+    }
+  });
 
   r.get("/", (_req, res) => {
     // 禁止缓存：应用内更新检查必须每次拿到最新版本

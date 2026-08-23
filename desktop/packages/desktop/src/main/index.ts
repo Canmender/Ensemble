@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { startLocalServer } from "./server";
 import { createWindow, registerIpc } from "./window";
 import { applyEditionWorkspace, EDITION_LABEL, resolveEdition, type Edition } from "./edition";
+import { registerAutoUpdater } from "./updater";
 import { logger } from "@ensemble/server";
 
 let mainWindow: BrowserWindow | null = null;
@@ -120,6 +121,10 @@ app.whenReady().then(async () => {
     });
 
     createTray();
+    // 自动更新：仅云端版启用（本地版离线无更新源）
+    if (edition === "cloud") {
+      registerAutoUpdater(app.getVersion());
+    }
     logger.info(`window loading: ${url}`);
   } catch (err) {
     console.error("startup failed:", err);

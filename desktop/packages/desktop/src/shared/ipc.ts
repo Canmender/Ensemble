@@ -13,4 +13,7 @@ export const IPC = {
   isAutoLaunch: "app:is-auto-launch",
   /** 云端地址连通性测试（主进程 net.fetch，绕开渲染层 CSP——新地址尚未入白名单） */
   testCloudHost: "app:test-cloud-host",
+  /** 自动更新：检查新版本 / 下载并拉起安装器 */
+  updateCheck: "update:check",
+  updateInstall: "update:install",
 } as const;

@@ -18,6 +18,16 @@ contextBridge.exposeInMainWorld("desktop", {
   /** 云端地址连通性测试（主进程 net.fetch，绕开渲染层 CSP） */
   testCloudHost: (host: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.testCloudHost, host),
+  /** 自动更新（仅云端版启用；本地版调用返回不可用） */
+  updateCheck: (): Promise<{ available: boolean; version?: string; note?: string }> =>
+    ipcRenderer.invoke(IPC.updateCheck),
+  updateInstall: (version: string): Promise<string> => ipcRenderer.invoke(IPC.updateInstall, version),
+  onUpdateAvailable: (cb: (info: { available: boolean; version?: string; note?: string }) => void) => {
+    ipcRenderer.on("update:available", (_e, info) => cb(info));
+  },
+  onUpdateProgress: (cb: (p: { received: number; total: number }) => void) => {
+    ipcRenderer.on("update:progress", (_e, p) => cb(p));
+  },
   /** 工具执行确认对话框（P2 工具安全用） */
   confirmTool: (tool: string, args: unknown): Promise<boolean> =>
     ipcRenderer.invoke(IPC.confirmTool, { tool, args }),

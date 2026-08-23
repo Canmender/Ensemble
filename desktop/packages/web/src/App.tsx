@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
   Bot, Brain, HelpCircle, LayoutDashboard, MessageSquare, Monitor, Moon, Settings, Sun, Users,
-  Workflow, Zap, MonitorSmartphone, Archive, LogOut, User as UserIcon
+  Workflow, Zap, MonitorSmartphone, Archive, LogOut, User as UserIcon, Download, X
 } from "lucide-react";
 import { api } from "./lib/api";
 import { wsClient } from "./lib/ws";
@@ -16,6 +16,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { CallOverlay } from "./components/CallOverlay";
 import { AssistantPanel } from "./components/AssistantPanel";
 import { bootstrapCallService } from "./lib/callService";
+import { Button } from "./components/ui";
 
 /* 路由级懒加载：首屏只加载当前页面，其余按需拆分 */
 const DashboardPage = lazy(() => import("./pages/DashboardPage"));
@@ -115,6 +116,41 @@ function PageLoading() {
   );
 }
 
+/** 自动更新提示条：主进程检测到新版本后显示（云端版专属，本地版无此状态） */
+function UpdateBanner({ info, progress, onInstall, onDismiss }: {
+  info: { version: string; note?: string };
+  progress: { received: number; total: number } | null;
+  onInstall: () => void;
+  onDismiss: () => void;
+}) {
+  const pct = progress && progress.total > 0 ? Math.round((progress.received / progress.total) * 100) : null;
+  return (
+    <div className="flex items-center gap-3 border-b border-border bg-primary/10 px-4 py-2 text-sm">
+      <Download className="h-4 w-4 shrink-0 text-primary" />
+      {pct !== null ? (
+        <>
+          <span className="text-fg">正在下载更新 v{info.version}…</span>
+          <span className="text-xs font-medium text-primary">{pct}%</span>
+          <button onClick={onDismiss} className="ml-auto text-xs text-muted hover:text-fg" aria-label="隐藏">隐藏</button>
+        </>
+      ) : (
+        <>
+          <span className="text-fg">
+            新版本 v{info.version} 可用
+            {info.note && <span className="ml-1.5 text-xs text-muted">{info.note}</span>}
+          </span>
+          <Button variant="primary" className="ml-auto !px-3 !py-1 text-xs" onClick={onInstall}>
+            一键升级
+          </Button>
+          <button onClick={onDismiss} className="rounded p-1 text-muted transition-colors hover:text-fg" aria-label="稍后提醒">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const { state, logout } = useAuth();
   const navigate = useNavigate();
@@ -122,6 +158,29 @@ export default function App() {
   const [serverOk, setServerOk] = useState<boolean | null>(null);
   const [agentCount, setAgentCount] = useState(0);
   const [showAssistant, setShowAssistant] = useState(false);
+
+  // ---- 自动更新提示（云端版；主进程检查到新版本后推送）----
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; note?: string } | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<{ received: number; total: number } | null>(null);
+  useEffect(() => {
+    const d = (window as any).desktop;
+    if (!d?.onUpdateAvailable) return; // 本地版/浏览器无此桥
+    d.onUpdateAvailable((info: any) => {
+      if (info?.available && info.version) setUpdateInfo({ version: info.version, note: info.note });
+    });
+    d.onUpdateProgress?.((p: { received: number; total: number }) => setUpdateProgress(p));
+  }, []);
+
+  async function installUpdate() {
+    if (!updateInfo) return;
+    try {
+      await ((window as any).desktop.updateInstall(updateInfo.version) as Promise<string>);
+      // 主进程拉起安装器后会自行退出
+    } catch (e) {
+      console.error("启动更新失败:", e);
+      setUpdateProgress(null);
+    }
+  }
 
   // 云端版首启引导：未配置云端地址时先走连接向导（顶部读取，避免 hooks 顺序问题）
   const forcedTop = getForcedMode();
@@ -204,8 +263,12 @@ export default function App() {
   if (effectiveMode === "local" && state.status === "guest") {
     // 本地模式自动以本地用户身份进入
     return (
-      <div className="flex h-full">
+      <div className="flex h-full flex-col">
         <CallOverlay />
+        {updateInfo && (
+          <UpdateBanner info={updateInfo} progress={updateProgress} onInstall={() => void installUpdate()} onDismiss={() => setUpdateInfo(null)} />
+        )}
+        <div className="flex min-h-0 flex-1">
         {/* Sidebar */}
         <aside className="glass flex w-56 flex-col border-r border-border">
           <div className="px-4 py-5">
@@ -259,10 +322,11 @@ export default function App() {
             </Suspense>
           </ErrorBoundary>
         </main>
+        </div>
       </div>
     );
   }
-  
+
   // 云端模式：未登录则跳转登录页（云端版首启：先完成地址配置向导）
   if (state.status === "guest") {
     if (isMultiGuest && cloudReady !== true) {
@@ -296,9 +360,13 @@ export default function App() {
   const userAvatar = isUser ? state.user?.avatarUrl : undefined;
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-col">
       <CallOverlay />
       <AssistantPanel isOpen={showAssistant} onClose={() => setShowAssistant(false)} />
+      {updateInfo && (
+        <UpdateBanner info={updateInfo} progress={updateProgress} onInstall={() => void installUpdate()} onDismiss={() => setUpdateInfo(null)} />
+      )}
+      <div className="flex min-h-0 flex-1">
       {/* Sidebar */}
       <aside className="glass flex w-56 flex-col border-r border-border">
         <div className="px-4 py-5">
@@ -402,6 +470,7 @@ export default function App() {
           </Suspense>
         </ErrorBoundary>
       </main>
+      </div>
     </div>
   );
 }

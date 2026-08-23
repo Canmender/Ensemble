@@ -2,6 +2,27 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.17 (2026-08-23) — 桌面端自动更新
+
+自研轻量方案（对齐移动端 UpdateManager 行为），不走 GitHub Releases（本网络环境持续不可达）：
+
+- **通道复用**：云端服务器 GET /api/app-version/desktop（apkDir/desktop.json + setup.exe 同目录，
+  部署时写入元数据即可），与移动端 APK 更新同一套基础设施
+- **主进程 updater.ts**：启动 30s 后首检 + 每 4h；仅云端版启用（本地版离线无更新源）；
+  net.fetch 走系统代理，无更新源/网络失败静默降级
+- **下载安装**：流式写临时目录（backpressure 处理）→ size 一致跳过重下（断点续传语义）→
+  拉起 NSIS 安装器 → 本进程退出让出句柄
+- **渲染层 UpdateBanner**：顶部提示条（版本号+说明+一键升级），下载中显示百分比；
+  可关闭稍后提醒
+- **localSettings.ts**：settings.json 主进程只读视图提取共享（window.ts/updater 共用）
+
+部署配套：apkDir 放 desktop.json（{"version":"0.8.x","url":"/apk/合鸣-云端版-0.8.x-setup.exe","size":N}）
++ 安装包文件即完成发布。
+
+验证: typecheck 0错; web/desktop build 通过; 云端版冒烟跨过检查点无异常
+
+**版本**: desktop 0.8.16 → 0.8.17
+
 ## v0.8.16 (2026-08-23) — 插件化 Agent 内核（Cordis 思想落地）
 
 按《Cordis插件系统调研》三篇（概念/源码/生态）落地，自研轻量内核（~230 行）而非引入 cordis 本体：
