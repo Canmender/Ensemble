@@ -8,6 +8,7 @@
  * state 存 PluginUserKv（重启不丢）；卡片 state 形状见 shared PollCardState。
  */
 import type { CandidatePlugin } from "../per-user";
+import type { PluginContext } from "../kernel";
 import type { EventSink } from "../events";
 import { newId } from "../../util/id";
 
@@ -44,9 +45,9 @@ export const pollPlugin: CandidatePlugin = {
       // POST /actions/create  body: { runId, question, options: string[] } → 发起投票
       // POST /actions/vote    body: { pollId, optionId }            → 计票并广播新卡片
       ctx.effect(() => {
-        const unregisterAction = registerPollActions(runtime, {
-          create: (body) => handleCreate(runtime, body as { runId?: string; question?: string; options?: string[] }),
-          vote: (body) => handleVote(runtime, body as { pollId?: string; optionId?: string }),
+        const unregisterAction = registerPollActions(runtime, ctx, {
+          create: (body) => handleCreate(runtime, ctx, body as { runId?: string; question?: string; options?: string[] }),
+          vote: (body) => handleVote(runtime, ctx, body as { pollId?: string; optionId?: string }),
         });
         return unregisterAction;
       }, "poll-actions");
@@ -61,14 +62,15 @@ type ActionTable = Map<string, PollActionHandler>;
 
 function registerPollActions(
   runtime: import("../per-user").UserPluginRuntime,
+  ctx: PluginContext,
   handlers: Record<string, PollActionHandler>,
 ): () => void {
   // 宿主级动作表：键 `user/<uid>/<pluginId>/<action>`（per-user 维度——不同用户的
   // 同名插件实例各自注册自己的闭包，互不覆盖）。动作端点按登录用户拼键查此表。
-  let table = runtime.ctx.tryGet<ActionTable>("plugin-actions");
+  let table = ctx.tryGet<ActionTable>("plugin-actions");
   if (!table) {
     table = new Map();
-    runtime.ctx.provide("plugin-actions", table);
+    ctx.provide("plugin-actions", table);
   }
   for (const [action, handler] of Object.entries(handlers)) {
     table.set(`user/${runtime.userId}/${runtime.manifest.id}/${action}`, handler);
@@ -82,6 +84,7 @@ function registerPollActions(
 
 async function handleCreate(
   runtime: import("../per-user").UserPluginRuntime,
+  ctx: PluginContext,
   body: { runId?: string; question?: string; options?: string[] },
 ) {
   const { runId, question } = body;
@@ -100,7 +103,7 @@ async function handleCreate(
   });
 
   // 发卡片消息
-  const sink = runtime.ctx.tryGet<EventSink>("events");
+  const sink = ctx.tryGet<EventSink>("events");
   sink?.emit("chat/message", {
     runId,
     jobId: undefined,
@@ -121,7 +124,7 @@ async function handleCreate(
   return { ok: true, pollId };
 }
 
-async function handleVote(runtime: import("../per-user").UserPluginRuntime, body: { pollId?: string; optionId?: string }) {
+async function handleVote(runtime: import("../per-user").UserPluginRuntime, ctx: PluginContext, body: { pollId?: string; optionId?: string }) {
   const cfg = (runtime.config ?? {}) as PollConfig;
   const { pollId, optionId } = body;
   if (!pollId || !optionId) return { error: "pollId/optionId 必填" };
@@ -142,7 +145,7 @@ async function handleVote(runtime: import("../per-user").UserPluginRuntime, body
   runtime.kv.set(`poll:${pollId}:state`, state);
 
   // 广播新版本卡片（新消息追加）
-  const sink = runtime.ctx.tryGet<EventSink>("events");
+  const sink = ctx.tryGet<EventSink>("events");
   const totalVotes = Object.values(state.votes).reduce((a, b) => a + b, 0);
   sink?.emit("chat/message", {
     runId: meta.runId,

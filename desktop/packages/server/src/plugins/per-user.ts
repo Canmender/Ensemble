@@ -12,7 +12,7 @@
  */
 import { z } from "zod";
 import type { DatabaseSync } from "node:sqlite";
-import type { PluginHost, EnsemblePlugin, PluginContext } from "./kernel";
+import type { PluginHost, EnsemblePlugin } from "./kernel";
 import type { PluginUserKv } from "./user-kv";
 import { logger } from "../util/logger";
 
@@ -65,13 +65,12 @@ interface UserPluginRow {
   enabled: number;
 }
 
-/** 插件运行时上下文：传给用户实例的 install */
+/** 插件运行时上下文：传给用户实例的 create 工厂 */
 export interface UserPluginRuntime {
   manifest: PluginManifest;
   userId: string;
   kv: PluginUserKv;
   config: unknown;
-  ctx: PluginContext;
 }
 
 /** 候选插件定义（服务器本地 plugins/ 目录的管理员预置集） */
@@ -213,7 +212,6 @@ export class PerUserPluginManager {
       userId,
       kv: this.makeKv(userId, pluginId),
       config: this.getUserConfig(userId, pluginId),
-      ctx: undefined as never, // create 不需要 ctx；真正 ctx 由 host 注入 install
     });
     const ok = await this.host.register({
       name: instanceName,
