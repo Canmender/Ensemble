@@ -9,6 +9,7 @@
  * { "time": "09:00", "message": "该做每日站会记录了", "conversationRunId": "run-xxx" }
  */
 import type { CandidatePlugin } from "../per-user";
+import type { PluginContext } from "../kernel";
 import type { EventSink } from "../events";
 
 interface ReminderConfig {
@@ -48,12 +49,12 @@ export const dailyReminderPlugin: CandidatePlugin = {
         runtime.kv.set("state", state);
       }
 
-      // 秒级检查循环（effect 化：unregister 自动清理）
+      // 秒级检查循环（effect 化：unregister 自动清理）；发消息用 install 注入的 ctx
       ctx.effect(() => {
         const timer = setInterval(() => {
           const s = runtime.kv.get<{ nextAt?: number }>("state") ?? {};
           if (!s.nextAt || Date.now() < s.nextAt) return;
-          fire(runtime, runId, message);
+          fire(runtime, ctx, runId, message);
           s.nextAt = nextOccurrence(time, Date.now());
           runtime.kv.set("state", s);
         }, 30_000);
@@ -74,9 +75,9 @@ function nextOccurrence(hhmm: string, from: number): number {
 }
 
 /** 发提醒消息：走事件总线（chat/message），由 chat-broadcaster 广播落链路 */
-function fire(runtime: import("../per-user").UserPluginRuntime, runId: string | undefined, message: string): void {
+function fire(runtime: import("../per-user").UserPluginRuntime, ctx: PluginContext, runId: string | undefined, message: string): void {
   if (!runId) return;
-  const sink = runtime.ctx.tryGet<EventSink>("events");
+  const sink = ctx.tryGet<EventSink>("events");
   if (!sink) return; // 事件总线不可用（异常环境）→ 静默跳过本轮
   sink.emit("chat/message", {
     runId,
