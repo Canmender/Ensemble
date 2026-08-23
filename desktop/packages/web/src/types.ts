@@ -185,6 +185,7 @@ export interface CardAction {
   id: string;
   label: string;
   style?: "primary" | "normal" | "danger";
+  /** 相对插件 actions 根，形如 "/vote"——勿带 /actions 前缀（拼接端已含） */
   endpoint: string;
   payload?: Record<string, unknown>;
 }
