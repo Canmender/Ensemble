@@ -15,7 +15,7 @@ import type {
   MessageReply,
   AgentEvent,
   WorkflowDef,
-} from "@ensemble/shared-protocol";
+} from "@ensemble/shared";
 
 // ==================== 请求配置 ====================
 

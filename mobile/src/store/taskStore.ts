@@ -11,7 +11,7 @@ import type {
   AgentEvent,
   RunStatus,
   JobStatus,
-} from "@ensemble/shared-protocol";
+} from "@ensemble/shared";
 
 // ==================== 事件订阅类型 ====================
 

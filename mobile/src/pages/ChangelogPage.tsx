@@ -8,6 +8,16 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.10",
+    date: "2026-08-23",
+    changes: [
+      "动态主题：新增「外观」设置（跟随系统/浅色/深色），全 App 支持暗色模式",
+      "状态栏与导航栏配色随主题自动切换，系统深色模式实时跟随",
+      "运行详情/任务页硬编码色值清理，统一引设计 token（双端同源）",
+      "液态玻璃组件明暗自适应，修复 shared 协议悬空引用",
+    ],
+  },
+  {
     version: "v0.9.8",
     date: "2026-08-22",
     changes: [

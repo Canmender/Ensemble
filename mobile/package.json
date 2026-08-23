@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/mobile",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -13,6 +13,7 @@
     "@capacitor/android": "^8.5.0",
     "@capacitor/cli": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@ensemble/shared": "file:../desktop/packages/shared",
     "@expo/metro-runtime": "~57.0.10",
     "@expo/vector-icons": "^15.1.1",
     "@noble/ciphers": "^2.3.0",

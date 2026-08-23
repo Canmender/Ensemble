@@ -58,7 +58,7 @@ import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
 import { LiquidGlass } from "../components/Glass";
-import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
+import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared";
 import type { RootStackParamList } from "../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ChatRoom">;

@@ -2,12 +2,13 @@
  * LiquidGlass — 液态玻璃容器
  *
  * Android 上 BlurView + borderRadius 会出白色矩形（库的已知限制），
- * 改用纯 View 多层叠加：半透明暖白 + 内高光边 + 外阴影 + 微光斑。
+ * 改用纯 View 多层叠加：半透明玻璃面 + 内高光边 + 外阴影 + 微光斑。
  * 视觉上接近液态玻璃，且 Android/iOS 稳定一致。
+ * 玻璃面颜色取自主题 palette（明暗自适应），可用 tint 显式覆盖。
  */
 import React, { memo } from "react";
 import { View, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
-import { radius } from "../theme";
+import { radius, getColors } from "../theme";
 
 export interface LiquidGlassProps {
   children?: React.ReactNode;
@@ -26,13 +27,16 @@ function LiquidGlassInner({
   contentStyle, padding, radiusValue = radius.xxl,
 }: LiquidGlassProps): React.ReactElement {
   const R = radiusValue;
+  // 渲染期读取当前 palette：换肤重挂载时随组件树一起刷新
+  const c = getColors();
+  const glassFace = tint ?? (c.glassHighlight === "#FFFFFF" ? "rgba(252,250,246,0.78)" : "rgba(30,41,59,0.78)");
 
   return (
     <View style={[{
       borderRadius: R,
       overflow: "hidden",
-      // 半透明暖白玻璃面
-      backgroundColor: "rgba(252,250,246,0.78)",
+      // 半透明玻璃面
+      backgroundColor: glassFace,
       // 3D 阴影
       shadowColor: "#000",
       shadowOpacity: 0.18,
@@ -44,7 +48,7 @@ function LiquidGlassInner({
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, {
         borderRadius: R,
         borderWidth: 1,
-        borderColor: "rgba(255,255,255,0.55)",
+        borderColor: c.glassHighlight === "#FFFFFF" ? "rgba(255,255,255,0.55)" : "rgba(148,163,184,0.28)",
       }]} />
       {/* 左上微光斑 */}
       {glow !== "none" && (
@@ -52,7 +56,7 @@ function LiquidGlassInner({
           position: "absolute", top: 0, left: 0,
           width: "60%", height: "40%",
           borderTopLeftRadius: R,
-          backgroundColor: "rgba(255,255,255,0.3)",
+          backgroundColor: c.glassHighlight === "#FFFFFF" ? "rgba(255,255,255,0.3)" : "rgba(148,163,184,0.14)",
         }} />
       )}
       {/* 底部暗边（3D 离地感） */}
@@ -72,5 +76,6 @@ function LiquidGlassInner({
 export const LiquidGlass = memo(LiquidGlassInner);
 
 export function GlassBackdrop({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[{ flex: 1, backgroundColor: "#FFFFFF" }, style]}>{children}</View>;
+  const c = getColors();
+  return <View style={[{ flex: 1, backgroundColor: c.glassHighlight === "#FFFFFF" ? "#FFFFFF" : c.bg }, style]}>{children}</View>;
 }

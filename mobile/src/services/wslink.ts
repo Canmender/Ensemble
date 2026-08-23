@@ -7,7 +7,7 @@
  */
 
 import { useTaskStore } from "../store/taskStore";
-import type { MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
+import type { MessageAttachment, MessageReply } from "@ensemble/shared";
 
 /** WS 聊天消息（chat.message 事件负载） */
 export interface ChatWsMessage {

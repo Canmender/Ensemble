@@ -20,7 +20,7 @@ import {
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { api } from "../services/api";
-import type { AgentConfig } from "@ensemble/shared-protocol";
+import type { AgentConfig } from "@ensemble/shared";
 import { colors } from "../theme";
 
 interface AgentFormData {

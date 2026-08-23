@@ -3,14 +3,14 @@ const path = require("path");
 
 const config = getDefaultConfig(__dirname);
 
-// 解析 @ensemble/shared-protocol 路径别名
+// 解析 @ensemble/shared 路径别名（直接吃 TS 源码，与桌面端 pnpm workspace 同源）
 config.resolver.extraNodeModules = {
-  "@ensemble/shared-protocol": path.resolve(__dirname, "../shared/src"),
+  "@ensemble/shared": path.resolve(__dirname, "../desktop/packages/shared/src"),
 };
 
 // 监听 shared 目录变化
 config.watchFolders = [
-  path.resolve(__dirname, "../shared/src"),
+  path.resolve(__dirname, "../desktop/packages/shared/src"),
 ];
 
 // RN 不认识 node: 前缀的内置模块引用（@peculiar/webcrypto 等生态包会用到），
