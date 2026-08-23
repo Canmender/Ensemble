@@ -26,6 +26,7 @@ import { OffloadStore } from "./context/offload";
 import { SkillStore, BUILTIN_SKILLS } from "./skills";
 import { PluginHost } from "./plugins/kernel";
 import { ragPlugin } from "./plugins/tools";
+import { maintenancePlugin } from "./plugins/services";
 import { makeMemoryTools } from "./tools/memory";
 import { logger } from "./util/logger";
 import { embedTexts, type EmbedFn, type EmbeddingOptions } from "./tools/embedding";
@@ -177,12 +178,11 @@ export function createAppContext(
   const mcpManager = new McpManager(mcpConfig, toolRegistry);
   void mcpManager.reload();
 
-  // 每日维护：记忆 consolidate/轮转 + offload 清理 + 隐式记忆池过期清理
-  // offload 目录：与 executor 保持一致（工作区内 .ensemble-offload）
+  // 每日维护体：记忆 consolidate/轮转 + offload 清理 + 隐式记忆池过期清理。
+  // 定时器经 maintenancePlugin effect 化（dispose 由插件内核接管，不再手动 clearInterval）。
   const offloadDir = config.getSettings().workspaceRoot;
-  const workspaceOffload = offloadDir ? new OffloadStore(join(offloadDir, ".ensemble-offload")) : undefined;
   const dataOffload = new OffloadStore(join(dataDir, "offload", "agents"));
-  const maintenanceTimer = setInterval(async () => {
+  const runMaintenance = async (): Promise<void> => {
     try {
       const wsRoot = config.getSettings().workspaceRoot;
       for (const a of config.listAgents()) {
@@ -216,8 +216,8 @@ export function createAppContext(
     } catch (err) {
       logger.error(`maintenance timer error: ${String(err)}`);
     }
-  }, 24 * 3600_000);
-  maintenanceTimer.unref?.();
+  };
+  void pluginHost.register(maintenancePlugin({ runMaintenance }));
 
   // Skill 池（逐个补写内置 skill：已存在的跳过，新增的会补上）
   const skillRoot = join(dataDir, "skills");
@@ -301,11 +301,12 @@ export function createAppContext(
     reloadAgents,
     reloadProviders,
     dispose: async () => {
-      clearInterval(maintenanceTimer);
+      // 插件（RAG 工具/维护定时器）经内核逆序清理；其余服务按依赖序手动收尾
+      await pluginHost.unregister("rag-tools");
+      await pluginHost.unregister("maintenance-timer");
       registry.disposeAll();
       memoryProvider.dispose();
       await mcpManager.dispose();
-      await pluginHost.unregister("rag-tools");
       hub.close();
     },
   };

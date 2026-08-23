@@ -2,6 +2,24 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.20 (2026-08-23) — 插件化重构 R0+R2：参数名回归锁定 + 定时器 effect 化
+
+按研究会话《插件化重构实施手册》推进，载体为 v0.8.16 自研内核（不引入 cordis 本体，整合评估见会话记录）：
+
+- **R0 回归锁定**：GET /api/runs/:id/events 的 afterSeq/since 双参数兼容此前只有实现无测试——
+  新增 3 个 HTTP 级用例钉死（afterSeq 裁剪 / since 等价 / 无参全量），防止未来重构回退
+- **R2⑤ 维护定时器 effect 化**：context.ts 手动 setInterval+clearInterval 迁入
+  maintenancePlugin——注册即启动、disposer 清理，日志可观测（scheduled/cleared）；
+  后续常驻服务统一此模式
+- **dispose 链更新**：插件经内核逆序清理，手动 clearInterval 退役
+
+**与手册的差异说明**：R1"引入 cordis"不采纳——自研内核已覆盖四大思想且上线验证；
+R2①-④ Service 化暂缓（ConfigManager/Store/WsHub/Engine 的类改造收益需配合 epoch
+自动传播才完整，显式装配下手动 reload 更诚实）。触发条件：插件实例 >500 或出现
+配置热更新需求时重评。
+
+**版本**: desktop 0.8.19 → 0.8.20
+
 ## v0.8.19 (2026-08-23) — 头像全链路修复 + 归档收敛为智能体专属
 
 **头像（深挖全部展示位，零硬编码）**
