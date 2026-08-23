@@ -12,12 +12,15 @@
  *   本地原位刷新。UI 只是数据的镜子，片段拿不到 token/原生 API。
  */
 
-/** 卡片动作按钮：点击 = POST {endpoint}（相对 /api/users/me/plugins/<pluginId> 根） */
+/** 卡片动作按钮：点击 = POST {endpoint}（相对插件 actions 根） */
 export interface CardAction {
   id: string;
   label: string;
   style?: "primary" | "normal" | "danger";
-  /** 相对插件根路径，如 "/vote"；服务端拼全路径并校验归属插件 */
+  /**
+   * 相对插件 actions 根的路径，形如 "/vote"——**勿带 /actions 前缀**
+   * （客户端拼接 /api/users/me/plugins/<pluginId>/actions<endpoint>，前缀由路由端持有）。
+   */
   endpoint: string;
   payload?: Record<string, unknown>;
 }

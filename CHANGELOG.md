@@ -2,6 +2,17 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.26 (2026-08-23) — 卡片动作 endpoint 契约修正（双端联调前置）
+
+移动端核对 curl 基准时发现 web 动作 URL 双前缀：poll 卡片的 endpoint 带
+"/actions/vote"，而 web 拼接端已含 /actions 段 → 实际请求 /actions/actions/vote。
+
+- **采纳单一定义**：endpoint 相对插件 actions 根、形如 "/vote"、勿带 /actions 前缀——
+  poll buildCard 修正；shared 与 web 两处 CardAction 类型注释补契约说明
+- 排查其余插件动作声明点：仅 poll 使用卡片 actions，无同病
+
+**版本**: desktop 0.8.25 → 0.8.26
+
 ## v0.8.25 (2026-08-23) — manifest 即 UI：settings schema 自动渲染（CONFIG_FIELDS 演进项清偿）
 
 - **manifest.settings 字段声明**：zod schema（key/label/placeholder/type），注册时

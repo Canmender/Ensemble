@@ -184,7 +184,8 @@ export function buildCard(pollId: string, state: PollState, totalVotes: number) 
           id: `vote-${o.id}`,
           label: o.label,
           style: "primary" as const,
-          endpoint: "/actions/vote",
+          // 相对插件 actions 根（勿带 /actions 前缀——路由端已含 /actions/:action 段）
+          endpoint: "/vote",
           payload: { pollId, optionId: o.id },
         })),
   };
