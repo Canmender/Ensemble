@@ -2,6 +2,7 @@ export * from "./types/events";
 export * from "./types/agent";
 export * from "./types/task";
 export * from "./types/provider";
+export * from "./types/plugin-card";
 export * from "./schema/agent.schema";
 export * from "./schema/task.schema";
 export * from "./schema/provider.schema";

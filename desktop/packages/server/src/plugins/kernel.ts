@@ -86,6 +86,11 @@ export class PluginHost {
     return [...this.services.keys()];
   }
 
+  /** 宿主侧宽松读取（路由/管理代码用；插件侧仍走 ctx.get fail-closed） */
+  tryGet<T>(name: string): T | undefined {
+    return this.services.has(name) ? (this.services.get(name)!.value as T) : undefined;
+  }
+
   /** 注册并安装一个插件。返回是否成功（失败原因见 statusOf） */
   async register(plugin: EnsemblePlugin): Promise<boolean> {
     // 幂等：同名重复注册先卸旧的（配置变更重载场景）

@@ -2,6 +2,26 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.24 (2026-08-23) — U1 卡片协议 + poll 投票插件 + web 渲染
+
+用户主权插件体系第一个完整闭环（发起→渲染→点击→计票→刷新）：
+
+- **卡片协议定稿**（shared/types/plugin-card.ts，双端契约）：PluginCardPayload/
+  CardAction/PollCardState 类型 + isPluginCard 守卫；MessageAttachment 加
+  "plugin-card" 变体内联传输；未识别 cardType → 折叠框降级永不白屏（写进类型注释）
+- **poll 插件**：/actions/create 发起投票（发 poll 卡片经 events 总线）、
+  /actions/vote 计票并广播新版本卡片；state 落 PluginUserKv 重启不丢；
+  动作表键含 userId 维度——同名插件各用户的实例互不覆盖
+- **插件动作端点**：POST /api/users/me/plugins/:id/actions/:action 统一分发，
+  实例未启用即拒绝（清单即权限的运行时体现）
+- **web 渲染**：五个内置模板（投票/列表/统计/进度/图文）+ actions 点击转发器 +
+  未识别类型 FallbackCard 折叠框
+
+验收: 187 测试全过（含 isPluginCard 守卫用例）；typecheck/build 全绿；冒烟正常。
+移动端渲染接入由移动会话按 shared 协议并行进行。
+
+**版本**: desktop 0.8.23 → 0.8.24
+
 ## v0.8.23 (2026-08-23) — 插件体系收尾：监听器硬超时 + SDK 文档
 
 插件体系进入"可对外交付"状态：

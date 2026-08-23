@@ -31,6 +31,7 @@ import { EventBus } from "./plugins/events";
 import { PerUserPluginManager } from "./plugins/per-user";
 import { PluginUserKv } from "./plugins/user-kv";
 import { dailyReminderPlugin } from "./plugins/builtin/daily-reminder";
+import { pollPlugin } from "./plugins/builtin/poll";
 import { makeMemoryTools } from "./tools/memory";
 import { logger } from "./util/logger";
 import { embedTexts, type EmbedFn, type EmbeddingOptions } from "./tools/embedding";
@@ -359,6 +360,7 @@ export function createAppContext(
   // per-user 插件管理器（R4）：候选集注册 + 已启用实例恢复
   const userPlugins = new PerUserPluginManager(pluginHost, db, (userId, pluginId) => new PluginUserKv(db, userId, pluginId));
   userPlugins.registerCandidate(dailyReminderPlugin);
+  userPlugins.registerCandidate(pollPlugin);
   void userPlugins.restoreAll();
   ctxObj.pluginHost = pluginHost;
   return Object.assign(ctxObj, { userPlugins });
