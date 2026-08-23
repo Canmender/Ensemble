@@ -188,6 +188,25 @@ CREATE TABLE IF NOT EXISTS e2e_one_time_prekeys (
   public_key TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_e2e_opks_user ON e2e_one_time_prekeys(user_id);
+
+-- 用户插件体系（R4）：per-user 插件 KV 存储（三元键隔离）+ 启用清单
+CREATE TABLE IF NOT EXISTS plugin_kv (
+  user_id    TEXT NOT NULL,
+  plugin_id  TEXT NOT NULL,
+  key        TEXT NOT NULL,
+  value_json TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, plugin_id, key)
+);
+
+CREATE TABLE IF NOT EXISTS user_plugins (
+  user_id   TEXT NOT NULL,
+  plugin_id TEXT NOT NULL,
+  config_json TEXT,
+  enabled   INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, plugin_id)
+);
 `;
 
 export function openDb(dbPath: string): DatabaseSync {

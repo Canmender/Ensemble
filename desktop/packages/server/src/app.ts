@@ -21,6 +21,8 @@ import { devicesRouter } from "./api/routes/devices";
 import { uploadRouter } from "./api/routes/upload";
 import { appVersionRouter } from "./api/routes/app-version";
 import { initRelayClient } from "./api/routes/relay";
+import { userPluginsRouter } from "./api/routes/user-plugins";
+import { RouterRegistry } from "./plugins/routers";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
 import { assistantRouter } from "./api/routes/assistant";
@@ -144,28 +146,36 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   const writeRateLimiter = createWriteRateLimiter();
   app.use("/api", writeRateLimiter);
 
-  app.use("/api/agents", agentsRouter(ctx));
-  app.use("/api/tasks", tasksRouter(ctx));
-  app.use("/api/runs", runsRouter(ctx));
-  app.use("/api/workflows", workflowsRouter(ctx));
-  app.use("/api/health", healthRouter(ctx));
-  app.use("/api/providers", providersRouter(ctx));
-  app.use("/api/settings", settingsRouter(ctx));
-  app.use("/api/mcp", mcpRouter(ctx));
-  app.use("/api/skills", skillsRouter(ctx));
-  app.use("/api/memory", memoryRouter(ctx));
-  app.use("/api/memory-pool", memoryPoolRouter(ctx));
-  app.use("/api/discovery", discoveryRouter(ctx));
-  app.use("/api/relay", relayRouter(ctx));
-  app.use("/api/chat", chatRouter(ctx));
-  app.use("/api/conversations", conversationsRouter(ctx));
-  app.use("/api/privacy", privacyRouter(ctx));
-  app.use("/api/devices", devicesRouter(ctx));
-  app.use("/api/upload", uploadRouter(ctx));
-  app.use("/api/app-version", appVersionRouter(ctx));
-  app.use("/api/assistant", assistantRouter(ctx));
-  app.use("/api/tokens", tokensRouter(ctx));
-  app.use("/api/e2e", e2eRouter(ctx));
+  // 路由统一经 RouterRegistry 注册后按序挂载（R3-C）：内置 21 条先注册即先挂，
+  // 插件路由（ctx.routerRegistry）随后追加——路径与中间件顺序契约不变。
+  const routerRegistry = new RouterRegistry();
+  routerRegistry.register("/api/agents", agentsRouter(ctx));
+  routerRegistry.register("/api/tasks", tasksRouter(ctx));
+  routerRegistry.register("/api/runs", runsRouter(ctx));
+  routerRegistry.register("/api/workflows", workflowsRouter(ctx));
+  routerRegistry.register("/api/health", healthRouter(ctx));
+  routerRegistry.register("/api/providers", providersRouter(ctx));
+  routerRegistry.register("/api/settings", settingsRouter(ctx));
+  routerRegistry.register("/api/mcp", mcpRouter(ctx));
+  routerRegistry.register("/api/skills", skillsRouter(ctx));
+  routerRegistry.register("/api/memory", memoryRouter(ctx));
+  routerRegistry.register("/api/memory-pool", memoryPoolRouter(ctx));
+  routerRegistry.register("/api/discovery", discoveryRouter(ctx));
+  routerRegistry.register("/api/relay", relayRouter(ctx));
+  routerRegistry.register("/api/chat", chatRouter(ctx));
+  routerRegistry.register("/api/conversations", conversationsRouter(ctx));
+  routerRegistry.register("/api/privacy", privacyRouter(ctx));
+  routerRegistry.register("/api/devices", devicesRouter(ctx));
+  routerRegistry.register("/api/upload", uploadRouter(ctx));
+  routerRegistry.register("/api/app-version", appVersionRouter(ctx));
+  routerRegistry.register("/api/assistant", assistantRouter(ctx));
+  routerRegistry.register("/api/tokens", tokensRouter(ctx));
+  routerRegistry.register("/api/e2e", e2eRouter(ctx));
+  routerRegistry.register("/api/users/me/plugins", userPluginsRouter(ctx));
+  for (const { path, router } of routerRegistry.list()) {
+    app.use(path, router);
+  }
+  ctx.routerRegistry = routerRegistry;
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）
   initRelayClient(ctx);

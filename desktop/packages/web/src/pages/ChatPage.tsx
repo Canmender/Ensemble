@@ -16,6 +16,8 @@ import { GroupSettingsDialog } from "../components/GroupSettingsDialog";
 import { ContactInfoDialog } from "../components/ContactInfoDialog";
 import { FriendsDialog } from "../components/FriendsDialog";
 import { Avatar } from "../components/Avatar";
+import { PluginCardView } from "../components/PluginCard";
+import { isPluginCard, type PluginCardPayload } from "../types";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import {
@@ -45,13 +47,15 @@ interface ChatMessage {
   timestamp: number;
 }
 
-/** 消息附件（图片/文件） */
+/** 消息附件（图片/文件/音频/插件卡片） */
 interface MessageAttachment {
-  type: "image" | "file" | "audio";
+  type: "image" | "file" | "audio" | "plugin-card";
   name: string;
   size: number;
   mime?: string;
   url: string;
+  /** 插件卡片载荷（type="plugin-card"；协议见 types.ts，与 shared 对齐） */
+  card?: PluginCardPayload;
 }
 
 /** 注册用户（/api/auth/users） */
@@ -298,7 +302,14 @@ function fmtSize(bytes: number): string {
 }
 
 /** 消息附件渲染（图片缩略图 / 文件卡片） */
-function AttachmentView({ att, content }: { att: MessageAttachment; content?: string }) {
+function AttachmentView({ att, content, pluginId }: { att: MessageAttachment; content?: string; pluginId?: string }) {
+  // 插件卡片（U1）：按 cardType 分派内置模板；未识别类型折叠框降级（永不白屏）
+  if (att.type === "plugin-card") {
+    if (att.card && isPluginCard(att)) {
+      return <PluginCardView card={att.card} pluginId={pluginId || att.card.cardType} />;
+    }
+    return <div className="mb-1 text-xs italic opacity-60">卡片数据异常</div>;
+  }
   if (att.type === "audio") {
     const url = (typeof window !== "undefined" && window.location && window.location.origin) ? att.url.startsWith("http") ? att.url : (window.location.origin + att.url) : att.url;
     return <VoiceBubble url={url} durationText={content} isUser={false} />;
@@ -1316,7 +1327,7 @@ export default function ChatPage() {
                                 {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
                               </div>
                             )}
-                            {msg.attachment && <AttachmentView att={msg.attachment} content={msg.content} />}
+                            {msg.attachment && <AttachmentView att={msg.attachment} content={msg.content} pluginId={msg.agentId} />}
                             {msg.content && <div className={cls("whitespace-pre-wrap leading-relaxed", variant === "ai-ghost" ? "text-sm text-fg" : "text-sm")}>{renderContent(msg.content)}</div>}
                           </>
                         )}

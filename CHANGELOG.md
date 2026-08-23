@@ -2,6 +2,119 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.25 (2026-08-23) — manifest 即 UI：settings schema 自动渲染（CONFIG_FIELDS 演进项清偿）
+
+- **manifest.settings 字段声明**：zod schema（key/label/placeholder/type），注册时
+  解析补默认值（PluginManifest 声明侧可选 / ResolvedManifest 解析后必填两态分离）
+- **listForUser 透传 settings** → web PluginsPanel 按 manifest 自动渲染表单，
+  手写 CONFIG_FIELDS 表删除——插件新增配置项零前端改动
+- **联调基准**：scripts/poll-curl-demo.sh（token 获取→启用→create→vote 全流程
+  curl 可复现，双端对帧用）
+- daily-reminder manifest 补 settings 声明；timer 闸门测试适配单插件上限 5
+
+验收: typecheck 0 错; 187 测试全过; web/desktop build 通过
+
+**版本**: desktop 0.8.24 → 0.8.25
+
+## v0.8.24 (2026-08-23) — U1 卡片协议 + poll 投票插件 + web 渲染
+
+用户主权插件体系第一个完整闭环（发起→渲染→点击→计票→刷新）：
+
+- **卡片协议定稿**（shared/types/plugin-card.ts，双端契约）：PluginCardPayload/
+  CardAction/PollCardState 类型 + isPluginCard 守卫；MessageAttachment 加
+  "plugin-card" 变体内联传输；未识别 cardType → 折叠框降级永不白屏（写进类型注释）
+- **poll 插件**：/actions/create 发起投票（发 poll 卡片经 events 总线）、
+  /actions/vote 计票并广播新版本卡片；state 落 PluginUserKv 重启不丢；
+  动作表键含 userId 维度——同名插件各用户的实例互不覆盖
+- **插件动作端点**：POST /api/users/me/plugins/:id/actions/:action 统一分发，
+  实例未启用即拒绝（清单即权限的运行时体现）
+- **web 渲染**：五个内置模板（投票/列表/统计/进度/图文）+ actions 点击转发器 +
+  未识别类型 FallbackCard 折叠框
+
+验收: 187 测试全过（含 isPluginCard 守卫用例）；typecheck/build 全绿；冒烟正常。
+移动端渲染接入由移动会话按 shared 协议并行进行。
+
+**版本**: desktop 0.8.23 → 0.8.24
+
+## v0.8.23 (2026-08-23) — 插件体系收尾：监听器硬超时 + SDK 文档
+
+插件体系进入"可对外交付"状态：
+
+- **waterfallAsync 硬超时**（《性能工程》§三 定死值）：整条监听器链 3s 内未完成
+  即放弃等待走 fallback——防"挂起不返回"的坏插件拖死调用方（chat 管线阻塞类风险）；
+  已启动的监听器无法强杀，只能不再等它
+- **decideAsync 决策链限时变体**：仅对监听器链计时、超时返回"未决策"而非误判——
+  tool/confirm 采用此形态：插件策略 3s 内答完，WS 弹窗 fallback 分钟级不受限
+- **docs/插件开发指南.md**：三章（第一个插件/事件与KV/配置与settings表单），
+  daily-reminder 全文作素材，含 API 速查表与上线检查单；写文档过程完成 API 面
+  终审——接口形态确认无别扭之处
+
+验收: 185 测试全过（新增挂起监听器被砍/decideAsync 超时未决策两用例）
+
+**版本**: desktop 0.8.22 → 0.8.23
+
+## v0.8.22 (2026-08-23) — 插件化重构 R4：per-user 插件 + 管理 API（用户主权模型）
+
+按「云端只做中转，插件是用户资产」宗旨落地：
+
+- **PerUserPluginManager**（plugins/per-user.ts）：内核零改动的 per-user 层——
+  每个 (userId, pluginId) 实例 = PluginHost 里命名空间化插件 user:<uid>:<pid>，
+  隔离语义由管理层保证（规避内核单例假设风险点）
+- **plugin_kv / user_plugins 表**：(userId, pluginId, key) 三元主键 KV +
+  用户启用清单/配置持久化；PluginUserKv 命名空间视图让插件拿不到别人的数据
+- **manifest 校验**：zod schema（id/name/version/scheduled/eventsOn），清单即权限
+- **性能闸门定死**：每用户 timer 上限 20（mount 时校验累计 scheduled）
+- **daily-reminder 官方示范插件**：manifest 声明 scheduled+配置；到点经
+  EventBus.emit("chat/message") 发提醒（吃自己种的菜，与 hub 广播同链路）；
+  下次触发时间落 kv 持久化（重启不丢不重发）
+- **管理 API**：GET /api/users/me/plugins + enable/disable + config 读写
+  （enable=该用户作用域 mount、disable=unmount 命名空间实例，其他用户零感知；
+  setConfig 热重启实例）
+- **设置页「插件」卡片**：候选列表+启停开关+配置表单（本地模式静默空态）
+
+验收: 183 测试全过（含 6 个多租户隔离用例——A disable 后 B 零感知/KV 三元键
+互不可见/timer 闸门拒绝/配置热重启）；web/desktop build 通过；冒烟正常
+
+**版本**: desktop 0.8.21 → 0.8.22
+
+## v0.8.21 (2026-08-23) — 插件化重构 R3：事件总线 + RouterRegistry
+
+按研究任务书在自研内核上完成 engine↔hub 解耦：
+
+- **EventBus**（plugins/events.ts）：内核 waterfall 之上的语义事件封装——
+  chat/message（engine 落库后 emit，hub 挂观察者广播）、device/status（设备上下线，
+  观察者插件写表+定向广播）、tool/confirm（HITL 异步短路瀑布：返回 {approved} 即决策
+  含拒绝、undefined 交下游、异常监听器不中断管线、无人应答 fallback 到 WS 弹窗）
+- **三处接线反转**：engine.broadcastChatMessage 尾部直调 → events.emit（保留直调兜底
+  渐进迁移）；hub.onDeviceStatus 回调体迁入 device-status-recorder 插件；
+  wsAskConfirm 走 requestToolConfirm 瀑布——插件可先于 UI 决策（自动审批策略挂载点）
+- **RouterRegistry**（plugins/routers.ts）：21 条内置路由改注册制按序统一挂载，
+  契约不变；ctx.routerRegistry 开放给插件挂子路由
+- **插件事件权限面**：监听白名单前缀（chat/ run/ device/），emit 强制插件 id 命名空间
+- **kernel.waterfallAsync**：新增异步瀑布（分钟级等待场景），短路/委托/容错语义与同步版一致
+
+验收: 177 测试全过（含 8 个 R3 验收用例）；云端版冒烟 WS 连接正常
+
+**版本**: desktop 0.8.20 → 0.8.21
+
+## v0.8.20 (2026-08-23) — 插件化重构 R0+R2：参数名回归锁定 + 定时器 effect 化
+
+按研究会话《插件化重构实施手册》推进，载体为 v0.8.16 自研内核（不引入 cordis 本体，整合评估见会话记录）：
+
+- **R0 回归锁定**：GET /api/runs/:id/events 的 afterSeq/since 双参数兼容此前只有实现无测试——
+  新增 3 个 HTTP 级用例钉死（afterSeq 裁剪 / since 等价 / 无参全量），防止未来重构回退
+- **R2⑤ 维护定时器 effect 化**：context.ts 手动 setInterval+clearInterval 迁入
+  maintenancePlugin——注册即启动、disposer 清理，日志可观测（scheduled/cleared）；
+  后续常驻服务统一此模式
+- **dispose 链更新**：插件经内核逆序清理，手动 clearInterval 退役
+
+**与手册的差异说明**：R1"引入 cordis"不采纳——自研内核已覆盖四大思想且上线验证；
+R2①-④ Service 化暂缓（ConfigManager/Store/WsHub/Engine 的类改造收益需配合 epoch
+自动传播才完整，显式装配下手动 reload 更诚实）。触发条件：插件实例 >500 或出现
+配置热更新需求时重评。
+
+**版本**: desktop 0.8.19 → 0.8.20
+
 ## v0.8.19 (2026-08-23) — 头像全链路修复 + 归档收敛为智能体专属
 
 **头像（深挖全部展示位，零硬编码）**

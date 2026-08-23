@@ -178,3 +178,33 @@ export interface WorkflowDef {
   nodes: Array<{ id: string; agentId: string; prompt: string }>;
   edges: Array<{ from: string; to: string; when: any }>;
 }
+
+// ---------- 插件卡片协议（U1；与 shared/src/types/plugin-card.ts 对齐——双端契约） ----------
+
+export interface CardAction {
+  id: string;
+  label: string;
+  style?: "primary" | "normal" | "danger";
+  endpoint: string;
+  payload?: Record<string, unknown>;
+}
+
+export interface PluginCardPayload {
+  cardType: "poll" | "form" | "list" | "stats" | "progress" | "rich" | (string & {});
+  cardVersion: 1;
+  title?: string;
+  state: Record<string, unknown>;
+  actions: CardAction[];
+}
+
+/** 类型守卫：消息附件是否携带合法的 v1 插件卡片（与 shared 同名函数对齐） */
+export function isPluginCard(att: unknown): att is { type: "plugin-card"; name: string; size: number; url: string; card: PluginCardPayload } {
+  if (typeof att !== "object" || att === null) return false;
+  const a = att as Record<string, unknown>;
+  return (
+    a.type === "plugin-card" &&
+    typeof a.card === "object" && a.card !== null &&
+    (a.card as PluginCardPayload).cardVersion === 1 &&
+    Array.isArray((a.card as PluginCardPayload).actions)
+  );
+}

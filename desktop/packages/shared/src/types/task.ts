@@ -101,15 +101,17 @@ export interface WorkflowEdge {
   when: EdgeCondition;
 }
 
-/** 聊天附件（图片/视频/文件） */
+/** 聊天附件（图片/视频/文件/插件卡片） */
 export interface MessageAttachment {
-  type: "image" | "video" | "file" | "audio";
+  type: "image" | "video" | "file" | "audio" | "plugin-card";
   name: string;
   size: number;
   mime?: string;
   url: string;
   /** 缩略图 URL（图片上传时自动生成） */
   thumbnailUrl?: string;
+  /** 插件卡片载荷（type="plugin-card" 时必填；协议见 plugin-card.ts） */
+  card?: import("./plugin-card").PluginCardPayload;
 }
 
 /** 引用的消息摘要（引用回复） */

@@ -26,6 +26,12 @@ import { OffloadStore } from "./context/offload";
 import { SkillStore, BUILTIN_SKILLS } from "./skills";
 import { PluginHost } from "./plugins/kernel";
 import { ragPlugin } from "./plugins/tools";
+import { maintenancePlugin } from "./plugins/services";
+import { EventBus } from "./plugins/events";
+import { PerUserPluginManager } from "./plugins/per-user";
+import { PluginUserKv } from "./plugins/user-kv";
+import { dailyReminderPlugin } from "./plugins/builtin/daily-reminder";
+import { pollPlugin } from "./plugins/builtin/poll";
 import { makeMemoryTools } from "./tools/memory";
 import { logger } from "./util/logger";
 import { embedTexts, type EmbedFn, type EmbeddingOptions } from "./tools/embedding";
@@ -92,6 +98,10 @@ export interface AppContext {
   mcpManager: McpManager;
   /** 插件宿主（cordis 思想）：RAG 等可重装工具插件挂载于此 */
   pluginHost: PluginHost;
+  /** 路由注册表（createApp 装配时填充；插件经此挂子路由） */
+  routerRegistry?: import("./plugins/routers").RouterRegistry;
+  /** per-user 插件管理器（R4 用户主权模型） */
+  userPlugins: PerUserPluginManager;
   reloadAgents: () => void;
   reloadProviders: () => void;
   dispose: () => Promise<void>;
@@ -113,18 +123,37 @@ export function createAppContext(
   const hub = new WsHub();
   // headless/Docker 部署：用固定 API key 覆盖随机 session token（HTTP + WS 统一凭证）
   if (env.apiKey) hub.overrideToken(env.apiKey);
-  // 设备多端在线：WS 上线注册设备表，下线/上线广播给同用户其他设备
+
+  // 事件总线（R3）：hub/engine 解耦的枢纽——engine emit chat/message，hub 挂观察者广播
+  const pluginHost = new PluginHost();
+  const events = new EventBus(pluginHost);
+  // EventBus 进服务容器：用户插件经 ctx.get("events") 发消息（吃自己种的菜）
+  pluginHost.register({
+    name: "event-bus-provider",
+    inject: [],
+    install: (ctx) => ctx.provide("events", events),
+  }).catch(() => {});
+  // 设备多端在线：WS 上线 → emit device/status（观察者写设备表 + 定向广播）
   hub.onDeviceStatus = (userId, device, online) => {
-    if (online) {
-      store.upsertDevice({ id: device.id, userId, name: device.name, type: device.type });
-      // 去重：清理同类型同名称的离线旧设备（重装后设备 ID 变化产生的"我的手机"残留）
-      if (device.type === "mobile") {
-        store.cleanupDuplicateDevices(userId, device.id, device.name, device.type, hub.getOnlineDeviceIds(userId));
-      }
-    }
-    const event: RunEvent = { type: "device.status", deviceId: device.id, name: device.name, kind: device.type, online };
-    hub.broadcastToUser(userId, event);
+    events.emit("device/status", { userId, device, online });
   };
+  pluginHost.register({
+    name: "device-status-recorder",
+    install: (ctx) => {
+      ctx.on("device/status", (payload) => {
+        const d = payload as { userId: string; device: { id: string; name: string; type: string }; online: boolean };
+        if (d.online) {
+          store.upsertDevice({ id: d.device.id, userId: d.userId, name: d.device.name, type: d.device.type });
+          // 去重：清理同类型同名称的离线旧设备（重装后设备 ID 变化产生的"我的手机"残留）
+          if (d.device.type === "mobile") {
+            store.cleanupDuplicateDevices(d.userId, d.device.id, d.device.name, d.device.type, hub.getOnlineDeviceIds(d.userId));
+          }
+        }
+        const event: RunEvent = { type: "device.status", deviceId: d.device.id, name: d.device.name, kind: d.device.type, online: d.online };
+        hub.broadcastToUser(d.userId, event);
+      });
+    },
+  }).catch(() => {});
   const keyStore = deps.keyStore ?? new FileKeyStore(resolve(env.configDir, "secrets.json"));
   const providerRegistry = new ProviderRegistry(keyStore);
   const toolRegistry = new ToolRegistry();
@@ -139,9 +168,8 @@ export function createAppContext(
   });
 
   registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager);
-  // 插件宿主（cordis 思想落地）：RAG 工具走插件形态，配置变更可 unregister+register 干净重装；
-  // 后续第三方工具包/存储后端并列注册均挂载于此。
-  const pluginHost = new PluginHost();
+  // RAG 工具走插件形态（配置变更可 unregister+register 干净重装）；
+  // 后续第三方工具包/存储后端并列注册均挂载于 pluginHost。
   void pluginHost.register(
     ragPlugin({
       registry: toolRegistry,
@@ -177,12 +205,11 @@ export function createAppContext(
   const mcpManager = new McpManager(mcpConfig, toolRegistry);
   void mcpManager.reload();
 
-  // 每日维护：记忆 consolidate/轮转 + offload 清理 + 隐式记忆池过期清理
-  // offload 目录：与 executor 保持一致（工作区内 .ensemble-offload）
+  // 每日维护体：记忆 consolidate/轮转 + offload 清理 + 隐式记忆池过期清理。
+  // 定时器经 maintenancePlugin effect 化（dispose 由插件内核接管，不再手动 clearInterval）。
   const offloadDir = config.getSettings().workspaceRoot;
-  const workspaceOffload = offloadDir ? new OffloadStore(join(offloadDir, ".ensemble-offload")) : undefined;
   const dataOffload = new OffloadStore(join(dataDir, "offload", "agents"));
-  const maintenanceTimer = setInterval(async () => {
+  const runMaintenance = async (): Promise<void> => {
     try {
       const wsRoot = config.getSettings().workspaceRoot;
       for (const a of config.listAgents()) {
@@ -216,8 +243,8 @@ export function createAppContext(
     } catch (err) {
       logger.error(`maintenance timer error: ${String(err)}`);
     }
-  }, 24 * 3600_000);
-  maintenanceTimer.unref?.();
+  };
+  void pluginHost.register(maintenancePlugin({ runMaintenance }));
 
   // Skill 池（逐个补写内置 skill：已存在的跳过，新增的会补上）
   const skillRoot = join(dataDir, "skills");
@@ -232,10 +259,11 @@ export function createAppContext(
     }
   }
 
-  // WS-based HITL 确认：通过 hub 向前端发送确认请求，等待用户响应
+  // HITL 确认（R3 事件化）：走 tool/confirm 异步短路瀑布——插件可先于 UI 决策
+  // （自动审批策略等）；无监听器短路时 fallback 到 WS 弹窗等待用户（超时拒绝）。
   const wsAskConfirm = async (tool: string, args: unknown, runId?: string): Promise<boolean> => {
     if (!runId) return false; // 无 runId（headless/CLI）→ 拒绝
-    return hub.requestConfirm(runId, tool, args);
+    return events.requestToolConfirm({ runId, tool, args }, () => hub.requestConfirm(runId, tool, args));
   };
 
   const registry = new AdapterRegistry({
@@ -247,7 +275,26 @@ export function createAppContext(
     memoryProvider,
     skillStore,
   });
-  const engine = new OrchestrationEngine(store, registry, hub, (id) => config.getWorkflow(id));
+  // engine emit chat/message 经事件总线；hub 挂观察者广播（见下方 chat-broadcaster 插件）
+  const engine = new OrchestrationEngine(store, registry, hub, (id) => config.getWorkflow(id), events);
+
+  void pluginHost.register({
+    name: "chat-broadcaster",
+    install: (ctx) => {
+      ctx.on("chat/message", (payload) => {
+        const m = payload as { runId: string; id: string; seq: number; jobId?: string; agentId: string; content: string; attachment?: unknown };
+        hub.broadcast(m.runId, 0, {
+          type: "chat.message",
+          jobId: m.jobId ?? "",
+          agentId: m.agentId,
+          content: m.content,
+          attachment: m.attachment as never,
+          id: m.id,
+          seq: m.seq,
+        });
+      });
+    },
+  }).catch(() => {});
 
   reloadAgents();
   reloadProviders();
@@ -278,7 +325,7 @@ export function createAppContext(
     })();
   }
 
-  return {
+  const ctxObj = {
     env,
     db,
     uploadsDir,
@@ -301,12 +348,20 @@ export function createAppContext(
     reloadAgents,
     reloadProviders,
     dispose: async () => {
-      clearInterval(maintenanceTimer);
+      // 插件（RAG 工具/维护定时器）经内核逆序清理；其余服务按依赖序手动收尾
+      await pluginHost.unregister("rag-tools");
+      await pluginHost.unregister("maintenance-timer");
       registry.disposeAll();
       memoryProvider.dispose();
       await mcpManager.dispose();
-      await pluginHost.unregister("rag-tools");
       hub.close();
     },
   };
+  // per-user 插件管理器（R4）：候选集注册 + 已启用实例恢复
+  const userPlugins = new PerUserPluginManager(pluginHost, db, (userId, pluginId) => new PluginUserKv(db, userId, pluginId));
+  userPlugins.registerCandidate(dailyReminderPlugin);
+  userPlugins.registerCandidate(pollPlugin);
+  void userPlugins.restoreAll();
+  ctxObj.pluginHost = pluginHost;
+  return Object.assign(ctxObj, { userPlugins });
 }

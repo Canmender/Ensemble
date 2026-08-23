@@ -9,6 +9,7 @@ import type {
   TaskInput,
 } from "@ensemble/shared";
 import type { SteeringMessage } from "../adapters/types";
+import type { EventSink } from "../plugins/events";
 import { Store } from "./store";
 import { AdapterRegistry } from "../adapters/registry";
 import { WsHub } from "../api/ws/hub";
@@ -41,6 +42,8 @@ export class OrchestrationEngine {
     private registry: AdapterRegistry,
     private hub: WsHub,
     private getWorkflowDef?: (id: string) => import("@ensemble/shared").WorkflowDef | undefined,
+    /** 事件总线（R3 解耦）：设置后 chat/message 走 emit，hub 直调退役 */
+    private events?: EventSink,
   ) {}
 
   setAgents(agents: AgentConfig[]): void {
@@ -394,15 +397,22 @@ export class OrchestrationEngine {
       this.store.updateConversationMeta(conv.id, content, new Date().toISOString());
       if (role === "assistant") this.store.incrementUnread(conv.id);
     }
-    this.hub.broadcast(runId, 0, {
-      type: "chat.message",
+    // R3 事件化：经事件总线到 hub（engine 不再直接依赖传输层广播接口形态）；
+    // 未接总线时（测试/渐进迁移期）保持直调兜底
+    const payload = {
+      type: "chat.message" as const,
       jobId: jobId ?? "",
       agentId,
       content,
       attachment,
       id,
       seq,
-    });
+    };
+    if (this.events) {
+      this.events.emit("chat/message", { runId, jobId, agentId, role, content, attachment, id, seq, userId: run?.userId });
+    } else {
+      this.hub.broadcast(runId, 0, payload);
+    }
   }
 
   private withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T> {
