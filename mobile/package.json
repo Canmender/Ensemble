@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/mobile",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -15,7 +15,8 @@
     "@capacitor/core": "^8.5.0",
     "@expo/metro-runtime": "~57.0.10",
     "@expo/vector-icons": "^15.1.1",
-    "@peculiar/webcrypto": "^1.7.1",
+    "@noble/ciphers": "^2.3.0",
+    "@noble/hashes": "^2.3.0",
     "@privacyresearch/libsignal-protocol-typescript": "^0.0.16",
     "@react-native-async-storage/async-storage": "^2.1.0",
     "@react-navigation/bottom-tabs": "^7.3.10",
@@ -28,6 +29,7 @@
     "expo-application": "~57.0.2",
     "expo-audio": "~57.0.3",
     "expo-blur": "~57.0.2",
+    "expo-crypto": "^57.0.1",
     "expo-document-picker": "~57.0.1",
     "expo-file-system": "~57.0.2",
     "expo-glass-effect": "^57.0.1",

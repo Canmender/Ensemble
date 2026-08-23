@@ -19,16 +19,16 @@ import { KeyHelper,
   setWebCrypto,
   type DeviceType,
 } from "@privacyresearch/libsignal-protocol-typescript";
-// @peculiar/webcrypto：纯 JS WebCrypto 实现（AES-CBC/HMAC/HKDF subtle 原语），
-// RN Hermes 无内建 WebCrypto，libsignal 的加解密全部走它
-import { Crypto as PeculiarCrypto } from "@peculiar/webcrypto";
+// MinimalWebCrypto：RN Hermes 无内建 WebCrypto；@peculiar/webcrypto 加载期依赖
+// node:crypto（Metro 空模块替换 → 模块加载即抛错 → App 白屏），故换纯 JS 实现。
+import { MinimalCrypto } from "./minimalCrypto";
 import { Buffer } from "buffer";
 import { E2EStore } from "./store";
 import { api } from "../api";
 
-// RN Hermes 无内建 WebCrypto：注入纯 JS 实现（随机数 + AES-CBC + HMAC-SHA256 subtle）
+// 注入最小 WebCrypto（随机数 + AES-CBC + HMAC-SHA256 + HKDF，libsignal 所需全集）
 try {
-  (setWebCrypto as unknown as (c: unknown) => void)(new PeculiarCrypto());
+  (setWebCrypto as unknown as (c: unknown) => void)(new MinimalCrypto());
 } catch {
   /* 注入失败时 libsignal 走内部路径 */
 }

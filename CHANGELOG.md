@@ -20,6 +20,15 @@
 
 **版本**: desktop 0.8.18 → 0.8.19
 
+## v0.9.9 (2026-08-23) — 修复 v0.9.7/v0.9.8 白屏
+
+- **根因**：v0.9.7 引入的 `@peculiar/webcrypto` 在**模块加载期**调用 `node:crypto.getCiphers()` 做 AES 探测；Metro 把 `node:crypto` 映射为空模块（打包必需），导致该模块一加载就抛 `crypto.getCiphers is not a function`。它位于 App 的 import 树上（ChatRoomPage → e2eService），模块树加载失败 → 整个应用白屏。
+- **修复**：自写 MinimalWebCrypto（`src/services/e2e/minimalCrypto.ts`）——libsignal 所需四原语（getRandomValues / AES-CBC / HMAC-SHA256 / HKDF）用 audited 纯 JS 库 @noble/ciphers + @noble/hashes 实现，零 node:crypto 依赖；移除 @peculiar/webcrypto。
+- **验证**：模拟 RN 环境（禁用 node:crypto）下 libsignal 全链路 X3DH + 三轮棘轮通过；AES/HMAC/HKDF 与原生 WebCrypto 双向交叉验证线格式一致（桌面端互通不受影响）。
+- 教训：node 实测必须复刻 Metro 的模块替换行为（空模块/不可用），否则测的是错误环境。
+
+**版本**：mobile 0.9.8 → 0.9.9，versionCode 108 → 109
+
 ## v0.8.18 (2026-08-23) — 「我的」页面退出登录 + 登出态修复
 
 用户反馈「登录界面没了」：实为保持登录态正常行为 + 无退出入口形成死锁，另发现登出 bug：
