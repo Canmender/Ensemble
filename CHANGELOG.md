@@ -2,6 +2,26 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.21 (2026-08-23) — 插件化重构 R3：事件总线 + RouterRegistry
+
+按研究任务书在自研内核上完成 engine↔hub 解耦：
+
+- **EventBus**（plugins/events.ts）：内核 waterfall 之上的语义事件封装——
+  chat/message（engine 落库后 emit，hub 挂观察者广播）、device/status（设备上下线，
+  观察者插件写表+定向广播）、tool/confirm（HITL 异步短路瀑布：返回 {approved} 即决策
+  含拒绝、undefined 交下游、异常监听器不中断管线、无人应答 fallback 到 WS 弹窗）
+- **三处接线反转**：engine.broadcastChatMessage 尾部直调 → events.emit（保留直调兜底
+  渐进迁移）；hub.onDeviceStatus 回调体迁入 device-status-recorder 插件；
+  wsAskConfirm 走 requestToolConfirm 瀑布——插件可先于 UI 决策（自动审批策略挂载点）
+- **RouterRegistry**（plugins/routers.ts）：21 条内置路由改注册制按序统一挂载，
+  契约不变；ctx.routerRegistry 开放给插件挂子路由
+- **插件事件权限面**：监听白名单前缀（chat/ run/ device/），emit 强制插件 id 命名空间
+- **kernel.waterfallAsync**：新增异步瀑布（分钟级等待场景），短路/委托/容错语义与同步版一致
+
+验收: 177 测试全过（含 8 个 R3 验收用例）；云端版冒烟 WS 连接正常
+
+**版本**: desktop 0.8.20 → 0.8.21
+
 ## v0.8.20 (2026-08-23) — 插件化重构 R0+R2：参数名回归锁定 + 定时器 effect 化
 
 按研究会话《插件化重构实施手册》推进，载体为 v0.8.16 自研内核（不引入 cordis 本体，整合评估见会话记录）：

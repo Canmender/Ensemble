@@ -206,6 +206,35 @@ export class PluginHost {
     return dispatch(0) as TOut;
   }
 
+  /**
+   * 异步 waterfall：监听器可 await（分钟级等待场景，如 HITL 确认）。
+   * 短路语义与同步版一致：返回非 undefined 即决策；调 next() 委托下游；
+   * 全部委托完走 fallback（调用方实现默认行为，如确认超时拒绝）。
+   * 单监听器异常视为未处理，交给下游（不中断管线）。
+   */
+  async waterfallAsync<TIn, TOut>(
+    event: string,
+    payload: TIn,
+    fallback: () => Promise<TOut> | TOut,
+  ): Promise<TOut> {
+    const chain = this.listeners.filter((l) => l.event === event);
+    const dispatch = async (i: number): Promise<unknown> => {
+      if (i >= chain.length) return fallback();
+      try {
+        const result = await chain[i].fn(payload, (result?: unknown) =>
+          result !== undefined ? result : dispatch(i + 1),
+        );
+        if (result !== undefined) return result;
+        // 监听器返回 undefined 且没调 next → 视为交给下游
+        return dispatch(i + 1);
+      } catch (e) {
+        console.warn(`[plugins] listener for ${event} threw: ${String(e)}`);
+        return dispatch(i + 1);
+      }
+    };
+    return (await dispatch(0)) as TOut;
+  }
+
   private getService<T>(name: string): T {
     const entry = this.services.get(name);
     if (!entry) throw new Error(`服务未注册: ${name}（fail-closed：插件须声明 inject 或使用 tryGet）`);

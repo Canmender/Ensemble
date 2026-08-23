@@ -27,6 +27,7 @@ import { SkillStore, BUILTIN_SKILLS } from "./skills";
 import { PluginHost } from "./plugins/kernel";
 import { ragPlugin } from "./plugins/tools";
 import { maintenancePlugin } from "./plugins/services";
+import { EventBus } from "./plugins/events";
 import { makeMemoryTools } from "./tools/memory";
 import { logger } from "./util/logger";
 import { embedTexts, type EmbedFn, type EmbeddingOptions } from "./tools/embedding";
@@ -93,6 +94,8 @@ export interface AppContext {
   mcpManager: McpManager;
   /** 插件宿主（cordis 思想）：RAG 等可重装工具插件挂载于此 */
   pluginHost: PluginHost;
+  /** 路由注册表（createApp 装配时填充；插件经此挂子路由） */
+  routerRegistry?: import("./plugins/routers").RouterRegistry;
   reloadAgents: () => void;
   reloadProviders: () => void;
   dispose: () => Promise<void>;
@@ -114,18 +117,31 @@ export function createAppContext(
   const hub = new WsHub();
   // headless/Docker 部署：用固定 API key 覆盖随机 session token（HTTP + WS 统一凭证）
   if (env.apiKey) hub.overrideToken(env.apiKey);
-  // 设备多端在线：WS 上线注册设备表，下线/上线广播给同用户其他设备
+
+  // 事件总线（R3）：hub/engine 解耦的枢纽——engine emit chat/message，hub 挂观察者广播
+  const pluginHost = new PluginHost();
+  const events = new EventBus(pluginHost);
+  // 设备多端在线：WS 上线 → emit device/status（观察者写设备表 + 定向广播）
   hub.onDeviceStatus = (userId, device, online) => {
-    if (online) {
-      store.upsertDevice({ id: device.id, userId, name: device.name, type: device.type });
-      // 去重：清理同类型同名称的离线旧设备（重装后设备 ID 变化产生的"我的手机"残留）
-      if (device.type === "mobile") {
-        store.cleanupDuplicateDevices(userId, device.id, device.name, device.type, hub.getOnlineDeviceIds(userId));
-      }
-    }
-    const event: RunEvent = { type: "device.status", deviceId: device.id, name: device.name, kind: device.type, online };
-    hub.broadcastToUser(userId, event);
+    events.emit("device/status", { userId, device, online });
   };
+  pluginHost.register({
+    name: "device-status-recorder",
+    install: (ctx) => {
+      ctx.on("device/status", (payload) => {
+        const d = payload as { userId: string; device: { id: string; name: string; type: string }; online: boolean };
+        if (d.online) {
+          store.upsertDevice({ id: d.device.id, userId: d.userId, name: d.device.name, type: d.device.type });
+          // 去重：清理同类型同名称的离线旧设备（重装后设备 ID 变化产生的"我的手机"残留）
+          if (d.device.type === "mobile") {
+            store.cleanupDuplicateDevices(d.userId, d.device.id, d.device.name, d.device.type, hub.getOnlineDeviceIds(d.userId));
+          }
+        }
+        const event: RunEvent = { type: "device.status", deviceId: d.device.id, name: d.device.name, kind: d.device.type, online: d.online };
+        hub.broadcastToUser(d.userId, event);
+      });
+    },
+  }).catch(() => {});
   const keyStore = deps.keyStore ?? new FileKeyStore(resolve(env.configDir, "secrets.json"));
   const providerRegistry = new ProviderRegistry(keyStore);
   const toolRegistry = new ToolRegistry();
@@ -140,9 +156,8 @@ export function createAppContext(
   });
 
   registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager);
-  // 插件宿主（cordis 思想落地）：RAG 工具走插件形态，配置变更可 unregister+register 干净重装；
-  // 后续第三方工具包/存储后端并列注册均挂载于此。
-  const pluginHost = new PluginHost();
+  // RAG 工具走插件形态（配置变更可 unregister+register 干净重装）；
+  // 后续第三方工具包/存储后端并列注册均挂载于 pluginHost。
   void pluginHost.register(
     ragPlugin({
       registry: toolRegistry,
@@ -232,10 +247,11 @@ export function createAppContext(
     }
   }
 
-  // WS-based HITL 确认：通过 hub 向前端发送确认请求，等待用户响应
+  // HITL 确认（R3 事件化）：走 tool/confirm 异步短路瀑布——插件可先于 UI 决策
+  // （自动审批策略等）；无监听器短路时 fallback 到 WS 弹窗等待用户（超时拒绝）。
   const wsAskConfirm = async (tool: string, args: unknown, runId?: string): Promise<boolean> => {
     if (!runId) return false; // 无 runId（headless/CLI）→ 拒绝
-    return hub.requestConfirm(runId, tool, args);
+    return events.requestToolConfirm({ runId, tool, args }, () => hub.requestConfirm(runId, tool, args));
   };
 
   const registry = new AdapterRegistry({
@@ -247,7 +263,26 @@ export function createAppContext(
     memoryProvider,
     skillStore,
   });
-  const engine = new OrchestrationEngine(store, registry, hub, (id) => config.getWorkflow(id));
+  // engine emit chat/message 经事件总线；hub 挂观察者广播（见下方 chat-broadcaster 插件）
+  const engine = new OrchestrationEngine(store, registry, hub, (id) => config.getWorkflow(id), events);
+
+  void pluginHost.register({
+    name: "chat-broadcaster",
+    install: (ctx) => {
+      ctx.on("chat/message", (payload) => {
+        const m = payload as { runId: string; id: string; seq: number; jobId?: string; agentId: string; content: string; attachment?: unknown };
+        hub.broadcast(m.runId, 0, {
+          type: "chat.message",
+          jobId: m.jobId ?? "",
+          agentId: m.agentId,
+          content: m.content,
+          attachment: m.attachment as never,
+          id: m.id,
+          seq: m.seq,
+        });
+      });
+    },
+  }).catch(() => {});
 
   reloadAgents();
   reloadProviders();
