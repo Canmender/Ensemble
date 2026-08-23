@@ -35,7 +35,18 @@ import { useLayoutSpringGentle } from "../utils/motion";
 import { bubbleVariantOf, bubbleStyles } from "../components/bubble";
 import { GlassSurface } from "../components/GlassSurface";
 import { startCall } from "../services/callService";
-import { encryptFor, decryptFrom } from "../services/e2e/e2eService";
+// E2E 服务懒加载：e2eService 及其密码学依赖不进 App 启动的 import 树——
+// 即使该模块链出问题（如 v0.9.7 白屏事故）也只影响聊天加解密，不拖垮整个应用
+let e2eModulePromise: Promise<typeof import("../services/e2e/e2eService")> | null = null;
+function loadE2e() {
+  if (!e2eModulePromise) {
+    e2eModulePromise = import("../services/e2e/e2eService").catch((e) => {
+      e2eModulePromise = null; // 失败可重试
+      throw e;
+    });
+  }
+  return e2eModulePromise;
+}
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { EmojiPicker } from "../components/EmojiPicker";
@@ -346,8 +357,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       // E2E 解密：1:1 用户会话中，仅对端消息可解密（自己发的密文无对应私钥，保持本地版本）
       const rawMsgs = histRes.data.messages;
       const isE2e = !!e2ePeer;
-      const decryptedMsgs = isE2e
-        ? await Promise.all(
+      let decryptedMsgs = rawMsgs;
+      if (isE2e) {
+        try {
+          const { decryptFrom } = await loadE2e();
+          decryptedMsgs = await Promise.all(
             rawMsgs.map(async (m) => {
               const content =
                 m.role === "assistant" && m.agentId === e2ePeer.userId
@@ -355,8 +369,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                   : m.content;
               return { ...m, content };
             }),
-          )
-        : rawMsgs;
+          );
+        } catch {
+          /* E2E 模块加载失败：按明文渲染（历史里本就有明文消息） */
+        }
+      }
       setMessages(
         decryptedMsgs.map((m) => ({
           id: m.id,
@@ -449,7 +466,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           let content = msg.content;
           // E2E 解密：仅 1:1 用户会话中来自 peer 的消息（自己发的密文无法解，保持本地版本）
           if (e2ePeer && !isSelf && msg.agentId === e2ePeer.userId) {
-            try { content = await decryptFrom(e2ePeer.userId, msg.content); } catch {}
+            try {
+              const { decryptFrom } = await loadE2e();
+              content = await decryptFrom(e2ePeer.userId, msg.content);
+            } catch {}
           }
           setMessages((prev) =>
             appendMessage(prev, {
@@ -511,12 +531,13 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       const res = await api.getConversationMessages(convId, undefined, 100, maxSeq);
       if (res.data) {
         const filtered = res.data.messages.filter((m) => (useSeq ? (m.seq ?? 0) > (maxSeq ?? 0) : m.ts > lastTs));
+        const e2eMod = e2ePeer ? await loadE2e().catch(() => null) : null;
         const newMsgs = await Promise.all(
           filtered.map(async (m) => {
             let content = m.content;
             // E2E 解密：仅 1:1 用户会话中来自 peer 的消息
-            if (e2ePeer && m.role === "assistant" && m.agentId === e2ePeer.userId) {
-              try { content = await decryptFrom(e2ePeer.userId, m.content); } catch {}
+            if (e2eMod && e2ePeer && m.role === "assistant" && m.agentId === e2ePeer.userId) {
+              try { content = await e2eMod.decryptFrom(e2ePeer.userId, m.content); } catch {}
             }
             return {
               id: m.id,
@@ -613,6 +634,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     let wireContent = text;
     if (e2ePeer && text && !draftAttachment) {
       try {
+        const { encryptFor } = await loadE2e();
         const encrypted = await encryptFor(e2ePeer.userId, text);
         if (encrypted) wireContent = encrypted;
       } catch {
