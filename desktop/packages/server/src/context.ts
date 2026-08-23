@@ -28,6 +28,9 @@ import { PluginHost } from "./plugins/kernel";
 import { ragPlugin } from "./plugins/tools";
 import { maintenancePlugin } from "./plugins/services";
 import { EventBus } from "./plugins/events";
+import { PerUserPluginManager } from "./plugins/per-user";
+import { PluginUserKv } from "./plugins/user-kv";
+import { dailyReminderPlugin } from "./plugins/builtin/daily-reminder";
 import { makeMemoryTools } from "./tools/memory";
 import { logger } from "./util/logger";
 import { embedTexts, type EmbedFn, type EmbeddingOptions } from "./tools/embedding";
@@ -96,6 +99,8 @@ export interface AppContext {
   pluginHost: PluginHost;
   /** 路由注册表（createApp 装配时填充；插件经此挂子路由） */
   routerRegistry?: import("./plugins/routers").RouterRegistry;
+  /** per-user 插件管理器（R4 用户主权模型） */
+  userPlugins: PerUserPluginManager;
   reloadAgents: () => void;
   reloadProviders: () => void;
   dispose: () => Promise<void>;
@@ -121,6 +126,12 @@ export function createAppContext(
   // 事件总线（R3）：hub/engine 解耦的枢纽——engine emit chat/message，hub 挂观察者广播
   const pluginHost = new PluginHost();
   const events = new EventBus(pluginHost);
+  // EventBus 进服务容器：用户插件经 ctx.get("events") 发消息（吃自己种的菜）
+  pluginHost.register({
+    name: "event-bus-provider",
+    inject: [],
+    install: (ctx) => ctx.provide("events", events),
+  }).catch(() => {});
   // 设备多端在线：WS 上线 → emit device/status（观察者写设备表 + 定向广播）
   hub.onDeviceStatus = (userId, device, online) => {
     events.emit("device/status", { userId, device, online });
@@ -313,7 +324,7 @@ export function createAppContext(
     })();
   }
 
-  return {
+  const ctxObj = {
     env,
     db,
     uploadsDir,
@@ -345,4 +356,10 @@ export function createAppContext(
       hub.close();
     },
   };
+  // per-user 插件管理器（R4）：候选集注册 + 已启用实例恢复
+  const userPlugins = new PerUserPluginManager(pluginHost, db, (userId, pluginId) => new PluginUserKv(db, userId, pluginId));
+  userPlugins.registerCandidate(dailyReminderPlugin);
+  void userPlugins.restoreAll();
+  ctxObj.pluginHost = pluginHost;
+  return Object.assign(ctxObj, { userPlugins });
 }

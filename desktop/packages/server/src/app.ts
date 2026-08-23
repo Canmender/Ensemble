@@ -21,6 +21,7 @@ import { devicesRouter } from "./api/routes/devices";
 import { uploadRouter } from "./api/routes/upload";
 import { appVersionRouter } from "./api/routes/app-version";
 import { initRelayClient } from "./api/routes/relay";
+import { userPluginsRouter } from "./api/routes/user-plugins";
 import { RouterRegistry } from "./plugins/routers";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
@@ -170,6 +171,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   routerRegistry.register("/api/assistant", assistantRouter(ctx));
   routerRegistry.register("/api/tokens", tokensRouter(ctx));
   routerRegistry.register("/api/e2e", e2eRouter(ctx));
+  routerRegistry.register("/api/users/me/plugins", userPluginsRouter(ctx));
   for (const { path, router } of routerRegistry.list()) {
     app.use(path, router);
   }

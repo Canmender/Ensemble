@@ -2,6 +2,30 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.22 (2026-08-23) — 插件化重构 R4：per-user 插件 + 管理 API（用户主权模型）
+
+按「云端只做中转，插件是用户资产」宗旨落地：
+
+- **PerUserPluginManager**（plugins/per-user.ts）：内核零改动的 per-user 层——
+  每个 (userId, pluginId) 实例 = PluginHost 里命名空间化插件 user:<uid>:<pid>，
+  隔离语义由管理层保证（规避内核单例假设风险点）
+- **plugin_kv / user_plugins 表**：(userId, pluginId, key) 三元主键 KV +
+  用户启用清单/配置持久化；PluginUserKv 命名空间视图让插件拿不到别人的数据
+- **manifest 校验**：zod schema（id/name/version/scheduled/eventsOn），清单即权限
+- **性能闸门定死**：每用户 timer 上限 20（mount 时校验累计 scheduled）
+- **daily-reminder 官方示范插件**：manifest 声明 scheduled+配置；到点经
+  EventBus.emit("chat/message") 发提醒（吃自己种的菜，与 hub 广播同链路）；
+  下次触发时间落 kv 持久化（重启不丢不重发）
+- **管理 API**：GET /api/users/me/plugins + enable/disable + config 读写
+  （enable=该用户作用域 mount、disable=unmount 命名空间实例，其他用户零感知；
+  setConfig 热重启实例）
+- **设置页「插件」卡片**：候选列表+启停开关+配置表单（本地模式静默空态）
+
+验收: 183 测试全过（含 6 个多租户隔离用例——A disable 后 B 零感知/KV 三元键
+互不可见/timer 闸门拒绝/配置热重启）；web/desktop build 通过；冒烟正常
+
+**版本**: desktop 0.8.21 → 0.8.22
+
 ## v0.8.21 (2026-08-23) — 插件化重构 R3：事件总线 + RouterRegistry
 
 按研究任务书在自研内核上完成 engine↔hub 解耦：
