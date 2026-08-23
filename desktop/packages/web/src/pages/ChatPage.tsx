@@ -9,12 +9,13 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot, MessageSquare, Plus, Send, Users, Smartphone, Brain, Archive, User as UserIcon,
+  Bot, MessageSquare, Plus, Send, Smartphone, Brain, Archive,
   Image as ImageIcon, Paperclip, File as FileIcon, X, Menu, Info, Settings2, UserPlus, Phone
 } from "lucide-react";
 import { GroupSettingsDialog } from "../components/GroupSettingsDialog";
 import { ContactInfoDialog } from "../components/ContactInfoDialog";
 import { FriendsDialog } from "../components/FriendsDialog";
+import { Avatar } from "../components/Avatar";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import {
@@ -59,6 +60,8 @@ interface UserInfo {
   username: string;
   displayName?: string;
   role?: string;
+  /** 用户自定义头像 URL（服务端返回；未设置则前端色块兜底） */
+  avatarUrl?: string;
 }
 
 /** 解析用户昵称（渲染发送者名） */
@@ -106,7 +109,8 @@ interface Contact {
   id: string;
   type: ContactType;
   name: string;
-  avatar?: string;
+  /** 自定义头像 URL（用户联系人来自 /auth/users；agent/device 无自定义头像走类型图标） */
+  avatarUrl?: string;
   status?: "online" | "offline" | "busy";
   lastMessage?: string;
   lastTime?: string;
@@ -117,6 +121,36 @@ interface Contact {
   participantIds?: string[];
   /** 会话 ID（conversations API，企业级会话持久化） */
   convId?: string;
+}
+
+/**
+ * 联系人头像：统一渲染入口，不硬编码具体用户/群聊。
+ * - user：真实头像优先（Avatar 组件），无则首字符色块兜底
+ * - group：群名色块；成员头像在群设置弹窗里看
+ * - agent / device：类型图标（无自定义头像概念），底色按类型区分
+ */
+function ContactAvatar({ contact, size = 40 }: { contact: Contact; size?: number }) {
+  const is = contact.type;
+  const wrapCls = cls(
+    "flex shrink-0 items-center justify-center rounded-full",
+    is === "agent" ? "bg-violet-500/10 text-violet-500" :
+    is === "device" ? "bg-primary/10 text-primary" :
+    is === "user" ? "bg-accent/10 text-accent" :
+    "bg-success/10 text-success",
+  );
+  if (is === "agent") {
+    return <div className={wrapCls} style={{ width: size, height: size }}><Bot className="h-[55%] w-[55%]" /></div>;
+  }
+  if (is === "device") {
+    return <div className={wrapCls} style={{ width: size, height: size }}><Smartphone className="h-[55%] w-[55%]" /></div>;
+  }
+  // user / group：真实头像或首字符色块
+  const inner = size - 4;
+  return (
+    <span className={wrapCls} style={{ width: size, height: size }}>
+      <Avatar name={contact.name} avatarUrl={contact.avatarUrl} size={inner} />
+    </span>
+  );
 }
 
 /** 创建群聊对话框 */
@@ -210,8 +244,6 @@ function ContactItem({
   onClick: () => void;
   onArchive?: (contact: Contact) => void;
 }) {
-  const icon = contact.type === "agent" ? Bot : contact.type === "device" ? Smartphone : contact.type === "user" ? UserIcon : Users;
-  const Icon = icon;
   const statusColor = contact.status === "online" ? "bg-success" : contact.status === "busy" ? "bg-warning" : "bg-muted";
 
   return (
@@ -224,15 +256,7 @@ function ContactItem({
       )}
     >
       <div className="relative">
-        <div className={cls(
-          "flex h-10 w-10 items-center justify-center rounded-full",
-          contact.type === "agent" ? "bg-violet-500/10 text-violet-500" :
-          contact.type === "device" ? "bg-primary/10 text-primary" :
-          contact.type === "user" ? "bg-accent/10 text-accent" :
-          "bg-success/10 text-success",
-        )}>
-          <Icon className="h-5 w-5" />
-        </div>
+        <ContactAvatar contact={contact} size={40} />
         <span className={cls("absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface", statusColor)} />
       </div>
       <div className="flex-1 min-w-0">
@@ -249,7 +273,8 @@ function ContactItem({
           {contact.unread}
         </span>
       )}
-      {contact.convId && onArchive && (
+      {/* 归档仅限智能体会话（普通 IM 会话不归档；归档=沉淀 agent 协作结论） */}
+      {contact.type === "agent" && contact.convId && onArchive && (
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -525,6 +550,7 @@ export default function ChatPage() {
             id: `user-${pid}`,
             type: "user" as const,
             name: u.displayName || u.username,
+            avatarUrl: u.avatarUrl,
             status: "online",
             runId: c.runId,
             convId: c.id,
@@ -564,6 +590,7 @@ export default function ChatPage() {
             id: `user-${u.id}`,
             type: "user" as const,
             name: u.displayName || u.username,
+            avatarUrl: u.avatarUrl,
             status: "online",
             participantIds: [u.id],
           },
@@ -1188,18 +1215,7 @@ export default function ChatPage() {
           <>
             {/* 聊天头部 */}
             <div className="flex items-center gap-3 border-b border-border px-6 py-3">
-              <div className={cls(
-                "flex h-9 w-9 items-center justify-center rounded-full",
-                activeContact.type === "agent" ? "bg-violet-500/10 text-violet-500" :
-                activeContact.type === "device" ? "bg-primary/10 text-primary" :
-                activeContact.type === "user" ? "bg-accent/10 text-accent" :
-                "bg-success/10 text-success",
-              )}>
-                {activeContact.type === "agent" ? <Bot className="h-4 w-4" /> :
-                 activeContact.type === "device" ? <Smartphone className="h-4 w-4" /> :
-                 activeContact.type === "user" ? <UserIcon className="h-4 w-4" /> :
-                 <Users className="h-4 w-4" />}
-              </div>
+              <ContactAvatar contact={activeContact} size={36} />
               <div>
                 <div className="text-sm font-semibold text-fg">{activeContact.name}</div>
                 <div className="text-xs text-muted">
