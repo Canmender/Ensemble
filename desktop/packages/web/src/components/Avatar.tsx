@@ -1,17 +1,41 @@
+import { useEffect, useState } from "react";
 import { cls } from "./ui";
+import { getCloudBase, isMultiMode } from "../lib/apiBase";
 
-/** 圆形头像：有 avatarUrl 显示图片，否则显示首字符的彩色圆块。 */
+/**
+ * 头像 URL 解析：服务端存的是相对路径（/uploads/avatars/...）。
+ * multi 模式下页面 origin ≠ 云端 API origin，裸相对路径会 404——
+ * 按 cloudBase 拼成绝对地址；本地模式（同源）原样返回。
+ */
+function useResolvedAvatarUrl(avatarUrl: string | undefined): string | undefined {
+  const [resolved, setResolved] = useState<string | undefined>(avatarUrl);
+  useEffect(() => {
+    setResolved(avatarUrl);
+    if (!avatarUrl || !avatarUrl.startsWith("/") || !isMultiMode()) return;
+    let cancelled = false;
+    void getCloudBase().then((base) => {
+      if (!cancelled && base) setResolved(`${base}${avatarUrl}`);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [avatarUrl]);
+  return resolved;
+}
+
+/** 圆形头像：有 avatarUrl 显示图片（multi 模式自动拼云端基址），否则显示首字符的彩色圆块。 */
 export function Avatar({
   name,
   avatarUrl,
   size = 36,
   className,
 }: { name?: string; avatarUrl?: string; size?: number; className?: string }) {
+  const src = useResolvedAvatarUrl(avatarUrl);
   const label = (name || "?")[0]?.toUpperCase();
-  if (avatarUrl) {
+  if (src) {
     return (
       <img
-        src={avatarUrl}
+        src={src}
         alt={name || "avatar"}
         width={size}
         height={size}

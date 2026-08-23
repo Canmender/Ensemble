@@ -2,6 +2,25 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.19 (2026-08-23) — 头像全链路修复 + 归档收敛为智能体专属
+
+**头像（深挖全部展示位，零硬编码）**
+- **Avatar 组件内建 URL 解析**：服务端存相对路径 /uploads/avatars/...，multi 模式下
+  页面 origin ≠ 云端 API origin 导致图片 404——组件内 useResolvedAvatarUrl 按
+  cloudBase 拼绝对地址（同步兜底+异步刷新），所有调用点自动修复
+- **消息气泡补发送者头像**：用户会话取对方真实头像，群聊按发送者首字色块，
+  agent 会话取 agent 名——此前消息区只有文字无头像
+- 覆盖位：侧栏/联系人列表/消息气泡/FriendsDialog/GroupSettingsDialog 成员列表/
+  ProfilePage 大头像——全部经 Avatar 组件单点修复
+
+**归档语义收敛**
+- 删除 ChatPage 残留的归档死代码（ContactItem onArchive prop + archiveContact +
+  四处传参）——普通 IM（用户/群聊）彻底无归档概念
+- 归档 = 智能体协作沉淀，入口即侧栏「归档处」（TasksPage 的 chat Run 列表），
+  agent 对话历史天然在此可查
+
+**版本**: desktop 0.8.18 → 0.8.19
+
 ## v0.8.19 (2026-08-23) — 联系人头像全链路 + 归档收敛为智能体专属
 
 用户反馈头像展示问题，深挖后修复数据断点 + 收敛归档语义：

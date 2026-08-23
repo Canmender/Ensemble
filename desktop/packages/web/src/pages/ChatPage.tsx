@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Bot, MessageSquare, Plus, Send, Smartphone, Brain, Archive,
+  Bot, MessageSquare, Plus, Send, Smartphone, Brain,
   Image as ImageIcon, Paperclip, File as FileIcon, X, Menu, Info, Settings2, UserPlus, Phone
 } from "lucide-react";
 import { GroupSettingsDialog } from "../components/GroupSettingsDialog";
@@ -237,12 +237,10 @@ function ContactItem({
   contact,
   active,
   onClick,
-  onArchive,
 }: {
   contact: Contact;
   active: boolean;
   onClick: () => void;
-  onArchive?: (contact: Contact) => void;
 }) {
   const statusColor = contact.status === "online" ? "bg-success" : contact.status === "busy" ? "bg-warning" : "bg-muted";
 
@@ -273,20 +271,7 @@ function ContactItem({
           {contact.unread}
         </span>
       )}
-      {/* 归档仅限智能体会话（普通 IM 会话不归档；归档=沉淀 agent 协作结论） */}
-      {contact.type === "agent" && contact.convId && onArchive && (
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onArchive(contact);
-          }}
-          className="ml-1 rounded p-1 text-muted transition-colors hover:text-fg"
-          title="归档会话"
-          aria-label="归档会话"
-        >
-          <Archive className="h-3.5 w-3.5" />
-        </button>
-      )}
+      {/* 归档说明：普通 IM（用户/群聊）不提供归档；智能体协作沉淀在「归档处」（TasksPage 的 chat Run 列表） */}
     </button>
   );
 }
@@ -786,17 +771,6 @@ export default function ChatPage() {
     });
   }, [activeContact?.runId, loadContacts]);
 
-  /** 归档会话（企业级会话，非本地 group） */
-  async function archiveContact(contact: Contact) {
-    if (!contact.convId) return;
-    try {
-      await api.post(`/conversations/${contact.convId}/archive`, { archived: true });
-      void loadContacts();
-    } catch (e) {
-      showToast("归档失败: " + (e as Error).message, "error");
-    }
-  }
-
   /** 撤回消息（发送者可撤） */
   async function recallMessage(msg: ChatMessage) {
     if (!activeContact?.convId) return;
@@ -1143,7 +1117,6 @@ export default function ChatPage() {
               </div>
               {deviceContacts.map((c) => (
                 <ContactItem
-                onArchive={archiveContact}
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
@@ -1161,7 +1134,6 @@ export default function ChatPage() {
               </div>
               {userContacts.map((c) => (
                 <ContactItem
-                onArchive={archiveContact}
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
@@ -1179,7 +1151,6 @@ export default function ChatPage() {
               </div>
               {agentContacts.map((c) => (
                 <ContactItem
-                onArchive={archiveContact}
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
@@ -1197,7 +1168,6 @@ export default function ChatPage() {
               </div>
               {groupContacts.map((c) => (
                 <ContactItem
-                onArchive={archiveContact}
                   key={c.id}
                   contact={c}
                   active={activeContact?.id === c.id}
@@ -1315,6 +1285,20 @@ export default function ChatPage() {
                           {selectedMsgs.has(msg.id) && "✓"}
                         </button>
                       )}
+                      {(() => {
+                        if (isMine) return null;
+                        if (activeContact.type === "user" && msg.agentId) {
+                          const u = usersById.get(msg.agentId);
+                          return <Avatar name={msg.senderName ?? u?.displayName ?? u?.username ?? msg.agentId} avatarUrl={u?.avatarUrl} size={28} className="mt-1 shrink-0" />;
+                        }
+                        if (activeContact.type === "group") {
+                          return <Avatar name={msg.senderName ?? msg.agentId ?? "?"} size={28} className="mt-1 shrink-0" />;
+                        }
+                        if (activeContact.type === "agent") {
+                          return <Avatar name={activeContact.name} avatarUrl={(activeContact as any).avatarUrl} size={28} className="mt-1 shrink-0" />;
+                        }
+                        return null;
+                      })()}
                       {/* Bubble 表面 */}
                       <Bubble variant={variant} tint={tint}>
                         {msg.deleted ? (
