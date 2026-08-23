@@ -82,12 +82,14 @@ describe("PerUserPluginManager 多租户隔离", () => {
   });
 
   it("timer 闸门：每用户累计超上限拒绝启用", async () => {
-    const heavy: CandidatePlugin = {
-      manifest: { id: "heavy", name: "Heavy", version: "0.1.0", scheduled: USER_TIMER_CAP, eventsOn: [] },
-      create: (runtime) => ({ install: (ctx) => void ctx }),
-    };
-    mgr.registerCandidate(heavy);
-    await mgr.enable("carol", "heavy");
+    // manifest schema 上限 scheduled=5/插件；注册 4 个 heavy(5×4=20) 占满 carol 的配额
+    for (let i = 0; i < 4; i++) {
+      mgr.registerCandidate({
+        manifest: { id: `heavy-${i}`, name: `Heavy${i}`, version: "0.1.0", scheduled: USER_TIMER_CAP / 4, eventsOn: [] },
+        create: (runtime) => ({ install: (ctx) => void ctx }),
+      });
+      await mgr.enable("carol", `heavy-${i}`);
+    }
     const r2 = await mgr.enable("carol", "ticker");
     expect(r2.ok).toBe(false);
     expect(r2.error).toContain("上限");

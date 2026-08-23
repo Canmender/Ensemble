@@ -27,9 +27,31 @@ export const pluginManifestSchema = z.object({
   scheduled: z.number().int().min(0).max(5).default(0),
   /** 声明监听的事件（须命中白名单前缀，见 events.ts） */
   eventsOn: z.array(z.string()).default([]),
+  /**
+   * 设置页配置表单的字段声明（U1 演进项落地：manifest 即 UI）。
+   * web 端按此自动渲染表单——插件新增配置项无需改前端代码。
+   */
+  settings: z.array(z.object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    placeholder: z.string().optional(),
+    type: z.enum(["text", "password"]).default("text"),
+  })).default([]),
 });
 
-export type PluginManifest = z.infer<typeof pluginManifestSchema>;
+/** 声明侧类型：scheduled/eventsOn/settings 可省略（schema 解析时补默认值） */
+export interface PluginManifest {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  scheduled?: number;
+  eventsOn?: string[];
+  settings?: Array<{ key: string; label: string; placeholder?: string; type?: "text" | "password" }>;
+}
+
+/** 解析后的完整 manifest（schema.parse 输出，default 已补齐） */
+export type ResolvedManifest = z.infer<typeof pluginManifestSchema>;
 
 /** 每用户可同时启用的定时任务上限 */
 export const USER_TIMER_CAP = 20;
@@ -59,9 +81,12 @@ export interface CandidatePlugin {
   create: (runtime: UserPluginRuntime) => Omit<EnsemblePlugin, "name">;
 }
 
+/** 注册后的候选（manifest 已解析补默认值） */
+type ResolvedCandidate = CandidatePlugin & { manifest: ResolvedManifest };
+
 export class PerUserPluginManager {
   /** 候选集：pluginId → 定义 */
-  private candidates = new Map<string, CandidatePlugin>();
+  private candidates = new Map<string, ResolvedCandidate>();
   /** 每用户已启用计数（timer 闸门用） */
   private activeTimers = new Map<string, number>();
 
@@ -71,19 +96,21 @@ export class PerUserPluginManager {
     private makeKv: (userId: string, pluginId: string) => PluginUserKv,
   ) {}
 
-  /** 注册候选插件（服务器启动时扫描 plugins/ 目录后调用） */
+  /** 注册候选插件：manifest 经 schema 解析（校验 + 补默认值），失败抛错（fail-fast） */
   registerCandidate(candidate: CandidatePlugin): void {
-    this.candidates.set(candidate.manifest.id, candidate);
+    const parsed = pluginManifestSchema.parse(candidate.manifest);
+    this.candidates.set(parsed.id, { ...candidate, manifest: parsed });
   }
 
-  listCandidates(): PluginManifest[] {
+  listCandidates(): ResolvedManifest[] {
     return [...this.candidates.values()].map((c) => c.manifest);
   }
 
-  /** 某用户的启用清单（含配置与状态投影） */
+  /** 某用户的启用清单（含配置与状态投影 + settings 表单声明透传） */
   listForUser(userId: string): Array<{
     id: string; name: string; version: string; description?: string;
     enabled: boolean; hasConfig: boolean; scheduled: number;
+    settings: PluginManifest["settings"];
   }> {
     const rows = this.db
       .prepare("SELECT user_id, plugin_id, config_json, enabled FROM user_plugins WHERE user_id = ?")
@@ -99,6 +126,7 @@ export class PerUserPluginManager {
         enabled: !!r.enabled && this.host.statusOf(this.instanceName(userId, r.plugin_id)).status === "active",
         hasConfig: !!r.config_json,
         scheduled: c.manifest.scheduled,
+        settings: c.manifest.settings,
       }];
     });
   }
@@ -169,7 +197,7 @@ export class PerUserPluginManager {
 
   // ---------- 内部：mount/unmount ----------
 
-  private async mount(userId: string, pluginId: string, candidate?: CandidatePlugin): Promise<{ ok: boolean; error?: string }> {
+  private async mount(userId: string, pluginId: string, candidate?: ResolvedCandidate): Promise<{ ok: boolean; error?: string }> {
     const c = candidate ?? this.candidates.get(pluginId);
     if (!c) return { ok: false, error: `插件不存在: ${pluginId}` };
 

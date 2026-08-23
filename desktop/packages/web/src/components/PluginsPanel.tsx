@@ -15,16 +15,9 @@ interface PluginInfo {
   scheduled: number;
   enabled: boolean;
   hasConfig: boolean;
+  /** manifest 内嵌的配置表单字段声明（manifest 即 UI——插件新增配置项无需改前端） */
+  settings?: Array<{ key: string; label: string; placeholder?: string; type?: "text" | "password" }>;
 }
-
-/** 已知插件的配置表单字段声明（服务端 manifest settings 渲染的起步实现） */
-const CONFIG_FIELDS: Record<string, Array<{ key: string; label: string; placeholder?: string; type?: string }>> = {
-  "daily-reminder": [
-    { key: "time", label: "提醒时间", placeholder: "09:00" },
-    { key: "message", label: "提醒文案", placeholder: "该做每日站会记录了" },
-    { key: "conversationRunId", label: "目标会话 runId", placeholder: "run-xxx（从聊天页复制）" },
-  ],
-};
 
 export function PluginsPanel() {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
@@ -67,7 +60,7 @@ export function PluginsPanel() {
     try {
       const cfg = await api.get<Record<string, unknown>>(`/users/me/plugins/${p.id}/config`);
       const draft: Record<string, string> = {};
-      for (const f of CONFIG_FIELDS[p.id] ?? []) draft[f.key] = String(cfg?.[f.key] ?? "");
+      for (const f of p.settings ?? []) draft[f.key] = String(cfg?.[f.key] ?? "");
       setConfigDraft(draft);
       setConfigFor(p);
     } catch {
@@ -118,7 +111,7 @@ export function PluginsPanel() {
                 </div>
                 {p.description && <div className="mt-0.5 text-xs text-muted">{p.description}</div>}
               </div>
-              {(CONFIG_FIELDS[p.id]?.length ?? 0) > 0 && (
+              {(p.settings?.length ?? 0) > 0 && (
                 <Button variant="secondary" className="!px-2.5 !py-1 text-xs" onClick={() => void openConfig(p)}>
                   配置
                 </Button>
@@ -150,7 +143,7 @@ export function PluginsPanel() {
       <Modal open={!!configFor} onClose={() => setConfigFor(null)} title={configFor ? `${configFor.name} 配置` : ""}>
         {configFor && (
           <div className="space-y-4">
-            {(CONFIG_FIELDS[configFor.id] ?? []).map((f) => (
+            {(configFor.settings ?? []).map((f) => (
               <div key={f.key}>
                 <Label>{f.label}</Label>
                 <Input

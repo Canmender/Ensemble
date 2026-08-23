@@ -2,6 +2,20 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.25 (2026-08-23) — manifest 即 UI：settings schema 自动渲染（CONFIG_FIELDS 演进项清偿）
+
+- **manifest.settings 字段声明**：zod schema（key/label/placeholder/type），注册时
+  解析补默认值（PluginManifest 声明侧可选 / ResolvedManifest 解析后必填两态分离）
+- **listForUser 透传 settings** → web PluginsPanel 按 manifest 自动渲染表单，
+  手写 CONFIG_FIELDS 表删除——插件新增配置项零前端改动
+- **联调基准**：scripts/poll-curl-demo.sh（token 获取→启用→create→vote 全流程
+  curl 可复现，双端对帧用）
+- daily-reminder manifest 补 settings 声明；timer 闸门测试适配单插件上限 5
+
+验收: typecheck 0 错; 187 测试全过; web/desktop build 通过
+
+**版本**: desktop 0.8.24 → 0.8.25
+
 ## v0.8.24 (2026-08-23) — U1 卡片协议 + poll 投票插件 + web 渲染
 
 用户主权插件体系第一个完整闭环（发起→渲染→点击→计票→刷新）：

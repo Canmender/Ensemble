@@ -27,6 +27,11 @@ export const dailyReminderPlugin: CandidatePlugin = {
     description: "每天定时向指定会话发送一条提醒消息",
     scheduled: 1,
     eventsOn: [],
+    settings: [
+      { key: "time", label: "提醒时间", placeholder: "09:00" },
+      { key: "message", label: "提醒文案", placeholder: "该做每日站会记录了" },
+      { key: "conversationRunId", label: "目标会话 runId", placeholder: "run-xxx（从聊天页复制）" },
+    ],
   },
   create: (runtime) => ({
     install: (ctx) => {
