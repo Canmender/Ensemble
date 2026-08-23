@@ -312,7 +312,6 @@ class ApiService {
     return "UNKNOWN";
   }
 
-  /** 发起 API 请求 */
   /** 发起 API 请求（含 401 自动重试：清除旧 Token → 重新获取 → 重试一次） */
   private async request<T>(
     method: string,
@@ -320,6 +319,7 @@ class ApiService {
     body?: unknown,
     timeoutMs?: number,
     _isRetry = false,
+    _skipAuth = false,
   ): Promise<ApiResponse<T>> {
     const baseUrl = this.getBaseUrl();
     if (!baseUrl) {
@@ -331,7 +331,7 @@ class ApiService {
     const timer = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const token = await this.getToken();
+      const token = _skipAuth ? null : await this.getToken();
       const options: RequestInit = {
         method,
         headers: {
@@ -353,7 +353,7 @@ class ApiService {
         if (response.status === 401 && !_isRetry) {
           this.resetToken();
           clearTimeout(timer);
-          return this.request<T>(method, path, body, timeoutMs, true);
+          return this.request<T>(method, path, body, timeoutMs, true, _skipAuth);
         }
 
         let detail: string | undefined;
@@ -568,9 +568,10 @@ class ApiService {
     return this.request<UserInfo[]>("GET", "/api/auth/users");
   }
 
-  /** 登录（云服务器账号）——成功后持久化用户 token，后续请求自动携带 */
+  /** 登录（云服务器账号）——成功后持久化用户 token，后续请求自动携带。
+   *  认证接口不带旧 token：残留的失效 Bearer 会让服务端直接 401（换机/重装后必现）。 */
   async login(username: string, password: string): Promise<ApiResponse<{ token: string; user: UserInfo }>> {
-    const res = await this.request<{ token: string; user: UserInfo }>("POST", "/api/auth/login", { username, password });
+    const res = await this.request<{ token: string; user: UserInfo }>("POST", "/api/auth/login", { username, password }, undefined, false, true);
     if (res.data?.token) {
       this.authToken = res.data.token;
       try {
@@ -588,7 +589,7 @@ class ApiService {
       username,
       password,
       ...(displayName ? { displayName } : {}),
-    });
+    }, undefined, false, true);
     if (res.data?.token) {
       this.authToken = res.data.token;
       try {

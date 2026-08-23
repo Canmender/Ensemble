@@ -247,8 +247,18 @@ export function useTheme(): { colors: Palette; mode: ThemeMode; scheme: "light" 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 
+// useSyncExternalStore 以 Object.is 比较快照：快照必须缓存复用，
+// 每次返回新字面量会触发"渲染→快照变更→再渲染"死循环（Maximum update depth）
+let snapshotCache: {
+  colors: Palette; mode: ThemeMode; scheme: "light" | "dark"; epoch: number;
+} | null = null;
+
 function getSnapshot() {
-  return { colors: palette, mode: currentMode, scheme: resolveScheme(currentMode, currentSystem), epoch: themeEpoch };
+  const scheme = resolveScheme(currentMode, currentSystem);
+  if (!snapshotCache || snapshotCache.epoch !== themeEpoch || snapshotCache.mode !== currentMode || snapshotCache.scheme !== scheme) {
+    snapshotCache = { colors: palette, mode: currentMode, scheme, epoch: themeEpoch };
+  }
+  return snapshotCache;
 }
 
 export const spacing = { xxs:2, xs:4, sm:8, md:12, lg:16, xl:20, xxl:24, xxxl:32, huge:40 } as const;
