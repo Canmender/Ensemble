@@ -2,6 +2,22 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.29 (2026-08-24) — 「功能」页：插件从设置 tab 升级为一等公民导航
+
+用户新产品决策：插件的扩展内容单独一个页面罗列，左侧导航栏命名「功能」。
+
+- **导航项**：NAV_ITEMS 在「记忆」与「Token用量」之间加 { to: "/plugins", label: "功能", icon: Puzzle }；
+  路由 /plugins 双布局分支注册（懒加载分包）
+- **PluginsPage**：Bento 卡片网格（sm:2列/lg:3列自适应，名称/描述/版本/定时标记/
+  启停开关/manifest.settings 自动渲染的配置表单）——从 PluginsPanel 迁移并舒展，
+  旧组件文件删除；底部预留 U5 市场入口挂载点
+- **本地模式引导态**：「登录后可用 · 功能由你自定义」+ 前往登录按钮
+- **设置页插件 tab 移除**：避免两处维护（tabs 数组/渲染分支/state 类型/imports 全清）
+
+验收: typecheck 0错; web/desktop build 通过; 云端版冒烟 0 错误
+
+**版本**: desktop 0.8.28 → 0.8.29
+
 ## v0.8.26 (2026-08-23) — 卡片动作 endpoint 契约修正（双端联调前置）
 
 移动端核对 curl 基准时发现 web 动作 URL 双前缀：poll 卡片的 endpoint 带
