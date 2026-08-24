@@ -2,6 +2,20 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.30 (2026-08-24) — 插件列表端点透传 settings（manifest 即 UI 断点修复）
+
+移动端做「功能」Tab 时发现 v0.8.25 遗留缺口：GET /api/users/me/plugins 列表端点
+走 listCandidates()，该路从未透传 manifest.settings（v0.8.25 只修了 listForUser
+已启用投影那条）——两端配置按钮点了都是空表单。
+
+- 修复取自移动端 3e84720（审查认可）：settings: enabled.get(m.id)?.settings ?? m.settings
+  （已启用用实例投影、未启用回退候选 manifest，两态覆盖）
+- 按云端唯一测试环境共识：修完直接部署生产
+
+验证: typecheck 0错; 188 测试全过
+
+**版本**: desktop 0.8.29 → 0.8.30
+
 ## v0.8.29 (2026-08-24) — 「功能」页：插件从设置 tab 升级为一等公民导航
 
 用户新产品决策：插件的扩展内容单独一个页面罗列，左侧导航栏命名「功能」。
