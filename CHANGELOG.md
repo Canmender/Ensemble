@@ -2,6 +2,23 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.31 (2026-08-24) — 云端版开箱即连：server.config.js 打进安装包
+
+用户反馈：云端版应装好打开就默认连服务器、直接见登录界面。根因：extraResources
+没打 server.config.js 且仓库无此文件（gitignored 两份式）——干净环境打出的包
+首启 cloudHost 为空，用户必须手填。
+
+- **ensure-server-config.mjs**：打包前置脚本——已有配置保留；缺失时从构建机
+  gitignored .env 读 CLOUD_HOST 生成本地文件（真实地址不进 git 只进产物；
+  来源优先级 环境变量→检出向上找 .env→主检出 .env）；解析不到报错退出
+  （宁可构建失败不可打出坏包）
+- electron-builder.cloud.yml extraResources 加 server.config.js；
+  package:cloud 脚本串上前置
+- 验证：模拟全新安装（清 settings.json），首启 settings API 即返回
+  cloudHost=生产地址 → 直接见登录页 ✓
+
+**版本**: desktop 0.8.30 → 0.8.31
+
 ## v0.8.30 (2026-08-24) — 插件列表端点透传 settings（manifest 即 UI 断点修复）
 
 移动端做「功能」Tab 时发现 v0.8.25 遗留缺口：GET /api/users/me/plugins 列表端点

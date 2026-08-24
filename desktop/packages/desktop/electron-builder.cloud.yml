@@ -26,3 +26,7 @@ extraResources:
     to: icon.png
   - from: build/edition-cloud.txt
     to: edition.txt
+  # 默认云端地址（打包时由 scripts/ensure-server-config.mjs 保证存在；gitignored 不入库）
+  # 主进程启动读取 → 首启直接进登录页，无需手填服务器地址
+  - from: server.config.js
+    to: server.config.js

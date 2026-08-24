@@ -1,6 +1,6 @@
 {
   "name": "@ensemble/desktop",
-  "version": "0.8.30",
+  "version": "0.8.31",
   "private": true,
   "description": "合鸣 桌面应用（Electron 壳）",
   "main": "./dist/main/index.cjs",
@@ -17,7 +17,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "package": "node scripts/gen-icon.mjs && pnpm build && pnpm --filter @ensemble/web build && electron-builder --win --publish never",
     "package:local": "node scripts/gen-icon.mjs && pnpm build && pnpm --filter @ensemble/web build && electron-builder --win --publish never",
-    "package:cloud": "node scripts/gen-icon.mjs && pnpm build && pnpm --filter @ensemble/web build && electron-builder --win --config electron-builder.cloud.yml --publish never"
+    "package:cloud": "node ../scripts/ensure-server-config.mjs && node scripts/gen-icon.mjs && pnpm build && pnpm --filter @ensemble/web build && electron-builder --win --config electron-builder.cloud.yml --publish never"
   },
   "dependencies": {
     "@ensemble/server": "workspace:*",
