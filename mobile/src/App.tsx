@@ -28,6 +28,7 @@ import TasksPage from "./pages/TasksPage";
 import ChatPage from "./pages/ChatPage";
 import ChatRoomPage from "./pages/ChatRoomPage";
 import ContactsPage from "./pages/ContactsPage";
+import PluginsPage from "./pages/PluginsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage";
@@ -82,6 +83,7 @@ const TAB_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Tasks: { active: "document-text", inactive: "document-text-outline" },
   Chat: { active: "chatbubble-ellipses", inactive: "chatbubble-ellipses-outline" },
   Contacts: { active: "people", inactive: "people-outline" },
+  Plugins: { active: "extension-puzzle", inactive: "extension-puzzle-outline" },
   Me: { active: "person", inactive: "person-outline" },
 };
 
@@ -246,6 +248,7 @@ function MainTabs() {
       <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务", header: () => <AppHeader title="任务" /> }} />
       <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天", header: () => <AppHeader title="聊天" /> }} />
       <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人", header: () => <AppHeader title="联系人" /> }} />
+      <Tab.Screen name="Plugins" component={PluginsPage} options={{ title: "功能", header: () => <AppHeader title="功能" /> }} />
       <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我", header: () => <AppHeader title="我" /> }} />
     </Tab.Navigator>
   );

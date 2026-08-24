@@ -123,6 +123,31 @@ export interface UserInfo {
   occupation?: string;
 }
 
+/** manifest.settings 字段声明（服务端 zod：type 目前仅 text | password，新增取值时此处同步） */
+export interface PluginSettingField {
+  key: string;
+  label: string;
+  placeholder?: string;
+  type?: "text" | "password";
+}
+
+/** 候选插件投影（GET /api/users/me/plugins 行形状） */
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  /** 声明的定时任务数 */
+  scheduled: number;
+  /** 本用户是否已启用（且实例 active） */
+  enabled: boolean;
+  /** 是否保存过配置 */
+  hasConfig: boolean;
+  /** manifest 内嵌配置表单声明（manifest 即 UI） */
+  settings?: PluginSettingField[];
+}
+
+
 /** 会话（企业级 IM） */
 export interface Conversation {
   id: string;
@@ -412,6 +437,33 @@ class ApiService {
   /** 内置 AI 助手对话（服务端不可用时页面回退本地回答） */
   async assistantChat(message: string): Promise<ApiResponse<{ reply?: string }>> {
     return this.request<{ reply?: string }>("POST", "/api/assistant/chat", { message });
+  }
+
+  // ========== 用户插件管理（R4 per-user 主权模型，「功能」页数据面） ==========
+
+  /** 候选插件清单（含本用户启停状态与 manifest.settings 表单声明） */
+  async getPlugins(): Promise<ApiResponse<PluginInfo[]>> {
+    return this.request<PluginInfo[]>("GET", "/api/users/me/plugins");
+  }
+
+  /** 启用插件（幂等；超 timer 闸门等拒绝见 error） */
+  async enablePlugin(id: string): Promise<ApiResponse<{ enabled: boolean }>> {
+    return this.request<{ enabled: boolean }>("POST", `/api/users/me/plugins/${encodeURIComponent(id)}/enable`);
+  }
+
+  /** 禁用插件（unregister 本用户实例，其他人零感知） */
+  async disablePlugin(id: string): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>("POST", `/api/users/me/plugins/${encodeURIComponent(id)}/disable`);
+  }
+
+  /** 读用户级插件配置 */
+  async getPluginConfig(id: string): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request<Record<string, unknown>>("GET", `/api/users/me/plugins/${encodeURIComponent(id)}/config`);
+  }
+
+  /** 保存用户级插件配置（服务端热重启该实例使其生效） */
+  async setPluginConfig(id: string, config: Record<string, unknown>): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>("PUT", `/api/users/me/plugins/${encodeURIComponent(id)}/config`, { config });
   }
 
   /** 获取所有 Agent */

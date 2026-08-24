@@ -23,6 +23,7 @@ export function userPluginsRouter(ctx: AppContext): Router {
       scheduled: m.scheduled,
       enabled: enabled.get(m.id)?.enabled ?? false,
       hasConfig: enabled.get(m.id)?.hasConfig ?? false,
+      settings: enabled.get(m.id)?.settings ?? m.settings,
     }));
     ok(res, list);
   });
