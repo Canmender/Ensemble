@@ -207,6 +207,35 @@ CREATE TABLE IF NOT EXISTS user_plugins (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, plugin_id)
 );
+
+-- 设备配对（L2）：我的手机 ↔ 我的桌面 显式设备对；互联信令按 pairId 放行
+CREATE TABLE IF NOT EXISTS device_pairs (
+  id               TEXT PRIMARY KEY,
+  user_id          TEXT NOT NULL,
+  desktop_device_id TEXT NOT NULL,
+  mobile_device_id TEXT NOT NULL,
+  paired_at        INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_pairs_unique ON device_pairs(user_id, desktop_device_id, mobile_device_id);
+
+-- 配对码（一次性；5 分钟过期，消费即删）
+CREATE TABLE IF NOT EXISTS pair_codes (
+  code        TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  desktop_device_id TEXT NOT NULL,
+  public_key_fingerprint TEXT,
+  expires_at  INTEGER NOT NULL
+);
+
+-- 互联事件本地日志（L1）：断线补拉的回放源（手机 sync.request sinceTs → delta 回放）
+CREATE TABLE IF NOT EXISTS device_link_events (
+  msg_id      TEXT PRIMARY KEY,
+  pair_id     TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  payload_json TEXT,
+  ts          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dle_pair_ts ON device_link_events(pair_id, ts);
 `;
 
 export function openDb(dbPath: string): DatabaseSync {
