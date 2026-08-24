@@ -3,6 +3,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
 import { Button, Input, Label } from "../components/ui";
 import { isMultiMode, getCloudBase } from "../lib/apiBase";
+import { cloudFetchOrDirect } from "../lib/cloudHttp";
 
 /** 登录页：多端协作模式走内置的云端服务器（测试环境默认），本地模式相对路径 */
 export default function LoginPage() {
@@ -21,7 +22,7 @@ export default function LoginPage() {
     try {
       const base = isMulti ? await getCloudBase() : "";
       const url = base ? `${base}/api/auth/login` : "/api/auth/login";
-      const res = await fetch(url, {
+      const res = await cloudFetchOrDirect(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),

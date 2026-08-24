@@ -18,6 +18,9 @@ contextBridge.exposeInMainWorld("desktop", {
   /** 云端地址连通性测试（主进程 net.fetch，绕开渲染层 CSP） */
   testCloudHost: (host: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke(IPC.testCloudHost, host),
+  /** 云端 HTTP 代理（multi 模式跨源请求统一走主进程 net.fetch） */
+  cloudFetch: (p: { url: string; method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; body: string }> =>
+    ipcRenderer.invoke(IPC.cloudFetch, p),
   /** 自动更新（仅云端版启用；本地版调用返回不可用） */
   updateCheck: (): Promise<{ available: boolean; version?: string; note?: string }> =>
     ipcRenderer.invoke(IPC.updateCheck),

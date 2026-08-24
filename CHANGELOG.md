@@ -2,6 +2,25 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.32 (2026-08-24) — P0 登录修复：云端请求改走主进程代理
+
+用户反馈云端版无法登录（"网络连接问题"）。CDP 探针逐层定位：renderer 的跨源
+fetch 被 Electron 43 的 webRequest/CSP 层拦截——connect-src 白名单无论具体 host
+还是协议通配都拦（同源正常），主进程 net.fetch 不受此限。
+
+- **cloudFetch IPC 代理**：主进程 net.fetch 转发 renderer 的云端 REST 请求
+  （方法白名单+30s 超时）；preload 暴露 window.desktop.cloudFetch
+- **统一出口 cloudHttp.ts**：api 客户端/auth 登录登出/注册页的跨源请求全部
+  改走代理；浏览器版无桌面桥自动回退直连（依赖服务端 CORS）
+- CSP connect-src 同步改为协议通配（http:/https:/ws:）——白名单形态已证明无效，
+  协议级放行对桌面客户端语义合理（自建服务器地址不固定）
+
+验收（CDP 在真实打包应用页面上下文实测）：settings 注入 ✓ → 桥存在 ✓ →
+经代理的登录请求到达云端并返回预期响应 ✓。全新环境安装→登录链路全程无 CSP/
+webRequest 拦截点。
+
+**版本**: desktop 0.8.31 → 0.8.32
+
 ## v0.8.31 (2026-08-24) — 云端版开箱即连：server.config.js 打进安装包
 
 用户反馈：云端版应装好打开就默认连服务器、直接见登录界面。根因：extraResources
