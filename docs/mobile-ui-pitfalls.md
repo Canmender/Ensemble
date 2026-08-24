@@ -227,3 +227,17 @@ cd /d/ens-mb/mobile && npm ci && node scripts/build-release.cjs
 注意：
 - 构建失败报 `Unable to delete file classes.jar` = 残留 gradle 守护进程锁文件 → `./gradlew --stop` 后重试即可。
 - Hermes 字节码中中文字符串以 UTF-16LE 存储，验证包内容时 grep 中文要用 utf-16-le 编码搜索，utf-8 会假阴性。
+
+## 11. 网络安全配置在 prebuild 时烘焙——只改 server.config.js 重新出包不生效
+
+**问题**：`plugins/withNetworkSecurityConfig.js` 在 `expo prebuild` 时把 `server.config.js` 的 `cleartextDomains` 写进 `android/app/src/main/res/xml/network_security_config.xml`。此后只改 server.config.js 再 gradle 出包，**APK 里的安全配置仍是旧域名**——Android 9+ 直接拦截未列入白名单的明文流量，症状是登录页「未连接服务器」（WS/HTTP 全被系统层拦，App 内无报错）。
+
+**2026-08-23 实例**：短路径构建目录先以本地地址 prebuild 过一次；后来只把 server.config.js 改回云端地址重出包，用户装包连不上。解包才发现 `network_security_config.xml` 里只有 10.0.2.2/localhost。
+
+**规程**：改 server.config.js 的 host/cleartextDomains 后，必须 `npx expo prebuild --platform android --clean` 重新生成 android/ 再出包；出包后用 `aapt dump xmltree ... AndroidManifest.xml` 确认 `networkSecurityConfig` 存在，并解包 grep 安全配置里的域名做终检。
+
+**验证包内地址的方法**（不装包即可查）：
+```bash
+unzip -p app-release.apk assets/index.android.bundle | grep -c <期望地址>   # bundle 内嵌地址
+unzip -o app-release.apk "res/*" -d /tmp/ns && grep -rl cleartextTrafficPermitted /tmp/ns/res  # 安全配置域名
+```
