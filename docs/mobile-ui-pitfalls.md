@@ -241,3 +241,32 @@ cd /d/ens-mb/mobile && npm ci && node scripts/build-release.cjs
 unzip -p app-release.apk assets/index.android.bundle | grep -c <期望地址>   # bundle 内嵌地址
 unzip -o app-release.apk "res/*" -d /tmp/ns && grep -rl cleartextTrafficPermitted /tmp/ns/res  # 安全配置域名
 ```
+
+## 12. expo gradle 插件在构建目录输出陈旧 bundle——--rerun-tasks 也无效
+
+**问题**：短路径构建目录（/d/ens-mb）上，`createBundleReleaseJsAndAssets` 生成的 `app/build/generated/assets/react/release/index.android.bundle` 是陈旧内容（源码已改、bundle 还是老版本），`--rerun-tasks` 显示 33 个任务 executed 但产物不变；`touch index.ts package.json` 破坏 up-to-date 判定也无效。症状：出包后 bundle 里 grep 不到新代码标记（注意 release bundle 是 Hermes 字节码，文本 grep 需先确认字符串以明文/UTF-16LE 哪种形式存在）。
+
+**2026-08-25 实例**：v0.9.14 出包时 curveasm 补丁和 ms() 工厂都不在 bundle 里，反复 assembleRelease 无效。
+
+**绕过手法**（已验证有效）：
+```bash
+# 1. expo export 出明文 JS bundle（含全部最新源码）
+cd /d/ens-mb/mobile && npx expo export --platform android --dev false --output-dir ./exported
+# 2. hermesc 编译为字节码
+node_modules/hermes-compiler/hermesc/win64-bin/hermesc.exe -O -emit-binary \
+  -out ./exported/index.android.bundle ./exported/_expo/static/js/android/<hash>.js
+# 3. PowerShell ZipArchive 替换 APK 内 bundle 条目（bash 无 zip 命令）
+# 4. 解包核验：unzip -p app.apk assets/index.android.bundle 比对字节数/magic(c61fbc03)
+```
+
+**教训**：gradle 的增量任务缓存对 node_modules 变更不可靠；出包后必须解包核验 bundle 内容标记，不能信 BUILD SUCCESSFUL。
+
+## 13. Hermes/Expo 的 TextDecoder 不支持 utf-16le——emscripten 依赖加载期即炸
+
+**问题**：libsignal 的 X25519 后端 `@privacyresearch/curve25519-typescript`（emscripten 产物 curveasm.js）在**模块加载期**执行 `new TextDecoder('utf-16le')`。Hermes 内置 TextDecoder 和 expo winter 装的 polyfill 都只认 utf-8 → RangeError 沿懒加载 require 链炸掉整个聊天房间页（白屏，栈顶 `TextDecoder@`）。
+
+**修复**（b323681）：curveasm.js 内联补丁——try-catch 包住构造，失败回退手写小端解码（`[ensemble-patch]` 标记）。**补丁在 node_modules，一次 `npm install` 就会丢失**——必须用 patch-package 固化（待办）。
+
+**时序陷阱**：给 globalThis.TextDecoder 打全局补丁必须放在 App.tsx 顶层，不能放 index.ts——expo winter 运行时（bundle 中先于 index.ts 执行）用 installGlobal 给 TextDecoder 定义**惰性 getter**，index.ts 先打的补丁会在依赖首次访问时被 getter 返回的 Expo polyfill 架空。
+
+**定位技巧**：Metro dev bundle 的异常栈偏移（如 `1:779931`）在模块结构不变时跨版本稳定，不能作为"新旧 bundle"的判据；判新旧要 grep 内容标记。
