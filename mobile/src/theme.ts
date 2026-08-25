@@ -13,7 +13,7 @@
  * import 无需改动；新代码可用 useTheme() 拿响应式 colors。
  */
 import { useSyncExternalStore } from "react";
-import { Appearance, type ColorSchemeName } from "react-native";
+import { Appearance, StyleSheet, type ColorSchemeName } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   LightTheme,
@@ -229,6 +229,50 @@ export const colors: Palette = new Proxy({} as Palette, {
     return Reflect.ownKeys(palette);
   },
 });
+
+// ==================== 动态样式工厂（ms = memoized styles） ====================
+//
+// 核心问题：`const styles = ms({ ... colors.bg ... })` 在模块
+// 加载期就把当时的颜色值**烘焙**进样式对象——epoch 重挂载只重渲染组件树，
+// 不会重新执行模块级代码，于是切主题后所有用 styles.xxx 的视图全部停留在
+// 旧配色（v0.9.13 真机"主题切换失效"根因：32 个文件模块级烘焙）。
+//
+// ms() 工厂：返回 Proxy 包住的 StyleSheet 容器。每次属性访问校验 epoch，
+// 过期即以当前 palette 重建整个 StyleSheet（一次重建，全量刷新）。组件内
+// 用法与 styles.xxx 完全一致，页面只需把声明换成 ms({...})。
+
+type StyleDef = Record<string, Record<string, unknown>>;
+interface MsBox {
+  readonly __raw: Record<string, unknown>;
+}
+
+const msCache = new WeakMap<object, { epoch: number; built: Record<string, unknown>; proxy: object }>();
+
+/** eslint-disable @typescript-eslint/no-explicit-any -- 样式容器本质动态，强类型化反而失真 */
+export function ms<T extends StyleDef>(def: T): { [K in keyof T]: any } {
+  const box: MsBox = { __raw: def as unknown as Record<string, unknown> };
+  const state = { epoch: -1, built: {} as Record<string, unknown>, proxy: {} as object };
+  msCache.set(def, state);
+  const proxy = new Proxy(box, {
+    get(_t, prop: string | symbol) {
+      if (prop === "__raw") return box.__raw;
+      if (typeof prop !== "string") return undefined;
+      if (state.epoch !== themeEpoch) {
+        // epoch 过期：以当前 palette 重建（colors Proxy 逐属性转发到最新 palette）
+        state.built = StyleSheet.create(
+          box.__raw as never,
+        ) as unknown as Record<string, unknown>;
+        state.epoch = themeEpoch;
+      }
+      return state.built[prop];
+    },
+    has(_t, prop) {
+      return typeof prop === "string" && prop in box.__raw;
+    },
+  }) as unknown as object;
+  state.proxy = proxy;
+  return proxy as { [K in keyof T]: any };
+}
 
 // ==================== 响应式 API（新代码优先） ====================
 

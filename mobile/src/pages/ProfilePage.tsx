@@ -22,7 +22,7 @@ import * as ImagePicker from "expo-image-picker";
 import { api, type UserInfo } from "../services/api";
 import { Avatar } from "../components/Avatar";
 import { useMeStore } from "../store/meStore";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 export default function ProfilePage() {
   const [me, setMe] = useState<UserInfo | null>(null);
@@ -285,7 +285,7 @@ export default function ProfilePage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   avatarWrap: { alignItems: "center", marginTop: spacing.xl },
   avatarBox: { position: "relative" },

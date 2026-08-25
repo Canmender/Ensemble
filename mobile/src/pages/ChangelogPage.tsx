@@ -4,7 +4,7 @@
  */
 import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 const changelogData = [
   {
@@ -263,7 +263,7 @@ export default function ChangelogPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg, padding: spacing.lg },
   entry: { marginBottom: spacing.xl },
   entryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },

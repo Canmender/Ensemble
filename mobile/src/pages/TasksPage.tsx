@@ -20,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 export default function TasksPage({ navigation }: { navigation: any }) {
   const { tasks, runs, agents } = useTaskStore();
@@ -367,7 +367,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: {
     flex: 1,
     backgroundColor: colors.bg,

@@ -9,7 +9,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { CardAction, PluginCardPayload, PollCardState } from "@ensemble/shared";
 import { api } from "../services/api";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { colors, spacing, radius, fontSize, elevation , ms } from "../theme";
 
 export interface PluginCardViewProps {
   card: PluginCardPayload;
@@ -236,7 +236,7 @@ export function PluginCardView({ card, pluginId }: PluginCardViewProps) {
   return <Template card={card} pluginId={pluginId} />;
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

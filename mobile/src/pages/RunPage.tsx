@@ -19,7 +19,7 @@ import { connectionService } from "../services/connection";
 import type { AgentEvent, RunStatus } from "@ensemble/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
-import { colors } from "../theme";
+import { colors , ms } from "../theme";
 
 type RunPageProps = NativeStackScreenProps<RootStackParamList, "Run">;
 
@@ -432,7 +432,7 @@ export default function RunPage({ route, navigation }: RunPageProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: {
     flex: 1,
     backgroundColor: colors.bg,

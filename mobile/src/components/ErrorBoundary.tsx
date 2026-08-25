@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../theme";
+import { colors , ms } from "../theme";
 
 interface Props {
   children: ReactNode;
@@ -89,7 +89,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: {
     flex: 1,
     backgroundColor: colors.bg,

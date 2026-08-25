@@ -5,7 +5,7 @@
 
 import React from "react";
 import { View, Text, StyleSheet, Image } from "react-native";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 import { CLOUD_SERVER } from "../services/connection";
 import { nativeApplicationVersion } from "expo-application";
 
@@ -31,7 +31,7 @@ export default function AboutPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg, padding: spacing.lg },
   logo: {
     alignSelf: "center",

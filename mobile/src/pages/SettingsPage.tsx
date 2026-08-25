@@ -24,7 +24,7 @@ import { Avatar } from "../components/Avatar";
 import { useMeStore } from "../store/meStore";
 import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
-import { colors, spacing, radius, fontSize, elevation, useTheme, setThemeMode } from "../theme";
+import { colors, spacing, radius, fontSize, elevation, useTheme, setThemeMode , ms } from "../theme";
 import type { ThemeMode } from "../theme";
 
 const APP_VERSION = nativeApplicationVersion ?? "0.9.11";
@@ -257,7 +257,7 @@ export default function SettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   profileCard: {
     flexDirection: "row",

@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api } from "../services/api";
 import { useMeStore } from "../store/meStore";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 import type { RootStackParamList } from "../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "UserProfile">;
@@ -131,7 +131,7 @@ export default function UserProfilePage({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   header: { alignItems: "center", marginTop: spacing.xl, paddingHorizontal: spacing.lg },
   avatar: {

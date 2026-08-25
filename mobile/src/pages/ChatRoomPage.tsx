@@ -58,7 +58,7 @@ import { isPluginCard } from "@ensemble/shared";
 import { timeAgo } from "../utils/timeAgo";
 import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 import { LiquidGlass } from "../components/Glass";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared";
 import type { RootStackParamList } from "../App";
@@ -1590,7 +1590,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   messageList: { padding: spacing.lg },
   loadingMore: { paddingVertical: spacing.md, alignItems: "center" },

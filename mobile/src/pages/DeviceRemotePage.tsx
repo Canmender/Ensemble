@@ -22,7 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { connectionService } from "../services/connection";
 import { useDeviceStore } from "../store/deviceStore";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 import { Card, Button, Input, SectionHeader } from "../components/ui";
 
 interface LogEntry {
@@ -370,7 +370,7 @@ export default function DeviceRemotePage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, paddingBottom: spacing.xxxl * 2 },
   card: { marginBottom: spacing.md },

@@ -17,7 +17,7 @@ import {
   type TextStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { colors, spacing, radius, fontSize, elevation , ms } from "../theme";
 
 /* ── Screen ─────────────────────────────────────────────────────────── */
 
@@ -230,7 +230,7 @@ export function SectionHeader({ title }: { title: string }) {
 
 /* ── Styles ─────────────────────────────────────────────────────────── */
 
-const styles = StyleSheet.create({
+const styles = ms({
   screen: { flex: 1, backgroundColor: colors.bg },
   screenContent: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
   card: {

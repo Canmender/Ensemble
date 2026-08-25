@@ -18,7 +18,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { api, type Conversation, type UserInfo } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
 import { useMeStore } from "../store/meStore";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 import type { RootStackParamList } from "../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "GroupSettings">;
@@ -361,7 +361,7 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   section: {
     backgroundColor: colors.surface,

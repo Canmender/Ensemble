@@ -24,7 +24,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { api, type PluginInfo } from "../services/api";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { colors, spacing, radius, fontSize, elevation , ms } from "../theme";
 
 export default function PluginsPage() {
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
@@ -228,7 +228,7 @@ export default function PluginsPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, paddingBottom: 96 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg, gap: spacing.sm },

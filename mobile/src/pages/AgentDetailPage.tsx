@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import { useTaskStore } from "../store/taskStore";
 import { api } from "../services/api";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 interface AgentFormData {
   name: string;
@@ -240,7 +240,7 @@ export default function AgentDetailPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   errorText: { color: colors.textMuted, fontSize: fontSize.md },

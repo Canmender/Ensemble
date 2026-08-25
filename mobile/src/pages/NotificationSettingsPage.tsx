@@ -6,7 +6,7 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, Switch } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 export default function NotificationSettingsPage() {
   const [chatNotify, setChatNotify] = useState(true);
@@ -54,7 +54,7 @@ export default function NotificationSettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg, padding: spacing.lg },
   item: {
     flexDirection: "row",

@@ -10,7 +10,7 @@ import { View, Text, Modal, TouchableOpacity, ActivityIndicator, StyleSheet } fr
 import { Ionicons } from "@expo/vector-icons";
 import { useUpdateStore } from "../store/updateStore";
 import { cancelDownload, downloadAndInstall, installReadyApk, openUnknownSourceSettings } from "../services/appUpdate";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 export function UpdateManager() {
   const { updateInfo, downloading, phase, downloaded, total, reset } = useUpdateStore();
@@ -117,7 +117,7 @@ export function UpdateManager() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: spacing.xl },
   card: { width: "100%", maxWidth: 320, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, alignItems: "center" },
   iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primarySoft, alignItems: "center", justifyContent: "center", marginBottom: spacing.md },

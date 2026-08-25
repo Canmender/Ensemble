@@ -17,7 +17,7 @@ import { useTaskStore } from "../store/taskStore";
 import { connectionService } from "../services/connection";
 import { api } from "../services/api";
 import { wsLink } from "../services/wslink";
-import { colors, radius, elevation } from "../theme";
+import { colors, radius, elevation , ms } from "../theme";
 
 type ConnectionQuality = "excellent" | "good" | "poor" | "unknown";
 
@@ -340,7 +340,7 @@ export default function DashboardPage({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: {
     flex: 1,
     backgroundColor: colors.bg,

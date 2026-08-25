@@ -4,7 +4,7 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, Switch, ScrollView, Alert } from "react-native";
 import { api } from "../services/api";
-import { colors, spacing, fontSize } from "../theme";
+import { colors, spacing, fontSize , ms } from "../theme";
 
 interface PrivacySettings {
   allowAddFriend: boolean;
@@ -71,7 +71,7 @@ export default function PrivacySettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   row: {
     flexDirection: "row",
