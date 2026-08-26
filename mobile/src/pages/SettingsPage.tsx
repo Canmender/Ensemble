@@ -93,6 +93,12 @@ export default function SettingsPage() {
       onPress: () => navigation.navigate("PrivacySettings"),
     },
     {
+      icon: "link-outline" as const,
+      title: "设备互联",
+      desc: "手机与桌面端配对同步",
+      onPress: () => navigation.navigate("DeviceRemote"),
+    },
+    {
       icon: "refresh-outline" as const,
       title: "检查更新",
       desc: `当前 v${APP_VERSION}，检查新版本`,

@@ -109,6 +109,7 @@ import GroupSettingsPage from "./pages/GroupSettingsPage";
 import PrivacySettingsPage from "./pages/PrivacySettingsPage";
 import RunPage from "./pages/RunPage";
 import DeviceRemotePage from "./pages/DeviceRemotePage";
+import DeviceLinkPage from "./pages/DeviceLinkPage";
 import LoginPage from "./pages/LoginPage";
 import ChangelogPage from "./pages/ChangelogPage";
 import AgentDetailPage from "./pages/AgentDetailPage";
@@ -134,6 +135,7 @@ export type RootStackParamList = {
   UserProfile: { userId: string; name: string; username: string; displayName?: string };
   PrivacySettings: undefined;
   DeviceRemote: undefined;
+  DeviceLink: undefined;
   AgentDetail: { agentId: string };
   Changelog: undefined;
   Assistant: undefined;
@@ -444,6 +446,14 @@ function MainApp() {
           options={{
             headerShown: true,
             header: () => <AppHeader title="我的电脑" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="DeviceLink"
+          component={DeviceLinkPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="设备互联" showBack showAvatar={false} />,
           }}
         />
         <Stack.Screen

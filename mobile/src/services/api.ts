@@ -837,6 +837,58 @@ class ApiService {
     return this.request<{ rejected: boolean }>("POST", "/api/privacy/friend-requests/" + requestId + "/reject");
   }
 
+  // ========== 设备互联（L2 配对 + L1 补拉）==========
+
+  /** 手机端确认配对：提交 6 位码 + 本机 deviceId → device_pairs 落库，返回 pairId */
+  async confirmPair(code: string, mobileDeviceId: string): Promise<ApiResponse<{ pairId: string }>> {
+    return this.request<{ pairId: string }>("POST", "/api/pairs/confirm", { code, mobileDeviceId });
+  }
+
+  /** 我的全部设备对列表 */
+  async getPairs(): Promise<ApiResponse<Array<{
+    id: string;
+    userId: string;
+    desktopDeviceId: string;
+    mobileDeviceId: string;
+    pairedAt: number;
+  }>>> {
+    return this.request<Array<{
+      id: string;
+      userId: string;
+      desktopDeviceId: string;
+      mobileDeviceId: string;
+      pairedAt: number;
+    }>>("GET", "/api/pairs");
+  }
+
+  /** 解除配对 */
+  async removePair(pairId: string): Promise<ApiResponse<{ removed: boolean }>> {
+    return this.request<{ removed: boolean }>("DELETE", "/api/pairs/" + encodeURIComponent(pairId));
+  }
+
+  /** 补拉：回放该设备对 sinceTs 之后的互联事件 */
+  async getPairEvents(pairId: string, sinceTs: number = 0): Promise<ApiResponse<{
+    events: Array<{
+      msgId: string;
+      pairId: string;
+      kind: string;
+      payload: unknown;
+      ts: number;
+    }>;
+    hasMore: boolean;
+  }>> {
+    return this.request<{
+      events: Array<{
+        msgId: string;
+        pairId: string;
+        kind: string;
+        payload: unknown;
+        ts: number;
+      }>;
+      hasMore: boolean;
+    }>("GET", `/api/pairs/${encodeURIComponent(pairId)}/events?sinceTs=${sinceTs}`);
+  }
+
   /** 当前用户的所有设备（多端在线状态：在线 / 离线） */
   async getDevices(): Promise<
     ApiResponse<Array<{ id: string; name: string; type: string; online: boolean; lastSeenAt?: string }>>
