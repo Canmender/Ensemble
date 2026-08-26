@@ -725,6 +725,11 @@ class ApiService {
     return this.request<{ recalled: string }>("DELETE", "/api/conversations/" + convId + "/messages/" + msgId);
   }
 
+  /** 编辑消息（仅发送者可调；成功后服务端广播 chat.edited 事件） */
+  async editMessage(convId: string, msgId: string, content: string): Promise<ApiResponse<{ edited: string }>> {
+    return this.request<{ edited: string }>("PUT", `/api/conversations/${convId}/messages/${msgId}`, { content });
+  }
+
   /** 发送会话消息（fire-and-forget，回复经 WS 推送） */
   /** 上传附件（base64 JSON）→ 返回可直接引用的附件元数据 */
   async uploadAttachment(input: {

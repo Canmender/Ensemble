@@ -74,6 +74,12 @@ type MessageItem = {
   replyTo?: MessageReply;
   mentions?: string[];
   deleted?: boolean;
+  /** 消息状态：1=正常 2=已撤回 3=已编辑（v0.8.34+，替代 deleted） */
+  status?: 1 | 2 | 3;
+  /** 已送达时间（对方已接收但未读） */
+  deliveredAt?: string;
+  /** 最后编辑时间 */
+  editedAt?: string;
   ts: string;
   /** 会话内单调 seq（服务端 v0.8.3+；补拉游标） */
   seq?: number;
@@ -113,6 +119,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   const [uploading, setUploading] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [draftAttachment, setDraftAttachment] = useState<MessageAttachment | null>(null);
+  /** 编辑模式：非空时发送按钮走 PUT 编辑而非 POST 新消息 */
+  const [editingMsgId, setEditingMsgId] = useState<string | null>(null);
   // 键盘高度（Android 15+/edge-to-edge 下 adjustResize 失效，需手动顶起输入栏）
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   // 长按操作菜单：当前长按的消息 / 引用中的消息 / 待转发的消息 / 转发目标会话列表
@@ -386,10 +394,22 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           replyTo: m.replyTo,
           mentions: m.mentions,
           deleted: m.deleted,
+          status: m.status,
+          deliveredAt: m.deliveredAt,
+          editedAt: m.editedAt,
           ts: m.ts,
           seq: m.seq,
         })),
       );
+      // 按 seq 排序（有 seq 时用 seq，回退到 ts）保证初次加载顺序一致
+      setMessages((prev) => {
+        const sorted = [...prev];
+        sorted.sort((a, b) => {
+          if (typeof a.seq === "number" && typeof b.seq === "number") return a.seq - b.seq;
+          return a.ts.localeCompare(b.ts);
+        });
+        return sorted;
+      });
       setHasMore(histRes.data.messages.length >= 20);
       const me = meRes.data?.id;
       if (me) setMeId(me);
@@ -482,6 +502,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               attachment: msg.attachment,
               replyTo: msg.replyTo,
               mentions: msg.mentions,
+              status: msg.status,
               ts: new Date().toISOString(),
               seq: msg.seq,
             }),
@@ -550,6 +571,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               replyTo: m.replyTo,
               mentions: m.mentions,
               deleted: m.deleted,
+              status: m.status,
+              deliveredAt: m.deliveredAt,
+              editedAt: m.editedAt,
               ts: m.ts,
               seq: m.seq,
             };
@@ -602,19 +626,41 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     return () => clearTimeout(t);
   }, [sendError]);
 
-  // 发送文本 / 附件（带重试：最多 3 次）
+  // 发送文本 / 附件（带重试：最多 3 次）；editingMsgId 非空时走编辑 PUT
   const handleSend = useCallback(async () => {
     const text = inputText.trim();
     if ((!text && !draftAttachment) || !isConnected || isSending || uploading) return;
-    // 防重复提交：2 秒内相同内容不重复发送
-    if (text && text === lastSendRef.current.content && Date.now() - lastSendRef.current.ts < 2000) return;
+    // 防重复提交：2 秒内相同内容不重复发送（编辑模式跳过此检查，允许二次提交修正）
+    if (!editingMsgId && text && text === lastSendRef.current.content && Date.now() - lastSendRef.current.ts < 2000) return;
     lastSendRef.current = { content: text, ts: Date.now() };
     setIsSending(true);
     setSendError(null);
-    // 临时 ID 同时作为 clientMsgId：服务端以它幂等入库，WS 回显带同一 ID → 按 id 精确去重
+
+    // 编辑模式：PUT 更新已有消息
+    if (editingMsgId) {
+      try {
+        const res = await api.editMessage(convId, editingMsgId, text);
+        if (res.error) {
+          setSendError(res.error);
+        } else {
+          // 乐观更新本地消息（WS chat.edited 事件会再刷新一次）
+          setMessages((prev) => prev.map((m) => (m.id === editingMsgId ? { ...m, content: text, status: 3 } : m)));
+        }
+        setInputText("");
+        setEditingMsgId(null);
+        setIsSending(false);
+        return;
+      } catch (err) {
+        setSendError(err instanceof Error ? err.message : "编辑失败");
+        setIsSending(false);
+        return;
+      }
+    }
+
+    // 新消息模式
     const tempId = `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const mentions = parseMentions(text);
-    // 乐观追加（临时 ID）
+    // 乐观追加（临时 ID，status=1 表示正常消息）
     setMessages((prev) =>
       appendMessage(prev, {
         id: tempId,
@@ -623,6 +669,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         attachment: draftAttachment ?? undefined,
         replyTo: quoting ?? undefined,
         mentions: mentions.length > 0 ? mentions : undefined,
+        status: 1,
         ts: new Date().toISOString(),
       }),
     );
@@ -677,7 +724,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     // 3 次都失败
     setSendError(lastError || "发送失败，请重试");
     setIsSending(false);
-  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages, parseMentions, e2ePeer]);
+  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages, parseMentions, e2ePeer, editingMsgId]);
 
   // 撤回消息（长按自己的消息触发）
   const recallMessage = useCallback(
@@ -694,13 +741,25 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                 setSendError(res.error);
                 return;
               }
-              setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, deleted: true } : m)));
+              setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, deleted: true, status: 2 } : m)));
             })();
           },
         },
       ]);
     },
     [convId],
+  );
+
+  /** 长按菜单 → 编辑：将消息内容回填到输入框，用户修改后发送 PUT 覆盖 */
+  const editMessageInPlace = useCallback(
+    async (msg: MessageItem) => {
+      setMenuMsg(null);
+      // 回填内容到输入框并记住正在编辑的 msgId（发送逻辑复用普通发送但走 PUT）
+      setInputText(msg.content);
+      setEditingMsgId(msg.id);
+      setTimeout(() => inputRef.current?.focus(), 50);
+    },
+    [],
   );
 
   /** 长按菜单 → 引用：记录被引用消息，输入栏显示引用条 */
@@ -799,7 +858,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   useEffect(() => {
     const unsub = wsLink.on({
       onChatDeleted: ({ msgId }) => {
-        setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, deleted: true } : m)));
+        setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, deleted: true, status: 2 } : m)));
+      },
+      onChatEdited: ({ msgId, content, editedAt }) => {
+        setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, content, status: 3, editedAt } : m)));
       },
     });
     return unsub;
@@ -1055,8 +1117,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           delayLongPress={350}
           onLongPress={() => setMenuMsg(item)}
         >
-          {item.deleted ? (
-            <Text style={[styles.bubbleText, styles.deletedText]}>消息已撤回</Text>
+          {item.deleted || item.status === 2 ? (
+            <Text style={[styles.bubbleText, styles.deletedText]}>
+              {item.status === 2 ? "[已撤回]" : "消息已撤回"}
+            </Text>
           ) : (
             <>
               {item.replyTo && (
@@ -1080,6 +1144,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                       <Text key={i}>{part}</Text>
                     ),
                   )}
+                  {item.status === 3 ? (
+                    <Text style={{ color: colors.textFaint, fontSize: fontSize.xs }}> (已编辑)</Text>
+                  ) : null}
                 </Text>
               )}
             </>
@@ -1088,7 +1155,10 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             <Text style={[styles.bubbleTime, isUser && styles.bubbleTimeUser]}>
               {timeAgo(item.ts)}
             </Text>
-            {isUser && !item.deleted && readLabel ? (
+            {isUser && !item.deleted && item.status !== 2 && item.deliveredAt ? (
+              <Text style={{ color: colors.textFaint, fontSize: 10, marginLeft: 4 }}>已送达</Text>
+            ) : null}
+            {isUser && !item.deleted && item.status !== 2 && readLabel ? (
               <Text style={readLabel.startsWith("已读") ? styles.bubbleRead : styles.bubbleUnread}>
                 {readLabel}
               </Text>
@@ -1397,8 +1467,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           { icon: "chatbubble-ellipses-outline", label: "引用", onPress: startQuote },
           { icon: "arrow-redo-outline", label: "转发", onPress: startForward },
           { icon: "checkmark-circle-outline", label: "多选转发", onPress: startMultiSelect },
-          ...(menuMsg && isMyMessage(menuMsg) && !menuMsg.deleted
-            ? [{ icon: "trash-outline", label: "撤回", color: colors.danger, onPress: () => recallMessage(menuMsg!) }]
+          ...(menuMsg && isMyMessage(menuMsg) && !menuMsg.deleted && menuMsg.status !== 2
+            ? [
+                { icon: "pencil-outline", label: "编辑", color: colors.primary, onPress: () => void editMessageInPlace(menuMsg!) },
+                { icon: "trash-outline", label: "撤回", color: colors.danger, onPress: () => recallMessage(menuMsg!) },
+              ]
             : []),
         ]}
       />
