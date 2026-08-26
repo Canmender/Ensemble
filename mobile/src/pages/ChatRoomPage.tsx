@@ -58,7 +58,7 @@ import { isPluginCard } from "@ensemble/shared";
 import { timeAgo } from "../utils/timeAgo";
 import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
-import { colors, spacing, radius, fontSize , ms } from "../theme";
+import { colors, spacing, radius, fontSize, useTheme, ms } from "../theme";
 import { LiquidGlass } from "../components/Glass";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared";
 import type { RootStackParamList } from "../App";
@@ -111,6 +111,8 @@ function attachUrl(u: string): string {
 export default function ChatRoomPage({ route, navigation }: Props) {
   const { convId, runId, title } = route.params;
   const { connectionState } = useDeviceStore();
+  const { scheme } = useTheme();
+  const isDark = scheme === "dark";
   const [conv, setConv] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<MessageItem[]>([]);
   const [inputText, setInputText] = useState("");
@@ -1094,7 +1096,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     const senderAvatar = item.agentName ? usersById.get(item.agentName)?.avatarUrl : undefined;
     // Bubble/Message 分层（对齐桌面 v0.8.15）：variant+tint 在此算好传给表面样式
     const isDirectAgent = !!conv && !conv.runId.startsWith("conv_") && !isGroup;
-    const { variant, tint } = bubbleVariantOf(isUser, item.agentName ?? "", isDirectAgent, item.role);
+    const { variant, tint } = bubbleVariantOf(isUser, item.agentName ?? "", isDirectAgent, item.role, isDark);
     const bs = bubbleStyles(variant, tint);
     return (
       <Animated.View layout={bubbleLayoutSpring} style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
