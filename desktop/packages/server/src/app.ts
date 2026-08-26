@@ -25,6 +25,7 @@ import { userPluginsRouter } from "./api/routes/user-plugins";
 import { pairsRouter } from "./api/routes/pairs";
 import { groupsRouter, userSearchRouter } from "./api/routes/groups";
 import { reactionsRouter } from "./api/routes/reactions";
+import { orgRouter } from "./api/routes/org";
 import { RouterRegistry } from "./plugins/routers";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
@@ -179,6 +180,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   routerRegistry.register("/api/users/me/plugins", userPluginsRouter(ctx));
   routerRegistry.register("/api/pairs", pairsRouter(ctx));
   routerRegistry.register("/api/reactions", reactionsRouter(ctx));
+  routerRegistry.register("/api/org", orgRouter(ctx));
   for (const { path, router } of routerRegistry.list()) {
     app.use(path, router);
   }

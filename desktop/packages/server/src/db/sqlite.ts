@@ -426,4 +426,37 @@ function migrateUserColumns(db: DatabaseSync): void {
     db.exec("ALTER TABLE conversations ADD COLUMN notice TEXT");
     db.exec("ALTER TABLE conversations ADD COLUMN notice_updated_at TEXT");
   }
+
+  // O1 组织权限：departments + organization 表 + users 补列 + conversations 关联
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS departments (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      parent_id TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS organization (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      settings_json TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+  const userO1Cols = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  if (!userO1Cols.some((c) => c.name === "dept_ids")) {
+    db.exec("ALTER TABLE users ADD COLUMN dept_ids TEXT");
+  }
+  if (!userCols.some((c) => c.name === "title")) {
+    db.exec("ALTER TABLE users ADD COLUMN title TEXT");
+  }
+  if (!userO1Cols.some((c) => c.name === "status")) {
+    db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  }
+  if (!convCols.some((c) => c.name === "dept_id")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN dept_id TEXT");
+  }
+  if (!convCols.some((c) => c.name === "visibility")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN visibility TEXT NOT NULL DEFAULT 'members'");
+  }
 }

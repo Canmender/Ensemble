@@ -1,6 +1,7 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 import { timingSafeEqual } from "node:crypto";
 import type { AuthUser } from "../db/users";
+import { type OrgRole, normalizeRole } from "@ensemble/shared";
 
 /**
  * 本地服务 HTTP API 认证中间件（挂载于 /api）。
@@ -125,5 +126,24 @@ export function apiAuth(opts: ApiAuthOptions): RequestHandler {
 
     res.setHeader("WWW-Authenticate", 'Bearer realm="ensemble"');
     return res.status(401).json({ error: { code: "unauthorized", message: "Missing or invalid API token" } });
+  };
+}
+
+/**
+ * 角色权限中间件（O1 组织权限基础）
+ * 挂在需权限控制的路由上：requireRole("owner", "admin")
+ * 机器凭证（role:system）明确排除——延续"清单即权限"的认证哲学
+ */
+export function requireRole(...allowed: OrgRole[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const role = normalizeRole(req.user?.role);
+    // 机器凭证（role:system）禁止通过——管理操作只能由真实用户执行
+    if (req.user?.role === "system") {
+      return res.status(403).json({ error: { code: "forbidden", message: "管理操作不支持机器凭证" } });
+    }
+    if (!allowed.includes(role)) {
+      return res.status(403).json({ error: { code: "forbidden", message: "需要更高权限" } });
+    }
+    next();
   };
 }

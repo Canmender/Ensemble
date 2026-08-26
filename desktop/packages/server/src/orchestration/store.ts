@@ -651,6 +651,68 @@ export class Store {
     }
   }
 
+  // ---------- O1 组织权限 ----------
+
+  initOrganization(name: string): boolean {
+    const existing = this.db.prepare("SELECT id FROM organization LIMIT 1").get() as any;
+    if (existing) return false;
+    this.db.prepare("INSERT INTO organization (id, name, settings_json, created_at) VALUES (?, ?, '{}', ?)")
+      .run(`org_${Date.now()}`, name, new Date().toISOString());
+    return true;
+  }
+
+  createDepartment(name: string, parentId?: string, sortOrder: number = 0): string {
+    const id = `dept_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    this.db.prepare("INSERT INTO departments (id, name, parent_id, sort_order, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(id, name, parentId ?? null, sortOrder, new Date().toISOString());
+    return id;
+  }
+
+  listDepartments(): Array<{ id: string; name: string; parentId: string | null; sortOrder: number }> {
+    return this.db.prepare("SELECT id, name, parent_id, sort_order FROM departments ORDER BY sort_order").all() as any[];
+  }
+
+  deleteDepartment(id: string): boolean {
+    const info = this.db.prepare("DELETE FROM departments WHERE id = ?").run(id);
+    return info.changes > 0;
+  }
+
+  updateUserRole(userId: string, role: string): boolean {
+    const info = this.db.prepare("UPDATE users SET role = ? WHERE id = ?").run(role, userId);
+    return info.changes > 0;
+  }
+
+  updateUserStatus(userId: string, status: string): boolean {
+    const info = this.db.prepare("UPDATE users SET status = ? WHERE id = ?").run(status, userId);
+    return info.changes > 0;
+  }
+
+  updateUserDepts(userId: string, deptIds: string[]): boolean {
+    const info = this.db.prepare("UPDATE users SET dept_ids = ? WHERE id = ?").run(JSON.stringify(deptIds), userId);
+    return info.changes > 0;
+  }
+
+  updateUserTitle(userId: string, title: string): boolean {
+    const info = this.db.prepare("UPDATE users SET title = ? WHERE id = ?").run(title, userId);
+    return info.changes > 0;
+  }
+
+  listMembers(filters?: { deptId?: string; status?: string }): Array<{ id: string; username: string; displayName?: string; role: string; deptIds: string[]; title: string; status: string }> {
+    let sql = "SELECT id, username, display_name, role, dept_ids, title, status FROM users WHERE status = ?";
+    const params: any[] = [filters?.status ?? "active"];
+    // dept_ids 过滤需要 JSON 检索，简单实现：应用层过滤
+    const rows = this.db.prepare(sql).all(...params) as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      displayName: r.display_name,
+      role: r.role,
+      deptIds: r.dept_ids ? JSON.parse(r.dept_ids) : [],
+      title: r.title ?? "",
+      status: r.status,
+    })).filter((u) => !filters?.deptId || u.deptIds.includes(filters.deptId));
+  }
+
   /** 修改群名 */
   updateConversationTitle(id: string, title: string): void {
     this.db.prepare("UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?")

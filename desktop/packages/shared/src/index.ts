@@ -6,6 +6,7 @@ export * from "./types/plugin-card";
 export * from "./types/device-link";
 export * from "./types/device-messages";
 export * from "./types/device-link-envelope";
+export * from "./types/org";
 export * from "./schema/agent.schema";
 export * from "./schema/task.schema";
 export * from "./schema/provider.schema";
