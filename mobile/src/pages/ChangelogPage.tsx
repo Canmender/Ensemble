@@ -1,12 +1,19 @@
 /**
  * 更新日志页
- * 完整版本历史记录
+ * 顶部从服务器拉取最新版本 note，下方为硬编码历史版本
  */
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { colors, spacing, radius, fontSize , ms } from "../theme";
+import { colors, spacing, radius, fontSize, ms } from "../theme";
+import { useDeviceStore } from "../store/deviceStore";
 
-const changelogData = [
+interface ChangelogEntry {
+  version: string;
+  date?: string;
+  changes: string[];
+}
+
+const changelogData: ChangelogEntry[] = [
   {
     version: "v0.9.11",
     date: "2026-08-23",
@@ -243,13 +250,45 @@ const changelogData = [
 ];
 
 export default function ChangelogPage() {
+  const [latest, setLatest] = useState<ChangelogEntry | null>(null);
+  const connectedDevice = useDeviceStore((s) => s.connectedDevice);
+
+  useEffect(() => {
+    const base = connectedDevice
+      ? `http://${connectedDevice.ip}:${connectedDevice.httpPort}`
+      : null;
+    if (!base) return;
+
+    // 拉取服务器最新版本 note，失败则回退到硬编码列表
+    fetch(`${base}/api/app-version`, { signal: AbortSignal.timeout(5000) })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.data?.version && d.data?.note) {
+          const lines = d.data.note.split(/\n/).filter((l: string) => l.trim());
+          setLatest({
+            version: `v${d.data.version}`,
+            changes: lines.map((l: string) => l.replace(/^[•·\-\s]+/, "").trim()).filter(Boolean),
+          });
+        }
+      })
+      .catch(() => {});
+  }, [connectedDevice]);
+
+  const allEntries = latest ? [latest, ...changelogData] : changelogData;
+
   return (
     <ScrollView style={styles.container}>
-      {changelogData.map((entry, idx) => (
+      {allEntries.map((entry, idx) => (
         <View key={idx} style={styles.entry}>
           <View style={styles.entryHeader}>
-            <Text style={styles.version}>{entry.version}</Text>
-            <Text style={styles.date}>{entry.date}</Text>
+            <Text style={[styles.version, idx === 0 && latest && styles.versionLatest]}>
+              {entry.version}
+            </Text>
+            {idx === 0 && latest ? (
+              <Text style={styles.latestTag}>最新版本</Text>
+            ) : entry.date ? (
+              <Text style={styles.date}>{entry.date}</Text>
+            ) : null}
           </View>
           {entry.changes.map((change, ci) => (
             <View key={ci} style={styles.changeRow}>
@@ -268,6 +307,12 @@ const styles = ms({
   entry: { marginBottom: spacing.xl },
   entryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
   version: { color: colors.text, fontSize: fontSize.lg, fontWeight: "700" },
+  versionLatest: { color: colors.primary },
+  latestTag: {
+    color: colors.primaryFg, backgroundColor: colors.primary,
+    fontSize: fontSize.xs, fontWeight: "700", paddingHorizontal: spacing.sm,
+    paddingVertical: 2, borderRadius: radius.full,
+  },
   date: { color: colors.textMuted, fontSize: fontSize.sm },
   changeRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: spacing.xs },
   bullet: { color: colors.textMuted, marginRight: spacing.sm, marginTop: 2 },
