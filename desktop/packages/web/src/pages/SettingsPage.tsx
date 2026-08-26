@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Blocks, Cloud, Download, Globe, MapPin, Radio, Pencil, Plug, Server, Settings, Shield, Trash2, Wrench } from "lucide-react";
+import { BookOpen, Cloud, Download, Globe, MapPin, Radio, Pencil, Plug, Server, Settings, Shield, Trash2, Wrench } from "lucide-react";
 import { api } from "../lib/api";
-import { PluginsPanel } from "../components/PluginsPanel";
 import { getMode, setMode } from "../lib/mode";
 import type { AppSettings, DetectedAgent, McpServerConfig, ProviderConfig, SkillDef, SyncResult } from "../types";
 import {
@@ -642,7 +641,7 @@ function ModeSwitch() {
 }
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "skills" | "plugins" | "local" | "general">("providers");
+  const [tab, setTab] = useState<"providers" | "tools" | "mcp" | "skills" | "local" | "general">("providers");
   const [providers, setProviders] = useState<ProviderConfig[]>([]);
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -696,7 +695,6 @@ export default function SettingsPage() {
     { key: "tools" as const, label: "工具与安全", icon: <Wrench className="h-4 w-4" /> },
     { key: "mcp" as const, label: "MCP", icon: <Server className="h-4 w-4" /> },
     { key: "skills" as const, label: "Skill 池", icon: <BookOpen className="h-4 w-4" /> },
-    { key: "plugins" as const, label: "插件", icon: <Blocks className="h-4 w-4" /> },
     { key: "local" as const, label: "本地 Agent", icon: <Download className="h-4 w-4" /> },
     { key: "general" as const, label: "通用", icon: <Settings className="h-4 w-4" /> },
   ];
@@ -947,7 +945,6 @@ export default function SettingsPage() {
       {tab === "mcp" && <McpSection />}
 
       {tab === "skills" && <SkillSection />}
-      {tab === "plugins" && <PluginsPanel />}
 
       {tab === "local" && <DiscoverySection />}
 

@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bot, Brain, HelpCircle, LayoutDashboard, MessageSquare, Monitor, Moon, Settings, Sun, Users,
+  Bot, Brain, HelpCircle, LayoutDashboard, MessageSquare, Monitor, Moon, Puzzle, Settings, Sun, Users,
   Workflow, Zap, MonitorSmartphone, Archive, LogOut, User as UserIcon, Download, X
 } from "lucide-react";
 import { api } from "./lib/api";
@@ -33,6 +33,9 @@ const ModeLandingPage = lazy(() => import("./pages/ModeLandingPage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const TokenUsagePage = lazy(() => import("./pages/TokenUsagePage"));
 const CloudSetupPage = lazy(() => import("./pages/CloudSetupPage"));
+const PluginsPage = lazy(() => import("./pages/PluginsPage"));
+const GroupMembersPage = lazy(() => import("./pages/GroupMembersPage"));
+const GroupAnnouncementPage = lazy(() => import("./pages/GroupAnnouncementPage"));
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
@@ -40,6 +43,7 @@ const NAV_ITEMS = [
   { to: "/tasks", label: "归档处", icon: Archive },
   { to: "/chat", label: "联系人", icon: Users },
   { to: "/memory", label: "记忆", icon: Brain },
+  { to: "/plugins", label: "功能", icon: Puzzle },
   { to: "/tokens", label: "Token用量", icon: Zap },
   { to: "/settings", label: "设置", icon: Settings },
 ];
@@ -317,7 +321,10 @@ export default function App() {
                 <Route path="/workflows" element={<WorkflowsPage />} />
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/tokens" element={<TokenUsagePage />} />
+                <Route path="/plugins" element={<PluginsPage />} />
+                <Route path="/group-members" element={<GroupMembersPage />} />
+                <Route path="/group-announcement" element={<GroupAnnouncementPage />} />
+              <Route path="/tokens" element={<TokenUsagePage />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>
@@ -465,6 +472,9 @@ export default function App() {
               <Route path="/workflows" element={<WorkflowsPage />} />
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/plugins" element={<PluginsPage />} />
+                <Route path="/group-members" element={<GroupMembersPage />} />
+                <Route path="/group-announcement" element={<GroupAnnouncementPage />} />
               <Route path="/tokens" element={<TokenUsagePage />} />
             </Routes>
           </Suspense>

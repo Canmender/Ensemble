@@ -16,4 +16,10 @@ export const IPC = {
   /** 自动更新：检查新版本 / 下载并拉起安装器 */
   updateCheck: "update:check",
   updateInstall: "update:install",
+  /**
+   * 云端 HTTP 代理：renderer 经主进程 net.fetch 访问云端（multi 模式）。
+   * 绕开 renderer CSP/webRequest 对跨源请求的拦截——桌面端同源只与本机 server
+   * 通信，云端访问统一走此通道（登录/注册/插件管理等全部 REST）。
+   */
+  cloudFetch: "cloud:fetch",
 } as const;

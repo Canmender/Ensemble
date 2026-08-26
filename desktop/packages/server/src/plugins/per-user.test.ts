@@ -118,4 +118,36 @@ describe("PerUserPluginManager 多租户隔离", () => {
     // 配置持久化：重新读取一致
     expect(mgr.getUserConfig("erin", "echo")).toMatchObject({ greeting: "hi" });
   });
+
+  it("回归（b4cb1f7）：mount 后插件异步回调里的 ctx 可用（SDK 契约）", async () => {
+    // bug 场景：create 工厂期拿不到 ctx，但 SDK 文档承诺插件可在异步回调
+    // （动作处理器/定时器）里经闭包捕获的 ctx 使用 tryGet/provide。
+    // 此前 mount 传 ctx: undefined as never → 异步触发时 TypeError。
+    let capturedCtx: import("./kernel").PluginContext | undefined;
+    const asyncPlugin: CandidatePlugin = {
+      manifest: { id: "async-ctx", name: "AsyncCtx", version: "0.1.0", scheduled: 0, eventsOn: [] },
+      create: (runtime) => ({
+        install: (ctx) => {
+          capturedCtx = ctx; // 模拟异步回调捕获（poll 动作处理器同款模式）
+          ctx.effect(() => {
+            const t = setTimeout(() => {
+              // 异步触发点：此时必须仍可用（此前 runtime.ctx 为 undefined 即炸这里）
+              runtime.kv.set("asyncProbe", { hasTryGet: typeof capturedCtx?.tryGet === "function", ok: true });
+            }, 10);
+            t.unref?.();
+            return () => clearTimeout(t);
+          }, "probe");
+        },
+      }),
+    };
+    mgr.registerCandidate(asyncPlugin);
+    const r = await mgr.enable("frank", "async-ctx");
+    expect(r.ok).toBe(true);
+    await new Promise<void>((resolve) => setTimeout(resolve, 60));
+    const frankKv = new PluginUserKv(db, "frank", "async-ctx");
+    expect(frankKv.get<{ hasTryGet: boolean; ok: boolean }>("asyncProbe")).toMatchObject({ hasTryGet: true, ok: true });
+    // 卸载后捕获的 ctx 不应再被宿主推进新语义（disposer 已清理 effect）
+    await mgr.disable("frank", "async-ctx");
+    expect(host.statusOf("user:frank:async-ctx").status).toBe("unknown");
+  });
 });

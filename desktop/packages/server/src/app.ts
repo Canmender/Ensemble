@@ -22,6 +22,10 @@ import { uploadRouter } from "./api/routes/upload";
 import { appVersionRouter } from "./api/routes/app-version";
 import { initRelayClient } from "./api/routes/relay";
 import { userPluginsRouter } from "./api/routes/user-plugins";
+import { pairsRouter } from "./api/routes/pairs";
+import { groupsRouter, userSearchRouter } from "./api/routes/groups";
+import { reactionsRouter } from "./api/routes/reactions";
+import { orgRouter } from "./api/routes/org";
 import { RouterRegistry } from "./plugins/routers";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
@@ -164,6 +168,8 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   routerRegistry.register("/api/relay", relayRouter(ctx));
   routerRegistry.register("/api/chat", chatRouter(ctx));
   routerRegistry.register("/api/conversations", conversationsRouter(ctx));
+  routerRegistry.register("/api/groups", groupsRouter(ctx));
+  routerRegistry.register("/api/users", userSearchRouter(ctx));
   routerRegistry.register("/api/privacy", privacyRouter(ctx));
   routerRegistry.register("/api/devices", devicesRouter(ctx));
   routerRegistry.register("/api/upload", uploadRouter(ctx));
@@ -172,6 +178,9 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   routerRegistry.register("/api/tokens", tokensRouter(ctx));
   routerRegistry.register("/api/e2e", e2eRouter(ctx));
   routerRegistry.register("/api/users/me/plugins", userPluginsRouter(ctx));
+  routerRegistry.register("/api/pairs", pairsRouter(ctx));
+  routerRegistry.register("/api/reactions", reactionsRouter(ctx));
+  routerRegistry.register("/api/org", orgRouter(ctx));
   for (const { path, router } of routerRegistry.list()) {
     app.use(path, router);
   }

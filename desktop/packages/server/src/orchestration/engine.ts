@@ -413,6 +413,8 @@ export class OrchestrationEngine {
     } else {
       this.hub.broadcast(runId, 0, payload);
     }
+    // 已送达标记（WS broadcast 后即写，对在线接收方近似正确；离线方补拉后由 sync 机制覆盖）
+    this.store.markDelivered([id]);
   }
 
   private withAgentLock<T>(agentId: string, fn: () => Promise<T>): Promise<T> {

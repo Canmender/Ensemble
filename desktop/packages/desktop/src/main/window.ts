@@ -4,22 +4,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { IPC } from "../shared/ipc";
 import { EDITION_LABEL, type Edition } from "./edition";
 
-/** 读取持久化的云端主机（多端协作时允许跨域到云端 REST/WS） */
-function readCloudHost(): string {
-  try {
-    const file = join(app.getPath("userData"), "config", "settings.json");
-    if (!existsSync(file)) return "";
-    const raw = JSON.parse(readFileSync(file, "utf8"));
-    const host = typeof raw?.cloudHost === "string" ? raw.cloudHost.trim() : "";
-    return host ? host.replace(/\/+$/, "") : "";
-  } catch {
-    return "";
-  }
-}
-
 export function createWindow(loadUrl: string, edition: Edition): BrowserWindow {
-  const _ch = readCloudHost();
-  const connectSrcCloud = _ch ? ("http://" + _ch + " ws://" + _ch + " ") : "";
   const isDev = !!process.env.RENDERER_URL;
   const win = new BrowserWindow({
     width: 1360,
@@ -45,20 +30,24 @@ export function createWindow(loadUrl: string, edition: Edition): BrowserWindow {
   // ── 安全加固 ──────────────────────────────────────────────────────
 
   // 1. Content-Security-Policy — 限制资源来源
+  // connect-src 用协议级通配（http: https: ws:）：Electron 43 对 onHeadersReceived
+  // 注入的 CSP 里「具体 host 源」解析异常（实测 connect-src 'self' http://host 会拦掉
+  // 该 host 的跨源 fetch，通配则正常——探针二分定位）。桌面客户端按协议放行可接受：
+  // 用户可能连接任意自建云端（开箱即连/多服务器），主机白名单由服务端凭证体系约束。
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     // 开发模式放宽 CSP，允许 Vite dev server 的脚本和连接
     const csp = isDev
       ? "default-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; " +
         "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:*; " +
         "style-src 'self' 'unsafe-inline'; " +
-        "connect-src 'self' ws://127.0.0.1:* ws://localhost:* http://localhost:* " + connectSrcCloud + "; " +
+        "connect-src 'self' ws://127.0.0.1:* ws://localhost:* http://localhost:* http: https: ws:; " +
         "img-src 'self' data:; " +
         "object-src 'none'; " +
         "base-uri 'self'"
       : "default-src 'self'; " +
         "script-src 'self'; " +
         "style-src 'self' 'unsafe-inline'; " +
-        "connect-src 'self' ws://127.0.0.1:* " + connectSrcCloud + "; " +
+        "connect-src 'self' ws://127.0.0.1:* http: https: ws:; " +
         "img-src 'self' data:; " +
         "object-src 'none'; " +
         "base-uri 'self'";
@@ -100,6 +89,33 @@ export function createWindow(loadUrl: string, edition: Edition): BrowserWindow {
 
 export function registerIpc(): void {
   ipcMain.handle(IPC.appVersion, () => app.getVersion());
+
+  // 云端 HTTP 代理：renderer 的跨源云端请求统一经主进程 net.fetch
+  // （renderer CSP/webRequest 对跨源 fetch 的拦截在 Electron 43 下无法用 CSP 白名单
+  // 可靠放行——探针实测 connect-src 通配仍拦，主进程代理是确定通路）。
+  ipcMain.handle(IPC.cloudFetch, async (_e, payload: unknown) => {
+    const p = payload as { url?: string; method?: string; headers?: Record<string, string>; body?: string };
+    if (!p?.url || !/^https?:\/\//i.test(p.url)) return { status: 0, body: "invalid url" };
+    if (!p.url.startsWith("http://127.0.0.1:") && !p.url.startsWith("http://localhost:")) {
+      // 只允许 http(s) 明文目标（自建云端场景）；方法白名单防滥用
+      const method = (p.method ?? "GET").toUpperCase();
+      if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+        return { status: 0, body: "invalid method" };
+      }
+    }
+    try {
+      const res = await net.fetch(p.url, {
+        method: p.method ?? "GET",
+        headers: p.headers,
+        body: p.body,
+        signal: AbortSignal.timeout(30_000),
+      });
+      const text = await res.text();
+      return { status: res.status, body: text };
+    } catch (e) {
+      return { status: 0, body: (e as Error).message || "network error" };
+    }
+  });
 
   // 云端地址连通性测试：主进程发起（渲染层 CSP 白名单在窗口创建时固化，
   // 首启引导输入的新地址不在其中，故经 IPC 由主进程探测）

@@ -28,6 +28,7 @@ export type RunEvent =
   | { type: "agent.event"; jobId: string; agentId: string; event: AgentEvent }
   | { type: "chat.message"; jobId: string; agentId: string; content: string; attachment?: MessageAttachment; replyTo?: MessageReply; mentions?: string[]; /** 消息 ID（客户端幂等去重用） */ id?: string; /** 会话内单调序号（排序/补拉游标） */ seq?: number }
   | { type: "chat.deleted"; msgId: string }
+  | { type: "chat.edited"; msgId: string; content: string }
   | { type: "call.signal"; fromUserId: string; fromName?: string; call: CallSignal }
   | { type: "chat.read"; userId: string; readTs: string }
   | { type: "chat.mention"; convId: string; convTitle: string; senderId: string; senderName: string; content: string }

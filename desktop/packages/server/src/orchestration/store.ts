@@ -97,7 +97,7 @@ export class Store {
       // Chat messages（INSERT OR IGNORE：clientMsgId 幂等投递；seq 由服务端按会话分配）
       createChatMessage: db.prepare("INSERT OR IGNORE INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts, seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
       nextChatSeq: db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM chat_messages WHERE run_id = ?"),
-      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY COALESCE(seq, rowid)"),
+      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND status != 2 ORDER BY COALESCE(seq, rowid)"),
       deleteChatMessage: db.prepare("UPDATE chat_messages SET deleted = 1 WHERE id = ?"),
       // Workflows
       listWorkflows: db.prepare("SELECT * FROM workflows ORDER BY name"),
@@ -329,13 +329,29 @@ export class Store {
    */
   createChatMessage(msg: ChatMessage): number | null {
     const seq = (this.stmts.nextChatSeq.get(msg.runId) as { s: number }).s + 1;
-    const info = this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts, seq);
+    const info = this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 2 : (msg.status ?? 1), msg.ts, seq);
     return info.changes > 0 ? seq : null;
   }
 
-  /** 撤回消息：标记 deleted（保留原始内容，前端显示「已撤回」） */
+  /** 撤回消息（v0.8.33 后 status=2，保留旧 deleted=1 兼容） */
   deleteChatMessage(id: string): void {
-    this.stmts.deleteChatMessage.run(id);
+    this.db.prepare("UPDATE chat_messages SET deleted = 1, status = 2 WHERE id = ?").run(id);
+  }
+
+  /** 编辑消息内容（新字段：edited_at + content 更新） */
+  editChatMessage(id: string, newContent: string): boolean {
+    const info = this.db
+      .prepare("UPDATE chat_messages SET content = ?, status = 3, edited_at = ? WHERE id = ? AND deleted = 0")
+      .run(newContent, new Date().toISOString(), id);
+    return info.changes > 0;
+  }
+
+  /** 标记已送达（WS 收到后调用；比已读更轻量的确认） */
+  markDelivered(ids: string[]): void {
+    if (ids.length === 0) return;
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare("UPDATE chat_messages SET delivered_at = ? WHERE delivered_at IS NULL AND id = ?");
+    for (const id of ids) stmt.run(now, id);
   }
 
   /** 拉取会话消息（按 seq 升序）。afterSeq：仅返回 seq 大于该值的消息（增量补拉，服务端裁剪） */
@@ -359,9 +375,63 @@ export class Store {
       attachment: r.attachment ? (JSON.parse(r.attachment) as ChatMessage["attachment"]) : undefined,
       replyTo: r.reply_to ? (JSON.parse(r.reply_to) as ChatMessage["replyTo"]) : undefined,
       mentions: r.mentions ? (JSON.parse(r.mentions) as string[]) : undefined,
+      status: (r.status ?? (r.deleted ? 2 : 1)) as ChatMessage["status"],
       deleted: !!r.deleted,
+      editedAt: r.edited_at ?? undefined,
+      deliveredAt: r.delivered_at ?? undefined,
       ts: r.ts,
     }));
+  }
+
+  // ---------- 消息表情回应（P2） ----------
+
+  /** 添加回应：每人每条消息每种 emoji 最多一个 */
+  addReaction(messageId: string, userId: string, emoji: string): boolean {
+    try {
+      this.db
+        .prepare("INSERT INTO message_reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?)")
+        .run(messageId, userId, emoji, new Date().toISOString());
+      return true;
+    } catch {
+      return false; // 已存在
+    }
+  }
+
+  /** 取消回应 */
+  removeReaction(messageId: string, userId: string, emoji: string): boolean {
+    const info = this.db
+      .prepare("DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?")
+      .run(messageId, userId, emoji);
+    return info.changes > 0;
+  }
+
+  /** 获取消息的所有回应（emoji → userIds） */
+  getReactions(messageId: string): Record<string, string[]> {
+    const rows = this.db
+      .prepare("SELECT emoji, user_id FROM message_reactions WHERE message_id = ?")
+      .all(messageId) as Array<{ emoji: string; user_id: string }>;
+    const out: Record<string, string[]> = {};
+    for (const r of rows) {
+      if (!out[r.emoji]) out[r.emoji] = [];
+      out[r.emoji].push(r.user_id);
+    }
+    return out;
+  }
+
+  /** 批量获取多条消息的回应（聊天历史用） */
+  batchGetReactions(messageIds: string[]): Record<string, Record<string, string[]>> {
+    if (messageIds.length === 0) return {};
+    const placeholders = messageIds.map(() => "?").join(",");
+    const rows = this.db
+      .prepare(`SELECT message_id, emoji, user_id FROM message_reactions WHERE message_id IN (${placeholders})`)
+      .all(...messageIds) as Array<{ message_id: string; emoji: string; user_id: string }>;
+    const out: Record<string, Record<string, string[]>> = {};
+    for (const r of rows) {
+      if (!out[r.message_id]) out[r.message_id] = {};
+      if (!out[r.message_id][r.emoji]) out[r.message_id][r.emoji] = [];
+      out[r.message_id][r.emoji].push(r.user_id);
+    }
+    return out;
   }
 
   // ---------- E2EE 密钥目录（服务器只见公钥；协议见 desktop/docs/E2E-PROTOCOL.md） ----------
@@ -506,6 +576,141 @@ export class Store {
 
   setConversationPinned(id: string, pinned: boolean): void {
     this.stmts.setConversationPinned.run(pinned ? 1 : 0, new Date().toISOString(), id);
+  }
+
+  /** 更新会话版本号（成员/设置变更时调用） */
+  bumpConversationVersion(id: string): number {
+    const row = this.db.prepare("UPDATE conversations SET version = version + 1, updated_at = ? WHERE id = ? RETURNING version").get(new Date().toISOString(), id) as { version: number } | undefined;
+    return row?.version ?? 0;
+  }
+
+  /** 更新入群方式 */
+  setJoinType(id: string, joinType: 0 | 1 | 2): void {
+    this.db.prepare("UPDATE conversations SET join_type = ?, updated_at = ? WHERE id = ?").run(joinType, new Date().toISOString(), id);
+    this.bumpConversationVersion(id);
+  }
+
+  /** 更新群公告 */
+  setAnnouncement(id: string, text: string | null): void {
+    this.db.prepare("UPDATE conversations SET announcement = ?, updated_at = ? WHERE id = ?").run(text, new Date().toISOString(), id);
+    this.bumpConversationVersion(id);
+  }
+
+  // ---------- 群成员管理（group_members 表）----------
+
+  addGroupMember(groupId: string, userId: string, role: 1 | 2 | 3 = 3): void {
+    this.db
+      .prepare("INSERT INTO group_members (group_id, user_id, role, status, joined_at) VALUES (?, ?, ?, 1, ?)")
+      .run(groupId, userId, role, new Date().toISOString());
+    this.bumpConversationVersion(groupId);
+  }
+
+  removeGroupMember(groupId: string, userId: string, status: 2 | 3 = 3): void {
+    this.db.prepare("UPDATE group_members SET status = ? WHERE group_id = ? AND user_id = ?").run(status, groupId, userId);
+    this.bumpConversationVersion(groupId);
+  }
+
+  getGroupMember(groupId: string, userId: string): { role: number; status: number } | undefined {
+    return this.db.prepare("SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, userId) as any;
+  }
+
+  setGroupMemberRole(groupId: string, userId: string, role: 1 | 2 | 3): void {
+    this.db.prepare("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?").run(role, groupId, userId);
+    this.bumpConversationVersion(groupId);
+  }
+
+  listGroupMembers(groupId: string): Array<{ userId: string; role: number; status: number; joinedAt: string }> {
+    return this.db
+      .prepare("SELECT user_id, role, status, joined_at FROM group_members WHERE group_id = ? AND status = 1 ORDER BY role, joined_at")
+      .all(groupId) as any[];
+  }
+
+  /** 按 username/display_name 模糊搜索已启用用户 */
+  searchUsers(query: string, limit: number = 20): Array<{ id: string; username: string; displayName?: string }> {
+    const pattern = `%${query}%`;
+    return this.db
+      .prepare("SELECT id, username, display_name FROM users WHERE username LIKE ? OR display_name LIKE ? ORDER BY username LIMIT ?")
+      .all(pattern, pattern, limit) as any[];
+  }
+
+  /** FTS5 消息搜索：全文检索 + snippet 高亮片段 */
+  searchMessagesFts(query: string, runId?: string, limit: number = 20): Array<{ id: string; runId: string; content: string; snippet: string }> {
+    try {
+      let sql: string;
+      let params: any[];
+      if (runId) {
+        sql = "SELECT id, run_id, content, snippet(chat_messages_fts, 2, '<mark>', '</mark>', '...', 20) AS snippet FROM chat_messages_fts WHERE content MATCH ? AND run_id = ? ORDER BY rank LIMIT ?";
+        params = [query, runId, limit];
+      } else {
+        sql = "SELECT id, run_id, content, snippet(chat_messages_fts, 2, '<mark>', '</mark>', '...', 20) AS snippet FROM chat_messages_fts WHERE content MATCH ? ORDER BY rank LIMIT ?";
+        params = [query, limit];
+      }
+      return this.db.prepare(sql).all(...params) as any[];
+    } catch {
+      return [];
+    }
+  }
+
+  // ---------- O1 组织权限 ----------
+
+  initOrganization(name: string): boolean {
+    const existing = this.db.prepare("SELECT id FROM organization LIMIT 1").get() as any;
+    if (existing) return false;
+    this.db.prepare("INSERT INTO organization (id, name, settings_json, created_at) VALUES (?, ?, '{}', ?)")
+      .run(`org_${Date.now()}`, name, new Date().toISOString());
+    return true;
+  }
+
+  createDepartment(name: string, parentId?: string, sortOrder: number = 0): string {
+    const id = `dept_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    this.db.prepare("INSERT INTO departments (id, name, parent_id, sort_order, created_at) VALUES (?, ?, ?, ?, ?)")
+      .run(id, name, parentId ?? null, sortOrder, new Date().toISOString());
+    return id;
+  }
+
+  listDepartments(): Array<{ id: string; name: string; parentId: string | null; sortOrder: number }> {
+    return this.db.prepare("SELECT id, name, parent_id, sort_order FROM departments ORDER BY sort_order").all() as any[];
+  }
+
+  deleteDepartment(id: string): boolean {
+    const info = this.db.prepare("DELETE FROM departments WHERE id = ?").run(id);
+    return info.changes > 0;
+  }
+
+  updateUserRole(userId: string, role: string): boolean {
+    const info = this.db.prepare("UPDATE users SET role = ? WHERE id = ?").run(role, userId);
+    return info.changes > 0;
+  }
+
+  updateUserStatus(userId: string, status: string): boolean {
+    const info = this.db.prepare("UPDATE users SET status = ? WHERE id = ?").run(status, userId);
+    return info.changes > 0;
+  }
+
+  updateUserDepts(userId: string, deptIds: string[]): boolean {
+    const info = this.db.prepare("UPDATE users SET dept_ids = ? WHERE id = ?").run(JSON.stringify(deptIds), userId);
+    return info.changes > 0;
+  }
+
+  updateUserTitle(userId: string, title: string): boolean {
+    const info = this.db.prepare("UPDATE users SET title = ? WHERE id = ?").run(title, userId);
+    return info.changes > 0;
+  }
+
+  listMembers(filters?: { deptId?: string; status?: string }): Array<{ id: string; username: string; displayName?: string; role: string; deptIds: string[]; title: string; status: string }> {
+    let sql = "SELECT id, username, display_name, role, dept_ids, title, status FROM users WHERE status = ?";
+    const params: any[] = [filters?.status ?? "active"];
+    // dept_ids 过滤需要 JSON 检索，简单实现：应用层过滤
+    const rows = this.db.prepare(sql).all(...params) as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      displayName: r.display_name,
+      role: r.role,
+      deptIds: r.dept_ids ? JSON.parse(r.dept_ids) : [],
+      title: r.title ?? "",
+      status: r.status,
+    })).filter((u) => !filters?.deptId || u.deptIds.includes(filters.deptId));
   }
 
   /** 修改群名 */

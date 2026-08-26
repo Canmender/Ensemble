@@ -1,3 +1,4 @@
+import { cloudFetchOrDirect } from "../lib/cloudHttp";
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../lib/auth";
@@ -24,7 +25,7 @@ export default function RegisterPage() {
     setError("");
     try {
       const base = await getCloudBase();
-      const res = await fetch(`${base}/api/auth/register`, {
+      const res = await cloudFetchOrDirect(`${base}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password, displayName: displayName || undefined }),

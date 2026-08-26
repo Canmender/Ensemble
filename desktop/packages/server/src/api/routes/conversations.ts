@@ -206,9 +206,16 @@ export function conversationsRouter(ctx: AppContext): Router {
         ? ctx.store.listChatMessages(conv.runId, undefined, afterSeq)
         : ctx.store.listChatMessages(conv.runId, req.user?.id, afterSeq);
       const filtered = before ? all.filter((m) => m.ts < before) : all;
+      const sliced = filtered.slice(-limit);
       // 已读回执：用户-用户会话返回各参与者最后已读时间（前端按接收者判断自己的消息是否已被读）
       const readers = isUserConv(conv) ? ctx.store.getConversationReads(conv.id) : [];
-      ok(res, { messages: filtered.slice(-limit), total: all.length, readers });
+      // 表情回应：每条消息附带 reactions 摘要
+      const reactionsMap = ctx.store.batchGetReactions(sliced.map((m) => m.id));
+      const messagesWithReactions = sliced.map((m) => ({
+        ...m,
+        reactions: reactionsMap[m.id] ?? {},
+      }));
+      ok(res, { messages: messagesWithReactions, total: all.length, readers });
     }),
   );
 
@@ -341,6 +348,42 @@ export function conversationsRouter(ctx: AppContext): Router {
         ctx.hub.broadcast(conv.runId, 0, { type: "chat.deleted", msgId });
       }
       ok(res, { recalled: msgId });
+    }),
+  );
+
+  /** 编辑消息内容（v0.8.33：status=3 + edited_at；仅发送者可编辑；实时广播 chat.edited） */
+  r.put(
+    "/:id/messages/:msgId",
+    asyncH(async (req, res) => {
+      const conv = ctx.store.getConversation(String(req.params.id));
+      if (!conv) return fail(res, new Error("conversation not found"), 404);
+      if (!canAccessConv(conv, req.user?.id)) return fail(res, new Error("无权限访问该会话"), 403);
+      const msgId = String(req.params.msgId);
+      const { content } = req.body ?? {};
+      if (typeof content !== "string" || !content.trim()) {
+        return fail(res, new Error("content required"), 400);
+      }
+      // 查找消息（用已撤回的也显示，但已撤回不可编辑）
+      const shared = isUserConv(conv) || conv.type === "group";
+      const all = shared
+        ? ctx.store.listChatMessages(conv.runId, undefined, undefined)
+        : ctx.store.listChatMessages(conv.runId, req.user?.id, undefined);
+      const msg = all.find((m) => m.id === msgId);
+      if (!msg) return fail(res, new Error("消息不存在"), 404);
+      if (msg.deleted) return fail(res, new Error("已撤回的消息不可编辑"), 400);
+      if (msg.userId !== req.user?.id) return fail(res, new Error("只能编辑自己发送的消息"), 403);
+      const updated = ctx.store.editChatMessage(msgId, content.trim());
+      if (!updated) return fail(res, new Error("编辑失败"), 400);
+      // 实时广播编辑事件（同撤回：用户-用户推参与者 / agent 会话推 run 订阅者）
+      const recipients = new Set<string>([conv.userId, ...conv.participantIds].filter((x): x is string => !!x));
+      if (isUserConv(conv)) {
+        for (const pid of recipients) {
+          ctx.hub.sendToUser(pid, { type: "chat.edited", msgId, content: content.trim() }, conv.runId);
+        }
+      } else {
+        ctx.hub.broadcast(conv.runId, 0, { type: "chat.edited", msgId, content: content.trim() });
+      }
+      ok(res, { edited: msgId });
     }),
   );
 

@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@ensemble/shared": "workspace:*",
     "@fontsource/inter": "^5.3.0",
     "@privacyresearch/libsignal-protocol-typescript": "^0.0.16",
     "@xyflow/react": "^12.11.2",

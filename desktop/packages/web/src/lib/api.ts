@@ -1,20 +1,22 @@
 // 轻量 API 客户端：统一 { data } / { error } 解析
 // 所有请求携带 Authorization: Bearer <sessionToken>（见 token.ts）。
+//
+// 跨源云端请求统一走 cloudHttp（桌面端经主进程代理，浏览器版直连）。
 
 import { getSessionToken, resetSessionToken, clearSessionToken, hasUserToken } from "./token";
 import { getCloudBase } from "./apiBase";
+import { cloudFetchOrDirect } from "./cloudHttp";
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const doFetch = async (): Promise<Response> => {
     const token = await getSessionToken();
-    const headers: Record<string, string> = {
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    };
     const base = await getCloudBase();
-    return fetch(`${base}/api${path}`, {
+    return cloudFetchOrDirect(`${base}/api${path}`, {
       method,
-      headers,
+      headers: {
+        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   };

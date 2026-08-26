@@ -2,6 +2,72 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
+## v0.8.32 (2026-08-24) — P0 登录修复：云端请求改走主进程代理
+
+用户反馈云端版无法登录（"网络连接问题"）。CDP 探针逐层定位：renderer 的跨源
+fetch 被 Electron 43 的 webRequest/CSP 层拦截——connect-src 白名单无论具体 host
+还是协议通配都拦（同源正常），主进程 net.fetch 不受此限。
+
+- **cloudFetch IPC 代理**：主进程 net.fetch 转发 renderer 的云端 REST 请求
+  （方法白名单+30s 超时）；preload 暴露 window.desktop.cloudFetch
+- **统一出口 cloudHttp.ts**：api 客户端/auth 登录登出/注册页的跨源请求全部
+  改走代理；浏览器版无桌面桥自动回退直连（依赖服务端 CORS）
+- CSP connect-src 同步改为协议通配（http:/https:/ws:）——白名单形态已证明无效，
+  协议级放行对桌面客户端语义合理（自建服务器地址不固定）
+
+验收（CDP 在真实打包应用页面上下文实测）：settings 注入 ✓ → 桥存在 ✓ →
+经代理的登录请求到达云端并返回预期响应 ✓。全新环境安装→登录链路全程无 CSP/
+webRequest 拦截点。
+
+**版本**: desktop 0.8.31 → 0.8.32
+
+## v0.8.31 (2026-08-24) — 云端版开箱即连：server.config.js 打进安装包
+
+用户反馈：云端版应装好打开就默认连服务器、直接见登录界面。根因：extraResources
+没打 server.config.js 且仓库无此文件（gitignored 两份式）——干净环境打出的包
+首启 cloudHost 为空，用户必须手填。
+
+- **ensure-server-config.mjs**：打包前置脚本——已有配置保留；缺失时从构建机
+  gitignored .env 读 CLOUD_HOST 生成本地文件（真实地址不进 git 只进产物；
+  来源优先级 环境变量→检出向上找 .env→主检出 .env）；解析不到报错退出
+  （宁可构建失败不可打出坏包）
+- electron-builder.cloud.yml extraResources 加 server.config.js；
+  package:cloud 脚本串上前置
+- 验证：模拟全新安装（清 settings.json），首启 settings API 即返回
+  cloudHost=生产地址 → 直接见登录页 ✓
+
+**版本**: desktop 0.8.30 → 0.8.31
+
+## v0.8.30 (2026-08-24) — 插件列表端点透传 settings（manifest 即 UI 断点修复）
+
+移动端做「功能」Tab 时发现 v0.8.25 遗留缺口：GET /api/users/me/plugins 列表端点
+走 listCandidates()，该路从未透传 manifest.settings（v0.8.25 只修了 listForUser
+已启用投影那条）——两端配置按钮点了都是空表单。
+
+- 修复取自移动端 3e84720（审查认可）：settings: enabled.get(m.id)?.settings ?? m.settings
+  （已启用用实例投影、未启用回退候选 manifest，两态覆盖）
+- 按云端唯一测试环境共识：修完直接部署生产
+
+验证: typecheck 0错; 188 测试全过
+
+**版本**: desktop 0.8.29 → 0.8.30
+
+## v0.8.29 (2026-08-24) — 「功能」页：插件从设置 tab 升级为一等公民导航
+
+用户新产品决策：插件的扩展内容单独一个页面罗列，左侧导航栏命名「功能」。
+
+- **导航项**：NAV_ITEMS 在「记忆」与「Token用量」之间加 { to: "/plugins", label: "功能", icon: Puzzle }；
+  路由 /plugins 双布局分支注册（懒加载分包）
+- **PluginsPage**：Bento 卡片网格（sm:2列/lg:3列自适应，名称/描述/版本/定时标记/
+  启停开关/manifest.settings 自动渲染的配置表单）——从 PluginsPanel 迁移并舒展，
+  旧组件文件删除；底部预留 U5 市场入口挂载点
+- **本地模式引导态**：「登录后可用 · 功能由你自定义」+ 前往登录按钮
+- **设置页插件 tab 移除**：避免两处维护（tabs 数组/渲染分支/state 类型/imports 全清）
+
+验收: typecheck 0错; web/desktop build 通过; 云端版冒烟 0 错误
+
+**版本**: desktop 0.8.28 → 0.8.29
+
 ## v0.8.26 (2026-08-23) — 卡片动作 endpoint 契约修正（双端联调前置）
 
 移动端核对 curl 基准时发现 web 动作 URL 双前缀：poll 卡片的 endpoint 带

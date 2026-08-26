@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { clearSessionToken, hasUserToken, setSessionToken } from "./token";
 import { getMode } from "./mode";
 import { getCloudBase } from "./apiBase";
+import { cloudFetchOrDirect } from "./cloudHttp";
 
 export interface AuthUser {
   id: string;
@@ -45,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const token = localStorage.getItem("ensemble.auth.token");
           const base = await getCloudBase();
-          const res = await fetch(`${base}/api/auth/me`, {
+          const res = await cloudFetchOrDirect(`${base}/api/auth/me`, {
             headers: { Authorization: `Bearer ${token}` },
           });
           if (res.ok) {
@@ -92,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token) {
       void (async () => {
         const base = await getCloudBase();
-        await fetch(`${base}/api/auth/logout`, {
+        await cloudFetchOrDirect(`${base}/api/auth/logout`, {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
         }).catch(() => {});

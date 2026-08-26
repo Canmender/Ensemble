@@ -138,14 +138,17 @@ export interface ChatMessage {
   replyTo?: MessageReply;
   /** 被@的用户/Agent ID 列表 */
   mentions?: string[];
-  /** 是否已撤回（撤回后内容隐藏，前端显示占位）。v0.8.34+ 请读 status 字段，此字段保留向后兼容 */
-  deleted?: boolean;
-  /** 消息状态：1=正常 2=已撤回 3=已编辑（v0.8.34+ 服务端落库字段） */
+  /**
+   * 消息状态：1=正常 2=已撤回 3=已编辑。
+   * 向前兼容：客户端忽略未识别的值（v0.8.33 前无此字段）。
+   */
   status?: 1 | 2 | 3;
-  /** 已送达时间（服务端回执：对方已接收但未读） */
-  deliveredAt?: string;
-  /** 最后编辑时间（status=3 时有值） */
+  /** 已撤回（旧字段，status=2 的反向兼容；新客户端读 status，旧客户端读 deleted） */
+  deleted?: boolean;
+  /** 消息编辑时间戳（status=3 时填写） */
   editedAt?: string;
+  /** 已送达时间戳（WS 收到即写；比已读回执更轻量） */
+  deliveredAt?: string;
   ts: string;
 }
 
@@ -175,6 +178,10 @@ export interface Conversation {
   groupOwner?: string;
   /** 管理员 ID 列表 */
   groupAdmins?: string[];
+  /** 入群方式：0=自由 1=需审批 2=不可加入 */
+  joinType?: 0 | 1 | 2;
+  /** 群版本号：成员/设置变更 +1（增量同步基础） */
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }

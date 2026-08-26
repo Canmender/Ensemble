@@ -207,6 +207,78 @@ CREATE TABLE IF NOT EXISTS user_plugins (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, plugin_id)
 );
+
+-- 群成员角色（P1 群组管理）：群主/管理员/普通成员 + 状态（正常/退出/被踢）
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id    TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  role        INTEGER NOT NULL DEFAULT 3,  -- 1=群主 2=管理员 3=成员
+  status      INTEGER NOT NULL DEFAULT 1,  -- 1=正常 2=退出 3=被踢
+  joined_at   TEXT NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
+
+-- 设备配对（L2）：我的手机 ↔ 我的桌面 显式设备对；互联信令按 pairId 放行
+CREATE TABLE IF NOT EXISTS device_pairs (
+  id               TEXT PRIMARY KEY,
+  user_id          TEXT NOT NULL,
+  desktop_device_id TEXT NOT NULL,
+  mobile_device_id TEXT NOT NULL,
+  paired_at        INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_device_pairs_unique ON device_pairs(user_id, desktop_device_id, mobile_device_id);
+
+-- 配对码（一次性；5 分钟过期，消费即删）
+CREATE TABLE IF NOT EXISTS pair_codes (
+  code        TEXT PRIMARY KEY,
+  user_id     TEXT NOT NULL,
+  desktop_device_id TEXT NOT NULL,
+  public_key_fingerprint TEXT,
+  expires_at  INTEGER NOT NULL
+);
+
+-- 互联事件本地日志（L1）：断线补拉的回放源（手机 sync.request sinceTs → delta 回放）
+CREATE TABLE IF NOT EXISTS device_link_events (
+  msg_id      TEXT PRIMARY KEY,
+  pair_id     TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  payload_json TEXT,
+  ts          INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dle_pair_ts ON device_link_events(pair_id, ts);
+
+-- 消息表情回应（P2 平台能力）：每人每条消息每种 emoji 最多一个
+CREATE TABLE IF NOT EXISTS message_reactions (
+  message_id  TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  emoji       TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (message_id, user_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_reaction_msg ON message_reactions(message_id);
+
+-- 消息全文搜索（P2-子任务3）：FTS5 虚拟表 + 触发器同步
+CREATE VIRTUAL TABLE IF NOT EXISTS chat_messages_fts USING fts5(
+  id UNINDEXED,
+  run_id UNINDEXED,
+  content,
+  content=chat_messages,
+  content_rowid=rowid
+);
+CREATE TRIGGER IF NOT EXISTS chat_messages_ai AFTER INSERT ON chat_messages BEGIN
+  INSERT INTO chat_messages_fts(rowid, id, run_id, content)
+  VALUES (new.rowid, new.id, new.run_id, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS chat_messages_ad AFTER DELETE ON chat_messages BEGIN
+  INSERT INTO chat_messages_fts(chat_messages_fts, rowid, id, run_id, content)
+  VALUES ('delete', old.rowid, old.id, old.run_id, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS chat_messages_au AFTER UPDATE ON chat_messages BEGIN
+  INSERT INTO chat_messages_fts(chat_messages_fts, rowid, id, run_id, content)
+  VALUES ('delete', old.rowid, old.id, old.run_id, old.content);
+  INSERT INTO chat_messages_fts(rowid, id, run_id, content)
+  VALUES (new.rowid, new.id, new.run_id, new.content);
+END;
 `;
 
 export function openDb(dbPath: string): DatabaseSync {
@@ -333,4 +405,58 @@ function migrateUserColumns(db: DatabaseSync): void {
     )`);
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_chat_run_seq ON chat_messages(run_id, seq)");
+
+  // status 枚举（v0.8.33）：替代 deleted 布尔值，支持正常/已撤回/已编辑三种状态
+  const cmStatusCol = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmStatusCol.some((c) => c.name === "status")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN status INTEGER NOT NULL DEFAULT 1");
+    db.exec("UPDATE chat_messages SET status = 2 WHERE deleted = 1");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_chat_run_status ON chat_messages(run_id, status)");
+
+  // conversations 表扩展（P1 群组管理）：join_type + version + notice
+  const convP1Cols = db.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>;
+  if (!convP1Cols.some((c) => c.name === "join_type")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN join_type INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!convP1Cols.some((c) => c.name === "version")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN version INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!convCols.some((c) => c.name === "notice")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN notice TEXT");
+    db.exec("ALTER TABLE conversations ADD COLUMN notice_updated_at TEXT");
+  }
+
+  // O1 组织权限：departments + organization 表 + users 补列 + conversations 关联
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS departments (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      parent_id TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS organization (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      settings_json TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+  const userO1Cols = db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>;
+  if (!userO1Cols.some((c) => c.name === "dept_ids")) {
+    db.exec("ALTER TABLE users ADD COLUMN dept_ids TEXT");
+  }
+  if (!userCols.some((c) => c.name === "title")) {
+    db.exec("ALTER TABLE users ADD COLUMN title TEXT");
+  }
+  if (!userO1Cols.some((c) => c.name === "status")) {
+    db.exec("ALTER TABLE users ADD COLUMN status TEXT NOT NULL DEFAULT 'active'");
+  }
+  if (!convCols.some((c) => c.name === "dept_id")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN dept_id TEXT");
+  }
+  if (!convCols.some((c) => c.name === "visibility")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN visibility TEXT NOT NULL DEFAULT 'members'");
+  }
 }
