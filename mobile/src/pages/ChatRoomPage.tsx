@@ -60,6 +60,7 @@ import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize, useTheme, ms } from "../theme";
 import { LiquidGlass } from "../components/Glass";
+import { SwipeableBubble } from "../components/SwipeableBubble";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared";
 import type { RootStackParamList } from "../App";
 
@@ -1113,12 +1114,25 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         {!isUser && variant !== "ai-ghost" && (
           <Avatar name={senderName} avatarUrl={senderAvatar} size={32} />
         )}
-        <TouchableOpacity
-          style={[styles.bubble, bs.surface]}
-          activeOpacity={0.6}
-          delayLongPress={350}
-          onLongPress={() => setMenuMsg(item)}
+        <SwipeableBubble
+          disabled={selectMode}
+          onReply={() => setQuoting({ id: item.id, content: item.content || "[附件]", agentName: senderName })}
+          onForward={() => {
+            setMenuMsg(item);
+            setTimeout(() => {
+              setForwardMsg(item);
+              void api.getConversations().then((res) => {
+                setForwardConversations((res.data ?? []).filter((c) => c.id !== convId));
+              });
+            }, 50);
+          }}
         >
+          <TouchableOpacity
+            style={[styles.bubble, bs.surface]}
+            activeOpacity={0.6}
+            delayLongPress={350}
+            onLongPress={() => setMenuMsg(item)}
+          >
           {item.deleted || item.status === 2 ? (
             <Text style={[styles.bubbleText, styles.deletedText]}>
               {item.status === 2 ? "[已撤回]" : "消息已撤回"}
@@ -1167,6 +1181,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             ) : null}
           </View>
         </TouchableOpacity>
+        </SwipeableBubble>
       </Animated.View>
     );
   };
