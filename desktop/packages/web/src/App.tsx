@@ -34,6 +34,8 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 const TokenUsagePage = lazy(() => import("./pages/TokenUsagePage"));
 const CloudSetupPage = lazy(() => import("./pages/CloudSetupPage"));
 const PluginsPage = lazy(() => import("./pages/PluginsPage"));
+const GroupMembersPage = lazy(() => import("./pages/GroupMembersPage"));
+const GroupAnnouncementPage = lazy(() => import("./pages/GroupAnnouncementPage"));
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
@@ -320,6 +322,8 @@ export default function App() {
                 <Route path="/chat" element={<ChatPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/plugins" element={<PluginsPage />} />
+                <Route path="/group-members" element={<GroupMembersPage />} />
+                <Route path="/group-announcement" element={<GroupAnnouncementPage />} />
               <Route path="/tokens" element={<TokenUsagePage />} />
               </Routes>
             </Suspense>
@@ -469,6 +473,8 @@ export default function App() {
               <Route path="/chat" element={<ChatPage />} />
               <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/plugins" element={<PluginsPage />} />
+                <Route path="/group-members" element={<GroupMembersPage />} />
+                <Route path="/group-announcement" element={<GroupAnnouncementPage />} />
               <Route path="/tokens" element={<TokenUsagePage />} />
             </Routes>
           </Suspense>
