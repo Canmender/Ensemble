@@ -20,15 +20,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
-import type { TaskMode } from "@ensemble/shared-protocol";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 export default function TasksPage({ navigation }: { navigation: any }) {
   const { tasks, runs, agents } = useTaskStore();
   const { connectionState } = useDeviceStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskMode, setNewTaskMode] = useState<TaskMode>("single");
+  const [newTaskMode, setNewTaskMode] = useState<"single" | "workflow" | "chat">("single");
   const [newTaskPrompt, setNewTaskPrompt] = useState("");
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -276,8 +275,8 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#5F7A5A"
-              colors={["#5F7A5A"]}
+              tintColor={colors.success}
+              colors={[colors.success]}
             />
           }
         />
@@ -297,13 +296,13 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <TextInput
               style={styles.input}
               placeholder="任务标题"
-              placeholderTextColor="#9A918A"
+              placeholderTextColor={colors.textFaint}
               value={newTaskTitle}
               onChangeText={setNewTaskTitle}
             />
 
             <View style={styles.modeSelector}>
-              {(["single", "workflow", "chat"] as TaskMode[]).map((mode) => (
+              {(["single", "workflow", "chat"] as const).map((mode) => (
                 <TouchableOpacity
                   key={mode}
                   style={[
@@ -331,7 +330,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="输入提示词..."
-              placeholderTextColor="#9A918A"
+              placeholderTextColor={colors.textFaint}
               value={newTaskPrompt}
               onChangeText={setNewTaskPrompt}
               multiline
@@ -355,7 +354,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
                 disabled={creating}
               >
                 {creating ? (
-                  <ActivityIndicator size="small" color="#fff" />
+                  <ActivityIndicator size="small" color={colors.white} />
                 ) : (
                   <Text style={styles.createButtonText}>创建</Text>
                 )}
@@ -368,7 +367,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -402,7 +401,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "rgba(239, 68, 68, 0.15)",
+    backgroundColor: colors.danger === "#DC2626" ? "rgba(239, 68, 68, 0.12)" : "rgba(248, 113, 113, 0.14)",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -543,7 +542,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+    backgroundColor: colors.scrim,
     justifyContent: "center",
     padding: 16,
   },

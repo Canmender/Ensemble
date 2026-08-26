@@ -15,7 +15,7 @@ import type {
   MessageReply,
   AgentEvent,
   WorkflowDef,
-} from "@ensemble/shared-protocol";
+} from "@ensemble/shared";
 
 // ==================== 请求配置 ====================
 
@@ -122,6 +122,31 @@ export interface UserInfo {
   /** 职业 */
   occupation?: string;
 }
+
+/** manifest.settings 字段声明（服务端 zod：type 目前仅 text | password，新增取值时此处同步） */
+export interface PluginSettingField {
+  key: string;
+  label: string;
+  placeholder?: string;
+  type?: "text" | "password";
+}
+
+/** 候选插件投影（GET /api/users/me/plugins 行形状） */
+export interface PluginInfo {
+  id: string;
+  name: string;
+  version: string;
+  description?: string;
+  /** 声明的定时任务数 */
+  scheduled: number;
+  /** 本用户是否已启用（且实例 active） */
+  enabled: boolean;
+  /** 是否保存过配置 */
+  hasConfig: boolean;
+  /** manifest 内嵌配置表单声明（manifest 即 UI） */
+  settings?: PluginSettingField[];
+}
+
 
 /** 会话（企业级 IM） */
 export interface Conversation {
@@ -312,7 +337,6 @@ class ApiService {
     return "UNKNOWN";
   }
 
-  /** 发起 API 请求 */
   /** 发起 API 请求（含 401 自动重试：清除旧 Token → 重新获取 → 重试一次） */
   private async request<T>(
     method: string,
@@ -320,6 +344,7 @@ class ApiService {
     body?: unknown,
     timeoutMs?: number,
     _isRetry = false,
+    _skipAuth = false,
   ): Promise<ApiResponse<T>> {
     const baseUrl = this.getBaseUrl();
     if (!baseUrl) {
@@ -331,7 +356,7 @@ class ApiService {
     const timer = setTimeout(() => controller.abort(), timeout);
 
     try {
-      const token = await this.getToken();
+      const token = _skipAuth ? null : await this.getToken();
       const options: RequestInit = {
         method,
         headers: {
@@ -353,7 +378,7 @@ class ApiService {
         if (response.status === 401 && !_isRetry) {
           this.resetToken();
           clearTimeout(timer);
-          return this.request<T>(method, path, body, timeoutMs, true);
+          return this.request<T>(method, path, body, timeoutMs, true, _skipAuth);
         }
 
         let detail: string | undefined;
@@ -391,9 +416,54 @@ class ApiService {
 
   // ========== Agent API ==========
 
+  /**
+   * 插件卡片动作（U1）：POST /api/users/me/plugins/<pluginId>/actions/<action>。
+   * endpoint 为卡片里的相对路径（如 "/actions/vote"），此处归一化掉可选的
+   * /actions 前缀后拼接（服务端路由固定为 .../actions/:action）。
+   */
+  async pluginCardAction(
+    pluginId: string,
+    endpoint: string,
+    body?: Record<string, unknown>,
+  ): Promise<ApiResponse<Record<string, unknown>>> {
+    const verb = endpoint.replace(/^\/+/, "").replace(/^actions\//, "");
+    return this.request<Record<string, unknown>>(
+      "POST",
+      `/api/users/me/plugins/${encodeURIComponent(pluginId)}/actions/${encodeURIComponent(verb)}`,
+      body,
+    );
+  }
+
   /** 内置 AI 助手对话（服务端不可用时页面回退本地回答） */
   async assistantChat(message: string): Promise<ApiResponse<{ reply?: string }>> {
     return this.request<{ reply?: string }>("POST", "/api/assistant/chat", { message });
+  }
+
+  // ========== 用户插件管理（R4 per-user 主权模型，「功能」页数据面） ==========
+
+  /** 候选插件清单（含本用户启停状态与 manifest.settings 表单声明） */
+  async getPlugins(): Promise<ApiResponse<PluginInfo[]>> {
+    return this.request<PluginInfo[]>("GET", "/api/users/me/plugins");
+  }
+
+  /** 启用插件（幂等；超 timer 闸门等拒绝见 error） */
+  async enablePlugin(id: string): Promise<ApiResponse<{ enabled: boolean }>> {
+    return this.request<{ enabled: boolean }>("POST", `/api/users/me/plugins/${encodeURIComponent(id)}/enable`);
+  }
+
+  /** 禁用插件（unregister 本用户实例，其他人零感知） */
+  async disablePlugin(id: string): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>("POST", `/api/users/me/plugins/${encodeURIComponent(id)}/disable`);
+  }
+
+  /** 读用户级插件配置 */
+  async getPluginConfig(id: string): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request<Record<string, unknown>>("GET", `/api/users/me/plugins/${encodeURIComponent(id)}/config`);
+  }
+
+  /** 保存用户级插件配置（服务端热重启该实例使其生效） */
+  async setPluginConfig(id: string, config: Record<string, unknown>): Promise<ApiResponse<unknown>> {
+    return this.request<unknown>("PUT", `/api/users/me/plugins/${encodeURIComponent(id)}/config`, { config });
   }
 
   /** 获取所有 Agent */
@@ -550,9 +620,10 @@ class ApiService {
     return this.request<UserInfo[]>("GET", "/api/auth/users");
   }
 
-  /** 登录（云服务器账号）——成功后持久化用户 token，后续请求自动携带 */
+  /** 登录（云服务器账号）——成功后持久化用户 token，后续请求自动携带。
+   *  认证接口不带旧 token：残留的失效 Bearer 会让服务端直接 401（换机/重装后必现）。 */
   async login(username: string, password: string): Promise<ApiResponse<{ token: string; user: UserInfo }>> {
-    const res = await this.request<{ token: string; user: UserInfo }>("POST", "/api/auth/login", { username, password });
+    const res = await this.request<{ token: string; user: UserInfo }>("POST", "/api/auth/login", { username, password }, undefined, false, true);
     if (res.data?.token) {
       this.authToken = res.data.token;
       try {
@@ -570,7 +641,7 @@ class ApiService {
       username,
       password,
       ...(displayName ? { displayName } : {}),
-    });
+    }, undefined, false, true);
     if (res.data?.token) {
       this.authToken = res.data.token;
       try {
@@ -652,6 +723,11 @@ class ApiService {
   /** 撤回消息（发送者可撤） */
   async recallMessage(convId: string, msgId: string): Promise<ApiResponse<{ recalled: string }>> {
     return this.request<{ recalled: string }>("DELETE", "/api/conversations/" + convId + "/messages/" + msgId);
+  }
+
+  /** 编辑消息（仅发送者可调；成功后服务端广播 chat.edited 事件） */
+  async editMessage(convId: string, msgId: string, content: string): Promise<ApiResponse<{ edited: string }>> {
+    return this.request<{ edited: string }>("PUT", `/api/conversations/${convId}/messages/${msgId}`, { content });
   }
 
   /** 发送会话消息（fire-and-forget，回复经 WS 推送） */
@@ -759,6 +835,58 @@ class ApiService {
 
   async rejectFriendRequest(requestId: string): Promise<ApiResponse<{ rejected: boolean }>> {
     return this.request<{ rejected: boolean }>("POST", "/api/privacy/friend-requests/" + requestId + "/reject");
+  }
+
+  // ========== 设备互联（L2 配对 + L1 补拉）==========
+
+  /** 手机端确认配对：提交 6 位码 + 本机 deviceId → device_pairs 落库，返回 pairId */
+  async confirmPair(code: string, mobileDeviceId: string): Promise<ApiResponse<{ pairId: string }>> {
+    return this.request<{ pairId: string }>("POST", "/api/pairs/confirm", { code, mobileDeviceId });
+  }
+
+  /** 我的全部设备对列表 */
+  async getPairs(): Promise<ApiResponse<Array<{
+    id: string;
+    userId: string;
+    desktopDeviceId: string;
+    mobileDeviceId: string;
+    pairedAt: number;
+  }>>> {
+    return this.request<Array<{
+      id: string;
+      userId: string;
+      desktopDeviceId: string;
+      mobileDeviceId: string;
+      pairedAt: number;
+    }>>("GET", "/api/pairs");
+  }
+
+  /** 解除配对 */
+  async removePair(pairId: string): Promise<ApiResponse<{ removed: boolean }>> {
+    return this.request<{ removed: boolean }>("DELETE", "/api/pairs/" + encodeURIComponent(pairId));
+  }
+
+  /** 补拉：回放该设备对 sinceTs 之后的互联事件 */
+  async getPairEvents(pairId: string, sinceTs: number = 0): Promise<ApiResponse<{
+    events: Array<{
+      msgId: string;
+      pairId: string;
+      kind: string;
+      payload: unknown;
+      ts: number;
+    }>;
+    hasMore: boolean;
+  }>> {
+    return this.request<{
+      events: Array<{
+        msgId: string;
+        pairId: string;
+        kind: string;
+        payload: unknown;
+        ts: number;
+      }>;
+      hasMore: boolean;
+    }>("GET", `/api/pairs/${encodeURIComponent(pairId)}/events?sinceTs=${sinceTs}`);
   }
 
   /** 当前用户的所有设备（多端在线状态：在线 / 离线） */

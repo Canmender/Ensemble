@@ -22,7 +22,7 @@ import { api } from "../services/api";
 import { connectionService, CLOUD_SERVER } from "../services/connection";
 import { useAuthGate } from "../store/authGateStore";
 import { useDeviceStore } from "../store/deviceStore";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 export default function LoginPage() {
   const setGate = useAuthGate((s) => s.setGate);
@@ -174,7 +174,7 @@ export default function LoginPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { flexGrow: 1, justifyContent: "center", padding: spacing.xl },
   brand: { alignItems: "center", marginBottom: spacing.xl },

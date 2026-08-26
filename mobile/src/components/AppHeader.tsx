@@ -9,7 +9,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "./Avatar";
 import { useMeStore } from "../store/meStore";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { colors, spacing, radius, fontSize, elevation , ms } from "../theme";
 
 interface AppHeaderProps {
   title: string;
@@ -74,7 +74,7 @@ export function AppHeader({ title, showBack = false, showAvatar = true, right, i
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   header: {
     backgroundColor: colors.surface,
     ...elevation.sm,

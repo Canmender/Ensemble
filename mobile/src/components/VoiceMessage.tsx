@@ -8,7 +8,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Animated, Easing } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useAudioPlayer, useAudioPlayerStatus } from "expo-audio";
-import { colors, spacing, fontSize } from "../theme";
+import { colors, spacing, fontSize , ms } from "../theme";
 
 interface VoiceMessageProps {
   url: string;
@@ -108,7 +108,7 @@ export function VoiceMessage({ url, isUser, durationText }: VoiceMessageProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   row: {
     flexDirection: "row",
     alignItems: "center",

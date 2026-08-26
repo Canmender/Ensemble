@@ -26,10 +26,10 @@ import { useDeviceStore } from "../store/deviceStore";
 import { api, type UserInfo, type Conversation } from "../services/api";
 import { useChatTarget } from "../store/chatTargetStore";
 import { wsLink } from "../services/wslink";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 import { Avatar } from "../components/Avatar";
 import { AddFriendSheet } from "../components/AddFriendSheet";
-import type { AgentConfig } from "@ensemble/shared-protocol";
+import type { AgentConfig } from "@ensemble/shared";
 
 const GROUPS_KEY = "@ensemble/contact-groups";
 
@@ -692,7 +692,7 @@ export default function ContactsPage({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   searchBar: {
     flexDirection: "row",

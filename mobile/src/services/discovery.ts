@@ -4,7 +4,7 @@
  */
 
 import Zeroconf from "react-native-zeroconf";
-import type { DeviceInfo } from "@ensemble/shared-protocol";
+import type { DeviceInfo } from "@ensemble/shared";
 import { useDeviceStore } from "../store/deviceStore";
 
 const SERVICE_TYPE = "_ensemble._tcp";

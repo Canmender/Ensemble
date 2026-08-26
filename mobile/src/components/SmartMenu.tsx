@@ -15,7 +15,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 import { LiquidGlass } from "./Glass";
 
 const SCREEN_H = Dimensions.get("window").height;
@@ -96,7 +96,7 @@ export function SmartMenu({ visible, items, onClose, touchY }: SmartMenuProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   menu: {
     backgroundColor: "transparent",

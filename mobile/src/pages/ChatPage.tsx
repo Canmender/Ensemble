@@ -32,7 +32,7 @@ import { timeAgo } from "../utils/timeAgo";
 import { loadDrafts } from "../utils/draft";
 import { cacheConversations, getCachedConversations } from "../utils/convCache";
 import { convTitle } from "../utils/convTitle";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 import type { RootStackParamList } from "../App";
 
 function convIcon(c: Conversation): React.ComponentProps<typeof Ionicons>["name"] {
@@ -422,7 +422,7 @@ export default function ChatPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   connBar: {
     flexDirection: "row",

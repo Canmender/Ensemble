@@ -3,14 +3,14 @@ const path = require("path");
 
 const config = getDefaultConfig(__dirname);
 
-// 解析 @ensemble/shared-protocol 路径别名
+// 解析 @ensemble/shared 路径别名（直接吃 TS 源码，与桌面端 pnpm workspace 同源）
 config.resolver.extraNodeModules = {
-  "@ensemble/shared-protocol": path.resolve(__dirname, "../shared/src"),
+  "@ensemble/shared": path.resolve(__dirname, "../desktop/packages/shared/src"),
 };
 
 // 监听 shared 目录变化
 config.watchFolders = [
-  path.resolve(__dirname, "../shared/src"),
+  path.resolve(__dirname, "../desktop/packages/shared/src"),
 ];
 
 // RN 不认识 node: 前缀的内置模块引用（@peculiar/webcrypto 等生态包会用到），
@@ -25,6 +25,18 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
     // @peculiar/webcrypto 仅在非浏览器环境探测里引用 node:crypto，RN 上运行时不走该分支；
     // 提供空实现满足静态解析
     return { type: "empty" };
+  }
+  // shared 源码（watchFolders 内）的裸名依赖（zod 等）：metro 以 originModulePath
+  // 向上找 node_modules，找不到 mobile 的平面安装。统一重定向到 mobile 的 node_modules。
+  if (!moduleName.startsWith(".") && !moduleName.startsWith("@ensemble/") && !path.isAbsolute(moduleName)) {
+    const fallback = path.resolve(__dirname, "node_modules", moduleName);
+    if (require("fs").existsSync(fallback)) {
+      return context.resolveRequest(
+        { ...context, originModulePath: path.resolve(__dirname, "index.ts") },
+        moduleName,
+        platform,
+      );
+    }
   }
   return context.resolveRequest(context, moduleName, platform);
 };

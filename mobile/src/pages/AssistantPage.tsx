@@ -17,7 +17,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 interface Message {
   id: string;
@@ -180,7 +180,7 @@ export default function AssistantPage({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   quickQuestions: {
     padding: spacing.lg,

@@ -3,7 +3,7 @@
  */
 
 import { create } from "zustand";
-import type { DeviceInfo, ConnectionState } from "@ensemble/shared-protocol";
+import type { DeviceInfo, ConnectionState } from "@ensemble/shared";
 
 /** 连接质量等级 */
 export type ConnectionQualityLevel = "excellent" | "good" | "fair" | "poor" | "unknown";

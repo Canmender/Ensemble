@@ -4,9 +4,28 @@
  */
 import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 const changelogData = [
+  {
+    version: "v0.9.11",
+    date: "2026-08-23",
+    changes: [
+      "插件卡片渲染接入（U1）：投票卡片可点击选项即时计票，票数条实时显示",
+      "五种卡片模板（投票/列表/统计/进度/图文）+ 未知类型折叠框降级，永不白屏",
+      "同步桌面端插件化基座（R0-R4 + 卡片协议 v1 定稿）",
+    ],
+  },
+  {
+    version: "v0.9.10",
+    date: "2026-08-23",
+    changes: [
+      "动态主题：新增「外观」设置（跟随系统/浅色/深色），全 App 支持暗色模式",
+      "状态栏与导航栏配色随主题自动切换，系统深色模式实时跟随",
+      "运行详情/任务页硬编码色值清理，统一引设计 token（双端同源）",
+      "液态玻璃组件明暗自适应，修复 shared 协议悬空引用",
+    ],
+  },
   {
     version: "v0.9.8",
     date: "2026-08-22",
@@ -244,7 +263,7 @@ export default function ChangelogPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg, padding: spacing.lg },
   entry: { marginBottom: spacing.xl },
   entryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },

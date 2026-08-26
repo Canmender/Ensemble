@@ -4,7 +4,7 @@
 import React, { useMemo } from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
 import { useDeviceStore } from "../store/deviceStore";
-import { colors, radius } from "../theme";
+import { colors, radius , ms } from "../theme";
 
 const AVATAR_COLORS = [
   "#3B3F4A", "#8F7D6F", "#6E5F52", "#5F7A5A", "#7E6B5E", "#897F75",
@@ -52,7 +52,7 @@ export function Avatar({ name, avatarUrl, size = 40 }: AvatarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { overflow: "hidden" },
   image: {},
   fallback: {

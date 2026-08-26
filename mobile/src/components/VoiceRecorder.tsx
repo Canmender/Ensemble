@@ -14,7 +14,7 @@ import {
 } from "expo-audio";
 import * as FileSystem from "expo-file-system/legacy";
 import { api } from "../services/api";
-import { colors, spacing, fontSize } from "../theme";
+import { colors, spacing, fontSize , ms } from "../theme";
 
 interface VoiceRecorderProps {
   onSend: (url: string, duration: number) => void;
@@ -155,7 +155,7 @@ export function VoiceRecorder({ onSend, onCancel }: VoiceRecorderProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   wrap: { flex: 1 },
   holdArea: { flex: 1, position: "relative", paddingHorizontal: spacing.xs },
   bigBtn: {

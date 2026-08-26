@@ -9,7 +9,7 @@ import { View, Text, StyleSheet, Modal, TextInput, TouchableOpacity, FlatList, A
 import { Ionicons } from "@expo/vector-icons";
 import { api, type UserInfo } from "../services/api";
 import { useMeStore } from "../store/meStore";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 interface ReqItem {
   id: string;
@@ -206,7 +206,7 @@ function TabBtn({ active, label, onPress }: { active: boolean; label: string; on
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   overlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg, maxHeight: "80%", paddingBottom: spacing.xl },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: spacing.lg, borderBottomWidth: 1, borderBottomColor: colors.border },

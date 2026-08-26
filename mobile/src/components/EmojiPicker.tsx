@@ -6,7 +6,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, FlatList, Dimensions, Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 const RECENT_KEY = "emoji_recent";
 const CUSTOM_KEY = "emoji_custom";
@@ -181,7 +181,7 @@ export function EmojiPicker({ onSelect, onSend, directSend = false }: EmojiPicke
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: {
     backgroundColor: colors.surface,
     borderTopWidth: 1,

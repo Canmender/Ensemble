@@ -1,5 +1,76 @@
 import React, { useEffect, useRef } from "react";
 import { View, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
+
+// ==================== Hermes TextDecoder 兼容补丁（必须在 App 模块顶层执行） ====================
+//
+// 白屏根因（v0.9.13 真机）：libsignal 的 X25519 后端（@privacyresearch/
+// curve25519-typescript 的 emscripten 产物）在模块加载期执行
+// `new TextDecoder('utf-16le')`，而 Hermes/Expo 的 TextDecoder 只认 utf-8
+// → RangeError 沿 require 链炸掉聊天房间整页。
+//
+// 为什么放这里而不是 index.ts：expo winter 运行时（bundle 里先于本模块执行）
+// 用 installGlobal 给 global.TextDecoder 定义**惰性 getter**——index.ts 里
+// 先打的补丁会被这个 getter 架空（curveasm 访问时 getter 返回 Expo 的
+// utf-8-only polyfill）。App.tsx 在 winter 之后、curveasm（聊天页懒加载）之前
+// 执行，在此处覆盖正好卡住时序窗口。用 defineProperty 固化为 data property，
+// 防止后续 installGlobal 再以 getter 覆盖。
+{
+  const g = globalThis as any;
+  const Current = g.TextDecoder as (new (label?: string) => TextDecoder) | undefined;
+  let broken = false;
+  if (Current) {
+    try {
+      new Current("utf-16le");
+    } catch {
+      broken = true;
+    }
+  } else {
+    broken = true;
+  }
+  console.log(`[td-patch] current=${Current ? Current.name : "none"} broken=${broken}`);
+  if (broken) {
+    const NativeUtf8 = Current ?? (g.TextDecoder = class {} as any);
+    class PatchedTextDecoder {
+      private utfLabel: string;
+      constructor(label?: string) {
+        this.utfLabel = String(label ?? "utf-8").toLowerCase();
+      }
+      get encoding(): string {
+        return this.utfLabel;
+      }
+      decode(input?: ArrayBuffer | ArrayBufferView, _options?: { stream?: boolean }): string {
+        const bytes =
+          input instanceof Uint8Array
+            ? input
+            : input instanceof ArrayBuffer
+              ? new Uint8Array(input)
+              : input
+                ? new Uint8Array((input as ArrayBufferView).buffer, (input as ArrayBufferView).byteOffset, (input as ArrayBufferView).byteLength)
+                : new Uint8Array();
+        if (this.utfLabel.includes("16")) {
+          // utf-16le：emscripten 只用它读 wasm 内存的 NUL 结尾短串，小端足够
+          let out = "";
+          for (let i = 0; i + 1 < bytes.length; i += 2) {
+            const code = bytes[i] | (bytes[i + 1] << 8);
+            if (code === 0) break;
+            out += String.fromCharCode(code);
+          }
+          return out;
+        }
+        // 其余未知编码按 utf-8 处理（TextDecoder 缺省语义）
+        return new NativeUtf8("utf-8").decode(bytes);
+      }
+    }
+    Object.defineProperty(g, "TextDecoder", {
+      value: PatchedTextDecoder,
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
+    console.log("[td-patch] PatchedTextDecoder installed");
+  }
+}
+
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
@@ -28,6 +99,7 @@ import TasksPage from "./pages/TasksPage";
 import ChatPage from "./pages/ChatPage";
 import ChatRoomPage from "./pages/ChatRoomPage";
 import ContactsPage from "./pages/ContactsPage";
+import PluginsPage from "./pages/PluginsPage";
 import SettingsPage from "./pages/SettingsPage";
 import ProfilePage from "./pages/ProfilePage";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage";
@@ -37,6 +109,7 @@ import GroupSettingsPage from "./pages/GroupSettingsPage";
 import PrivacySettingsPage from "./pages/PrivacySettingsPage";
 import RunPage from "./pages/RunPage";
 import DeviceRemotePage from "./pages/DeviceRemotePage";
+import DeviceLinkPage from "./pages/DeviceLinkPage";
 import LoginPage from "./pages/LoginPage";
 import ChangelogPage from "./pages/ChangelogPage";
 import AgentDetailPage from "./pages/AgentDetailPage";
@@ -48,7 +121,7 @@ import { LiquidGlass } from "./components/Glass";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Theme
-import { colors, radius } from "./theme";
+import { colors, radius, initTheme, useTheme , ms } from "./theme";
 
 /** 根导航栈参数表 */
 export type RootStackParamList = {
@@ -62,6 +135,7 @@ export type RootStackParamList = {
   UserProfile: { userId: string; name: string; username: string; displayName?: string };
   PrivacySettings: undefined;
   DeviceRemote: undefined;
+  DeviceLink: undefined;
   AgentDetail: { agentId: string };
   Changelog: undefined;
   Assistant: undefined;
@@ -82,6 +156,7 @@ const TAB_ICONS: Record<string, { active: IconName; inactive: IconName }> = {
   Tasks: { active: "document-text", inactive: "document-text-outline" },
   Chat: { active: "chatbubble-ellipses", inactive: "chatbubble-ellipses-outline" },
   Contacts: { active: "people", inactive: "people-outline" },
+  Plugins: { active: "extension-puzzle", inactive: "extension-puzzle-outline" },
   Me: { active: "person", inactive: "person-outline" },
 };
 
@@ -246,6 +321,7 @@ function MainTabs() {
       <Tab.Screen name="Tasks" component={TasksPage} options={{ title: "任务", header: () => <AppHeader title="任务" /> }} />
       <Tab.Screen name="Chat" component={ChatPage} options={{ title: "聊天", header: () => <AppHeader title="聊天" /> }} />
       <Tab.Screen name="Contacts" component={ContactsPage} options={{ title: "联系人", header: () => <AppHeader title="联系人" /> }} />
+      <Tab.Screen name="Plugins" component={PluginsPage} options={{ title: "功能", header: () => <AppHeader title="功能" /> }} />
       <Tab.Screen name="Me" component={SettingsPage} options={{ title: "我", header: () => <AppHeader title="我" /> }} />
     </Tab.Navigator>
   );
@@ -253,17 +329,19 @@ function MainTabs() {
 
 /** 已登录主界面 */
 function MainApp() {
+  const { colors: c, scheme, epoch } = useTheme();
   return (
     <NavigationContainer
+      key={epoch}
       theme={{
-        dark: false,
+        dark: scheme === "dark",
         colors: {
-          primary: colors.primary,
-          background: colors.bg,
-          card: colors.surface,
-          text: colors.text,
-          border: colors.border,
-          notification: colors.primary,
+          primary: c.primary,
+          background: c.bg,
+          card: c.surface,
+          text: c.text,
+          border: c.border,
+          notification: c.primary,
         },
         fonts: {
           regular: { fontFamily: "System", fontWeight: "400" },
@@ -371,6 +449,14 @@ function MainApp() {
           }}
         />
         <Stack.Screen
+          name="DeviceLink"
+          component={DeviceLinkPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="设备互联" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
           name="Assistant"
           component={AssistantPage}
           options={{
@@ -379,15 +465,16 @@ function MainApp() {
           }}
         />
       </Stack.Navigator>
-      <StatusBar style="dark" />
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
     </NavigationContainer>
   );
 }
 
 /** 启动加载屏 */
 function LoadingScreen() {
+  const { colors: c, epoch } = useTheme();
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}>
+    <View key={epoch} style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}>
       <Image source={require("../assets/icon.png")} style={{ width: 72, height: 72, borderRadius: 18, overflow: "hidden", marginBottom: 16 }} resizeMode="contain" />
       <ActivityIndicator color={colors.primary} />
     </View>
@@ -395,7 +482,7 @@ function LoadingScreen() {
 }
 
 
-const styles = StyleSheet.create({
+const styles = ms({
   tabRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-around", height: 62, paddingTop: 4, paddingBottom: 4 },
   tabItem: { flex: 1, alignItems: "center", justifyContent: "center" },
   tabBtn: { alignItems: "center", justifyContent: "center", width: "100%", paddingTop: 4 },
@@ -415,6 +502,12 @@ const styles = StyleSheet.create({
 export default function App() {
   const gate = useAuthGate((s) => s.gate);
   const setGate = useAuthGate((s) => s.setGate);
+  const { epoch } = useTheme();
+
+  // 主题：恢复持久化偏好 + 系统外观监听（一次性）
+  useEffect(() => {
+    initTheme();
+  }, []);
 
   // 启动：初始化通知 → 连接云端 → 读取登录态 → 进登录页或主界面
   useEffect(() => {
@@ -465,7 +558,7 @@ export default function App() {
   }, [gate]);
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary key={epoch}>
       <SafeAreaProvider>
         {gate === "loading" && <LoadingScreen />}
         {gate === "out" && <LoginPage />}
