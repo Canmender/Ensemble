@@ -18,6 +18,9 @@ import { FriendsDialog } from "../components/FriendsDialog";
 import { Avatar } from "../components/Avatar";
 import { PluginCardView } from "../components/PluginCard";
 import { isPluginCard, type PluginCardPayload } from "../types";
+import { MessageEditModal } from "../components/MessageEditModal";
+import { ReactionBar } from "../components/ReactionBar";
+import { MessageSearch } from "../components/MessageSearch";
 import { api } from "../lib/api";
 import { wsClient } from "../lib/ws";
 import {
@@ -43,6 +46,8 @@ interface ChatMessage {
   senderName?: string; // 用户会话显示发送者昵称
   attachment?: MessageAttachment;
   deleted?: boolean; // 已撤回
+  status?: 1 | 2 | 3; // 1=正常 2=已撤回 3=已编辑
+  reactions?: Record<string, string[]>; // 表情回应 {emoji: userIds}
   replyTo?: { id: string; content: string; senderName?: string };
   timestamp: number;
 }
@@ -439,7 +444,12 @@ export default function ChatPage() {
   // 单聊消息（本地管理）
   const [singleMessages, setSingleMessages] = useState<Record<string, ChatMessage[]>>({});
   // 企业级会话历史（conversations API，原始数据；方向/昵称在渲染时解析）
-  const [convHistory, setConvHistory] = useState<Record<string, Array<{ id: string; content: string; agentId?: string; role: string; ts: string; attachment?: MessageAttachment; deleted?: boolean; replyTo?: { id: string; content: string } }>>>({});
+  const [convHistory, setConvHistory] = useState<Record<string, Array<{ id: string; content: string; agentId?: string; role: string; ts: string; status?: number; attachment?: MessageAttachment; deleted?: boolean; replyTo?: { id: string; content: string }; reactions?: Record<string, string[]> }>>>({});
+  // 消息编辑状态
+  const [editTarget, setEditTarget] = useState<{ msgId: string; content: string; convId: string } | null>(null);
+  // 每条消息的 reactions（从 convHistory 加载）
+  const [localReactions, setLocalReactions] = useState<Record<string, Record<string, string[]>>>({});
+  const [showSearch, setShowSearch] = useState(false);
 
   // ---- E2E 解密缓存（1:1 用户私聊；信封 content → 明文）----
   // 渲染层查表：命中显示明文，未命中显示占位并触发异步解密回填
@@ -620,7 +630,7 @@ export default function ChatPage() {
       // 用户-用户会话：双方 role 都是 user，方向按发送者是否为自己判定
       const isUserConv = activeContact.type === "user";
       const rawHistory = convHistory[activeContact.convId] ?? [];
-      const history: ChatMessage[] = rawHistory.map((m) => ({
+      const history = rawHistory.map((m) => ({
         id: m.id,
         contactId: activeContact.id,
         content: resolveE2e(e2ePeerId, m.content),
@@ -631,7 +641,9 @@ export default function ChatPage() {
         senderName: isUserConv ? userName(usersById, m.agentId) : undefined,
         attachment: m.attachment,
         deleted: m.deleted,
+        status: m.status,
         replyTo: m.replyTo ? { id: m.replyTo.id, content: m.replyTo.content } : undefined,
+        reactions: m.reactions,
         timestamp: new Date(m.ts).getTime(),
       }));
       // 相邻去重：WS 回显 + 乐观追加会产生相同消息（如群聊里自己的发言）
@@ -649,11 +661,13 @@ export default function ChatPage() {
         senderName: isUserConv && m.agentId ? userName(usersById, m.agentId) : undefined,
         attachment: m.attachment,
         deleted: undefined,
+        status: 1,
+        reactions: undefined,
         replyTo: undefined,
         timestamp: groupBaseTs.current - (deduped.length - 1 - i) * 60000,
       }));
       // 历史 + 实时（打开会话时已清空旧 live，历史为准）
-      return [...history, ...live];
+      return [...history, ...live] as ChatMessage[];
     }
     if (activeContact?.type === "group") {
       return groupMessages.map((m, i) => ({
@@ -665,9 +679,11 @@ export default function ChatPage() {
         senderName: undefined,
         attachment: m.attachment,
         deleted: undefined,
+        status: 1,
+        reactions: undefined,
         replyTo: undefined,
         timestamp: groupBaseTs.current - (groupMessages.length - 1 - i) * 60000,
-      }));
+      })) as ChatMessage[];
     }
     return singleMessages[activeContact?.id ?? ""] ?? [];
   }, [activeContact?.type, activeContact?.id, activeContact?.convId, groupMessages, singleMessages, convHistory, me?.id, usersById, e2ePeerId, e2ePlain]);
@@ -1224,6 +1240,16 @@ export default function ChatPage() {
                   <Phone className="h-5 w-5" />
                 </button>
               )}
+              {/* P1-3: 消息搜索图标（当前会话内搜索） */}
+              {activeContact.convId && (
+                <MessageSearch
+                  convId={activeContact.convId}
+                  onSelectMessage={(msgId) => {
+                    // 搜索结果跳转（可扩展为滚动到指定消息）
+                    console.log("搜索结果跳转:", msgId);
+                  }}
+                />
+              )}
               {/* 右上角 ≡ 菜单 */}
               <div ref={headerMenuRef} className={cls("relative", activeContact.type !== "user" ? "ml-auto" : "")}>
                 <button
@@ -1329,6 +1355,7 @@ export default function ChatPage() {
                             )}
                             {msg.attachment && <AttachmentView att={msg.attachment} content={msg.content} pluginId={msg.agentId} />}
                             {msg.content && <div className={cls("whitespace-pre-wrap leading-relaxed", variant === "ai-ghost" ? "text-sm text-fg" : "text-sm")}>{renderContent(msg.content)}</div>}
+                            {msg.status === 3 && !msg.content.startsWith("{") && <div className="text-[10px] text-muted italic mt-0.5">已编辑</div>}
                           </>
                         )}
                         <div className={cls(
@@ -1345,6 +1372,15 @@ export default function ChatPage() {
                             <>
                               <button onClick={() => startQuote(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="引用回复">引用</button>
                               <button onClick={() => openForward(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="转发">转发</button>
+                              {isMine && activeContact?.convId && (
+                                <button
+                                  onClick={() => setEditTarget({ msgId: msg.id, content: msg.content, convId: activeContact.convId! })}
+                                  className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
+                                  title="编辑"
+                                >
+                                  编辑
+                                </button>
+                              )}
                             </>
                           )}
                           {isMine && !msg.deleted && activeContact?.convId && (
@@ -1360,6 +1396,26 @@ export default function ChatPage() {
                             <span className="text-[10px] font-semibold text-primary">已读</span>
                           )}
                         </div>
+                        {/* P1-2: Reaction 摘要栏（每条消息下方） */}
+                        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                          <ReactionBar
+                            messageId={msg.id}
+                            reactions={msg.reactions}
+                            currentUserId={me?.id}
+                            onToggle={(emoji, added) => {
+                              setLocalReactions((prev) => {
+                                const msgR = { ...(prev[msg.id] ?? {}) };
+                                if (added) {
+                                  msgR[emoji] = [...(msgR[emoji] ?? []), me?.id ?? "self"];
+                                } else {
+                                  msgR[emoji] = (msgR[emoji] ?? []).filter((u) => u !== me?.id);
+                                  if (msgR[emoji].length === 0) delete msgR[emoji];
+                                }
+                                return { ...prev, [msg.id]: msgR };
+                              });
+                            }}
+                          />
+                        )}
                       </Bubble>
                     </div>
                   </div>
@@ -1599,6 +1655,24 @@ export default function ChatPage() {
             <button onClick={() => { setForwardMsg(null); setForwardTargets([]); }} className="w-full rounded-lg bg-muted/10 px-3 py-2 text-sm text-muted hover:text-fg">取消</button>
           </div>
         </Modal>
+      )}
+      {editTarget && (
+        <MessageEditModal
+          open={true}
+          convId={editTarget.convId}
+          msgId={editTarget.msgId}
+          originalContent={editTarget.content}
+          onClose={() => setEditTarget(null)}
+          onEdited={(newContent) => {
+            setConvHistory((prev) => ({
+              ...prev,
+              [editTarget.convId]: (prev[editTarget.convId] ?? []).map((m) =>
+                m.id === editTarget.msgId ? { ...m, content: newContent } : m
+              ),
+            }));
+            setEditTarget(null);
+          }}
+        />
       )}
     </div>
   );
