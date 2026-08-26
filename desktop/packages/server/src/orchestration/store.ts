@@ -527,6 +527,61 @@ export class Store {
     this.stmts.setConversationPinned.run(pinned ? 1 : 0, new Date().toISOString(), id);
   }
 
+  /** 更新会话版本号（成员/设置变更时调用） */
+  bumpConversationVersion(id: string): number {
+    const row = this.db.prepare("UPDATE conversations SET version = version + 1, updated_at = ? WHERE id = ? RETURNING version").get(new Date().toISOString(), id) as { version: number } | undefined;
+    return row?.version ?? 0;
+  }
+
+  /** 更新入群方式 */
+  setJoinType(id: string, joinType: 0 | 1 | 2): void {
+    this.db.prepare("UPDATE conversations SET join_type = ?, updated_at = ? WHERE id = ?").run(joinType, new Date().toISOString(), id);
+    this.bumpConversationVersion(id);
+  }
+
+  /** 更新群公告 */
+  setAnnouncement(id: string, text: string | null): void {
+    this.db.prepare("UPDATE conversations SET announcement = ?, updated_at = ? WHERE id = ?").run(text, new Date().toISOString(), id);
+    this.bumpConversationVersion(id);
+  }
+
+  // ---------- 群成员管理（group_members 表）----------
+
+  addGroupMember(groupId: string, userId: string, role: 1 | 2 | 3 = 3): void {
+    this.db
+      .prepare("INSERT INTO group_members (group_id, user_id, role, status, joined_at) VALUES (?, ?, ?, 1, ?)")
+      .run(groupId, userId, role, new Date().toISOString());
+    this.bumpConversationVersion(groupId);
+  }
+
+  removeGroupMember(groupId: string, userId: string, status: 2 | 3 = 3): void {
+    this.db.prepare("UPDATE group_members SET status = ? WHERE group_id = ? AND user_id = ?").run(status, groupId, userId);
+    this.bumpConversationVersion(groupId);
+  }
+
+  getGroupMember(groupId: string, userId: string): { role: number; status: number } | undefined {
+    return this.db.prepare("SELECT role, status FROM group_members WHERE group_id = ? AND user_id = ?").get(groupId, userId) as any;
+  }
+
+  setGroupMemberRole(groupId: string, userId: string, role: 1 | 2 | 3): void {
+    this.db.prepare("UPDATE group_members SET role = ? WHERE group_id = ? AND user_id = ?").run(role, groupId, userId);
+    this.bumpConversationVersion(groupId);
+  }
+
+  listGroupMembers(groupId: string): Array<{ userId: string; role: number; status: number; joinedAt: string }> {
+    return this.db
+      .prepare("SELECT user_id, role, status, joined_at FROM group_members WHERE group_id = ? AND status = 1 ORDER BY role, joined_at")
+      .all(groupId) as any[];
+  }
+
+  /** 按 username/display_name 模糊搜索已启用用户 */
+  searchUsers(query: string, limit: number = 20): Array<{ id: string; username: string; displayName?: string }> {
+    const pattern = `%${query}%`;
+    return this.db
+      .prepare("SELECT id, username, display_name FROM users WHERE username LIKE ? OR display_name LIKE ? ORDER BY username LIMIT ?")
+      .all(pattern, pattern, limit) as any[];
+  }
+
   /** 修改群名 */
   updateConversationTitle(id: string, title: string): void {
     this.db.prepare("UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?")

@@ -208,6 +208,16 @@ CREATE TABLE IF NOT EXISTS user_plugins (
   PRIMARY KEY (user_id, plugin_id)
 );
 
+-- 群成员角色（P1 群组管理）：群主/管理员/普通成员 + 状态（正常/退出/被踢）
+CREATE TABLE IF NOT EXISTS group_members (
+  group_id    TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  role        INTEGER NOT NULL DEFAULT 3,  -- 1=群主 2=管理员 3=成员
+  status      INTEGER NOT NULL DEFAULT 1,  -- 1=正常 2=退出 3=被踢
+  joined_at   TEXT NOT NULL,
+  PRIMARY KEY (group_id, user_id)
+);
+
 -- 设备配对（L2）：我的手机 ↔ 我的桌面 显式设备对；互联信令按 pairId 放行
 CREATE TABLE IF NOT EXISTS device_pairs (
   id               TEXT PRIMARY KEY,
@@ -370,4 +380,17 @@ function migrateUserColumns(db: DatabaseSync): void {
     db.exec("UPDATE chat_messages SET status = 2 WHERE deleted = 1");
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_chat_run_status ON chat_messages(run_id, status)");
+
+  // conversations 表扩展（P1 群组管理）：join_type + version + notice
+  const convP1Cols = db.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>;
+  if (!convP1Cols.some((c) => c.name === "join_type")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN join_type INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!convP1Cols.some((c) => c.name === "version")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN version INTEGER NOT NULL DEFAULT 0");
+  }
+  if (!convCols.some((c) => c.name === "notice")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN notice TEXT");
+    db.exec("ALTER TABLE conversations ADD COLUMN notice_updated_at TEXT");
+  }
 }

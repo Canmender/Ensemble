@@ -178,6 +178,10 @@ export interface Conversation {
   groupOwner?: string;
   /** 管理员 ID 列表 */
   groupAdmins?: string[];
+  /** 入群方式：0=自由 1=需审批 2=不可加入 */
+  joinType?: 0 | 1 | 2;
+  /** 群版本号：成员/设置变更 +1（增量同步基础） */
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }
