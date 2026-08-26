@@ -246,6 +246,39 @@ CREATE TABLE IF NOT EXISTS device_link_events (
   ts          INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_dle_pair_ts ON device_link_events(pair_id, ts);
+
+-- 消息表情回应（P2 平台能力）：每人每条消息每种 emoji 最多一个
+CREATE TABLE IF NOT EXISTS message_reactions (
+  message_id  TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  emoji       TEXT NOT NULL,
+  created_at  TEXT NOT NULL,
+  PRIMARY KEY (message_id, user_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_reaction_msg ON message_reactions(message_id);
+
+-- 消息全文搜索（P2-子任务3）：FTS5 虚拟表 + 触发器同步
+CREATE VIRTUAL TABLE IF NOT EXISTS chat_messages_fts USING fts5(
+  id UNINDEXED,
+  run_id UNINDEXED,
+  content,
+  content=chat_messages,
+  content_rowid=rowid
+);
+CREATE TRIGGER IF NOT EXISTS chat_messages_ai AFTER INSERT ON chat_messages BEGIN
+  INSERT INTO chat_messages_fts(rowid, id, run_id, content)
+  VALUES (new.rowid, new.id, new.run_id, new.content);
+END;
+CREATE TRIGGER IF NOT EXISTS chat_messages_ad AFTER DELETE ON chat_messages BEGIN
+  INSERT INTO chat_messages_fts(chat_messages_fts, rowid, id, run_id, content)
+  VALUES ('delete', old.rowid, old.id, old.run_id, old.content);
+END;
+CREATE TRIGGER IF NOT EXISTS chat_messages_au AFTER UPDATE ON chat_messages BEGIN
+  INSERT INTO chat_messages_fts(chat_messages_fts, rowid, id, run_id, content)
+  VALUES ('delete', old.rowid, old.id, old.run_id, old.content);
+  INSERT INTO chat_messages_fts(rowid, id, run_id, content)
+  VALUES (new.rowid, new.id, new.run_id, new.content);
+END;
 `;
 
 export function openDb(dbPath: string): DatabaseSync {

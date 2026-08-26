@@ -206,9 +206,16 @@ export function conversationsRouter(ctx: AppContext): Router {
         ? ctx.store.listChatMessages(conv.runId, undefined, afterSeq)
         : ctx.store.listChatMessages(conv.runId, req.user?.id, afterSeq);
       const filtered = before ? all.filter((m) => m.ts < before) : all;
+      const sliced = filtered.slice(-limit);
       // 已读回执：用户-用户会话返回各参与者最后已读时间（前端按接收者判断自己的消息是否已被读）
       const readers = isUserConv(conv) ? ctx.store.getConversationReads(conv.id) : [];
-      ok(res, { messages: filtered.slice(-limit), total: all.length, readers });
+      // 表情回应：每条消息附带 reactions 摘要
+      const reactionsMap = ctx.store.batchGetReactions(sliced.map((m) => m.id));
+      const messagesWithReactions = sliced.map((m) => ({
+        ...m,
+        reactions: reactionsMap[m.id] ?? {},
+      }));
+      ok(res, { messages: messagesWithReactions, total: all.length, readers });
     }),
   );
 

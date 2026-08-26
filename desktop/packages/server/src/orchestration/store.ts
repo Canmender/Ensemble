@@ -383,6 +383,57 @@ export class Store {
     }));
   }
 
+  // ---------- 消息表情回应（P2） ----------
+
+  /** 添加回应：每人每条消息每种 emoji 最多一个 */
+  addReaction(messageId: string, userId: string, emoji: string): boolean {
+    try {
+      this.db
+        .prepare("INSERT INTO message_reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?)")
+        .run(messageId, userId, emoji, new Date().toISOString());
+      return true;
+    } catch {
+      return false; // 已存在
+    }
+  }
+
+  /** 取消回应 */
+  removeReaction(messageId: string, userId: string, emoji: string): boolean {
+    const info = this.db
+      .prepare("DELETE FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?")
+      .run(messageId, userId, emoji);
+    return info.changes > 0;
+  }
+
+  /** 获取消息的所有回应（emoji → userIds） */
+  getReactions(messageId: string): Record<string, string[]> {
+    const rows = this.db
+      .prepare("SELECT emoji, user_id FROM message_reactions WHERE message_id = ?")
+      .all(messageId) as Array<{ emoji: string; user_id: string }>;
+    const out: Record<string, string[]> = {};
+    for (const r of rows) {
+      if (!out[r.emoji]) out[r.emoji] = [];
+      out[r.emoji].push(r.user_id);
+    }
+    return out;
+  }
+
+  /** 批量获取多条消息的回应（聊天历史用） */
+  batchGetReactions(messageIds: string[]): Record<string, Record<string, string[]>> {
+    if (messageIds.length === 0) return {};
+    const placeholders = messageIds.map(() => "?").join(",");
+    const rows = this.db
+      .prepare(`SELECT message_id, emoji, user_id FROM message_reactions WHERE message_id IN (${placeholders})`)
+      .all(...messageIds) as Array<{ message_id: string; emoji: string; user_id: string }>;
+    const out: Record<string, Record<string, string[]>> = {};
+    for (const r of rows) {
+      if (!out[r.message_id]) out[r.message_id] = {};
+      if (!out[r.message_id][r.emoji]) out[r.message_id][r.emoji] = [];
+      out[r.message_id][r.emoji].push(r.user_id);
+    }
+    return out;
+  }
+
   // ---------- E2EE 密钥目录（服务器只见公钥；协议见 desktop/docs/E2E-PROTOCOL.md） ----------
 
   upsertE2eIdentity(
@@ -580,6 +631,24 @@ export class Store {
     return this.db
       .prepare("SELECT id, username, display_name FROM users WHERE username LIKE ? OR display_name LIKE ? ORDER BY username LIMIT ?")
       .all(pattern, pattern, limit) as any[];
+  }
+
+  /** FTS5 消息搜索：全文检索 + snippet 高亮片段 */
+  searchMessagesFts(query: string, runId?: string, limit: number = 20): Array<{ id: string; runId: string; content: string; snippet: string }> {
+    try {
+      let sql: string;
+      let params: any[];
+      if (runId) {
+        sql = "SELECT id, run_id, content, snippet(chat_messages_fts, 2, '<mark>', '</mark>', '...', 20) AS snippet FROM chat_messages_fts WHERE content MATCH ? AND run_id = ? ORDER BY rank LIMIT ?";
+        params = [query, runId, limit];
+      } else {
+        sql = "SELECT id, run_id, content, snippet(chat_messages_fts, 2, '<mark>', '</mark>', '...', 20) AS snippet FROM chat_messages_fts WHERE content MATCH ? ORDER BY rank LIMIT ?";
+        params = [query, limit];
+      }
+      return this.db.prepare(sql).all(...params) as any[];
+    } catch {
+      return [];
+    }
   }
 
   /** 修改群名 */

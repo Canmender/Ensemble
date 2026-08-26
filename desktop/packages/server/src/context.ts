@@ -31,6 +31,8 @@ import { EventBus } from "./plugins/events";
 import { PerUserPluginManager } from "./plugins/per-user";
 import { PluginUserKv } from "./plugins/user-kv";
 import { DeviceLinkLog } from "./plugins/device-link-log";
+import type { StorageAdapter } from "./storage";
+import { LocalStorageAdapter } from "./storage";
 import { dailyReminderPlugin } from "./plugins/builtin/daily-reminder";
 import { pollPlugin } from "./plugins/builtin/poll";
 import { makeMemoryTools } from "./tools/memory";
@@ -105,6 +107,8 @@ export interface AppContext {
   userPlugins: PerUserPluginManager;
   /** 互联事件本地日志（L1：设备配对信令的断线补拉回放源） */
   deviceLinkLog: import("./plugins/device-link-log").DeviceLinkLog;
+  /** 文件存储适配器（本地/S3/OSS 统一抽象；零外部依赖） */
+  storage: import("./storage").StorageAdapter;
   reloadAgents: () => void;
   reloadProviders: () => void;
   dispose: () => Promise<void>;
@@ -185,6 +189,8 @@ export function createAppContext(
   // 聊天附件存储目录（图片/文件上传）
   const uploadsDir = join(dataDir, "uploads");
   mkdirSync(uploadsDir, { recursive: true });
+  // 文件存储适配器（零外部依赖，本地落盘；未来扩展 S3/OSS 只需新建适配器）
+  const storage = new LocalStorageAdapter(uploadsDir);
   // 移动端应用包托管目录（app-version 接口 + APK 文件）
   const apkDir = join(dataDir, "apk");
   mkdirSync(apkDir, { recursive: true });
@@ -368,5 +374,5 @@ export function createAppContext(
   ctxObj.pluginHost = pluginHost;
   // 互联事件日志（L1）：设备配对信令断线补拉的回放源
   const deviceLinkLog = new DeviceLinkLog(db);
-  return Object.assign(ctxObj, { userPlugins, deviceLinkLog });
+  return Object.assign(ctxObj, { userPlugins, deviceLinkLog, storage });
 }
