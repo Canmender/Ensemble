@@ -30,7 +30,7 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useUnreadStore } from "../store/unreadStore";
 import { useMeStore } from "../store/meStore";
 import { wsLink } from "../services/wslink";
-import Animated from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import { useLayoutSpringGentle } from "../utils/motion";
 import { bubbleVariantOf, bubbleStyles } from "../components/bubble";
 import { GlassSurface } from "../components/GlassSurface";
@@ -1079,7 +1079,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   // 消息气泡布局转场弹簧（顶层调用 hooks；系统减弱动态时为 undefined）
   const bubbleLayoutSpring = useLayoutSpringGentle();
 
-  const renderMessage = ({ item }: { item: MessageItem }) => {
+  const renderMessage = ({ item, index }: { item: MessageItem; index: number }) => {
     const isUser = isMyMessage(item);
     const isGroup = conv && !conv.runId.startsWith("conv_");
     // 已读状态：私聊看 peerReadTs，群聊看多少人已读
@@ -1100,7 +1100,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     const { variant, tint } = bubbleVariantOf(isUser, item.agentName ?? "", isDirectAgent, item.role, isDark);
     const bs = bubbleStyles(variant, tint);
     return (
-      <Animated.View layout={bubbleLayoutSpring} style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
+      <Animated.View
+        layout={bubbleLayoutSpring}
+        entering={FadeInDown.springify().damping(20).stiffness(300).delay(Math.min(index * 50, 500))}
+        style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}
+      >
         {/* 多选模式：点击选中/取消 */}
         {selectMode && (
           <TouchableOpacity onPress={() => toggleSelect(item.id)} style={styles.selectCheck} hitSlop={8}>
