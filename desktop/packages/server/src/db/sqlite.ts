@@ -362,4 +362,12 @@ function migrateUserColumns(db: DatabaseSync): void {
     )`);
   }
   db.exec("CREATE INDEX IF NOT EXISTS idx_chat_run_seq ON chat_messages(run_id, seq)");
+
+  // status 枚举（v0.8.33）：替代 deleted 布尔值，支持正常/已撤回/已编辑三种状态
+  const cmStatusCol = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmStatusCol.some((c) => c.name === "status")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN status INTEGER NOT NULL DEFAULT 1");
+    db.exec("UPDATE chat_messages SET status = 2 WHERE deleted = 1");
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS idx_chat_run_status ON chat_messages(run_id, status)");
 }

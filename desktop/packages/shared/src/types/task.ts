@@ -138,8 +138,17 @@ export interface ChatMessage {
   replyTo?: MessageReply;
   /** 被@的用户/Agent ID 列表 */
   mentions?: string[];
-  /** 是否已撤回（撤回后内容隐藏，前端显示占位） */
+  /**
+   * 消息状态：1=正常 2=已撤回 3=已编辑。
+   * 向前兼容：客户端忽略未识别的值（v0.8.33 前无此字段）。
+   */
+  status?: 1 | 2 | 3;
+  /** 已撤回（旧字段，status=2 的反向兼容；新客户端读 status，旧客户端读 deleted） */
   deleted?: boolean;
+  /** 消息编辑时间戳（status=3 时填写） */
+  editedAt?: string;
+  /** 已送达时间戳（WS 收到即写；比已读回执更轻量） */
+  deliveredAt?: string;
   ts: string;
 }
 

@@ -97,7 +97,7 @@ export class Store {
       // Chat messages（INSERT OR IGNORE：clientMsgId 幂等投递；seq 由服务端按会话分配）
       createChatMessage: db.prepare("INSERT OR IGNORE INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts, seq) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
       nextChatSeq: db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM chat_messages WHERE run_id = ?"),
-      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY COALESCE(seq, rowid)"),
+      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND status != 2 ORDER BY COALESCE(seq, rowid)"),
       deleteChatMessage: db.prepare("UPDATE chat_messages SET deleted = 1 WHERE id = ?"),
       // Workflows
       listWorkflows: db.prepare("SELECT * FROM workflows ORDER BY name"),
@@ -329,13 +329,29 @@ export class Store {
    */
   createChatMessage(msg: ChatMessage): number | null {
     const seq = (this.stmts.nextChatSeq.get(msg.runId) as { s: number }).s + 1;
-    const info = this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts, seq);
+    const info = this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 2 : (msg.status ?? 1), msg.ts, seq);
     return info.changes > 0 ? seq : null;
   }
 
-  /** 撤回消息：标记 deleted（保留原始内容，前端显示「已撤回」） */
+  /** 撤回消息（v0.8.33 后 status=2，保留旧 deleted=1 兼容） */
   deleteChatMessage(id: string): void {
-    this.stmts.deleteChatMessage.run(id);
+    this.db.prepare("UPDATE chat_messages SET deleted = 1, status = 2 WHERE id = ?").run(id);
+  }
+
+  /** 编辑消息内容（新字段：edited_at + content 更新） */
+  editChatMessage(id: string, newContent: string): boolean {
+    const info = this.db
+      .prepare("UPDATE chat_messages SET content = ?, status = 3, edited_at = ? WHERE id = ? AND deleted = 0")
+      .run(newContent, new Date().toISOString(), id);
+    return info.changes > 0;
+  }
+
+  /** 标记已送达（WS 收到后调用；比已读更轻量的确认） */
+  markDelivered(ids: string[]): void {
+    if (ids.length === 0) return;
+    const now = new Date().toISOString();
+    const stmt = this.db.prepare("UPDATE chat_messages SET delivered_at = ? WHERE delivered_at IS NULL AND id = ?");
+    for (const id of ids) stmt.run(now, id);
   }
 
   /** 拉取会话消息（按 seq 升序）。afterSeq：仅返回 seq 大于该值的消息（增量补拉，服务端裁剪） */
@@ -359,7 +375,10 @@ export class Store {
       attachment: r.attachment ? (JSON.parse(r.attachment) as ChatMessage["attachment"]) : undefined,
       replyTo: r.reply_to ? (JSON.parse(r.reply_to) as ChatMessage["replyTo"]) : undefined,
       mentions: r.mentions ? (JSON.parse(r.mentions) as string[]) : undefined,
+      status: (r.status ?? (r.deleted ? 2 : 1)) as ChatMessage["status"],
       deleted: !!r.deleted,
+      editedAt: r.edited_at ?? undefined,
+      deliveredAt: r.delivered_at ?? undefined,
       ts: r.ts,
     }));
   }
