@@ -1,14 +1,16 @@
 /**
- * 通知服务（应用内 + 系统通知）
+ * 通知服务（应用内 + 系统通知 + 推送 token 注册）
  * - WS 收到新消息（非当前打开会话）→ 弹系统通知 + 未读计数 +1
  * - @提及通知：被@时始终弹通知（高优先级），不受当前会话限制
  * - Android 需要通知 channel；Android 13+ 需运行时请求通知权限
- *
- * 局限：依赖 WS 连接（app 前台/后台未杀时），app 被杀后需远程推送（FCM/Expo push，当前自用场景未接）。
+ * - 推送 token 注册：app 启动时获取 expo push token 并 POST 到服务端
  */
 import * as Notifications from "expo-notifications";
+import * as Device from "expo-device";
+import { Platform } from "react-native";
 import { wsLink, type ChatWsMessage, type MentionEvent } from "./wslink";
 import { useUnreadStore } from "../store/unreadStore";
+import { useDeviceStore } from "../store/deviceStore";
 
 // 前台也展示横幅/列表（iOS 默认前台不弹，需显式设置）
 Notifications.setNotificationHandler({
@@ -31,7 +33,38 @@ function previewOf(msg: ChatWsMessage): string {
   return "新消息";
 }
 
-/** 初始化通知：Android channel + 全局 WS 监听（弹通知/未读红点），需在 App 启动时调用一次 */
+/** 注册推送 token：获取 expo push token 并 POST 到服务端 */
+async function registerPushToken(): Promise<void> {
+  if (!Device.isDevice) return; // 模拟器不注册
+
+  const { status } = await Notifications.getPermissionsAsync();
+  if (status !== "granted") {
+    await Notifications.requestPermissionsAsync();
+  }
+
+  const { status: finalStatus } = await Notifications.getPermissionsAsync();
+  if (finalStatus !== "granted") return;
+
+  const tokenData = await Notifications.getExpoPushTokenAsync();
+  const pushToken = tokenData.data;
+
+  // POST 到服务端（connectedDevice 不可用时跳过）
+  const { connectedDevice } = useDeviceStore.getState();
+  if (!connectedDevice) return;
+  const baseUrl = `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
+  const deviceId = connectedDevice.id;
+  try {
+    await fetch(`${baseUrl}/api/devices/push-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ deviceId, token: pushToken, platform: Platform.OS }),
+    });
+  } catch {
+    /* token 注册失败不影响主流程 */
+  }
+}
+
+/** 初始化通知：推送 token 注册 + Android channel + 全局 WS 监听 + 通知点击处理 */
 export function initNotifications(): void {
   if (initialized) return;
   initialized = true;
@@ -42,17 +75,21 @@ export function initNotifications(): void {
     sound: null,
   }).catch(() => {});
 
-  // Android 13+ 运行时通知权限：先查状态再请求（已拒绝时系统不再弹窗，需手动开启）
-  void (async () => {
-    try {
-      const { status } = await Notifications.getPermissionsAsync();
-      if (status !== "granted") {
-        await Notifications.requestPermissionsAsync();
+  // 注册推送 token
+  void registerPushToken();
+
+  // 通知点击处理：跳转到对应会话
+  Notifications.addNotificationResponseListener((response) => {
+    const convId = response.notification.request.content.data?.convId;
+    if (convId) {
+      // 导航由 App.tsx 监听处理（避免循环依赖）
+      const { lastActiveConvId } = useUnreadStore.getState();
+      if (lastActiveConvId !== convId) {
+        // 触发导航（通过 WS 回调或其他机制）
+        useUnreadStore.getState().setLastActiveConvId(convId);
       }
-    } catch {
-      /* 权限请求失败不影响 WS 连接 */
     }
-  })();
+  });
 
   wsLink.onGlobalChatMessage((msg) => {
     const { lastActiveConvId, mutedRunIds, addUnread } = useUnreadStore.getState();
@@ -62,8 +99,12 @@ export function initNotifications(): void {
     if (mutedRunIds.has(msg.runId)) return;
     addUnread();
     void Notifications.scheduleNotificationAsync({
-      content: { title: "新消息", body: previewOf(msg), sound: false },
-      // 显式指定 HIGH 重要度 channel（messages），保证 heads-up 横幅弹出
+      content: {
+        title: "新消息",
+        body: previewOf(msg),
+        sound: false,
+        data: { convId: msg.runId },
+      },
       trigger: { channelId: "messages" },
     }).catch(() => {});
   });
@@ -79,6 +120,7 @@ export function initNotifications(): void {
         title: `${ev.senderName} 提到了你`,
         body: ev.content || "提到了你",
         sound: true,
+        data: { convId: ev.convId },
       },
       trigger: { channelId: "messages" },
     }).catch(() => {});

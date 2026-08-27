@@ -137,6 +137,7 @@ CREATE TABLE IF NOT EXISTS devices (
   user_id      TEXT NOT NULL,
   name         TEXT NOT NULL DEFAULT '',
   type         TEXT NOT NULL DEFAULT 'mobile',
+  push_token   TEXT,
   last_seen_at TEXT,
   created_at   TEXT NOT NULL
 );
