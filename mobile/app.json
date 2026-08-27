@@ -2,7 +2,7 @@
   "expo": {
     "name": "合鸣",
     "slug": "ensemble-mobile",
-    "version": "0.9.23",
+    "version": "0.9.24",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -21,7 +21,7 @@
     },
     "android": {
       "package": "com.ensemble.mobile",
-      "versionCode": 123,
+      "versionCode": 124,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
@@ -53,6 +53,11 @@
       "./plugins/withGetuiPush",
       "expo-sharing"
     ],
+    "extra": {
+      "eas": {
+        "projectId": "51970ac4-af3c-4345-bed2-b1ac8bee96bb"
+      }
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     }
