@@ -106,7 +106,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   });
   
   // 25MB：支持聊天图片/文件的 base64 上传（膨胀 ~33%，20MB 文件上限）
-  app.use(express.json({ limit: "150mb" }));
+  app.use(express.json({ limit: "10mb" }));
 
   // 聊天附件静态服务（图片/文件；URL 直接内嵌在消息里，由消息 API 权限控制内容，静态文件本身公开）
   app.use("/uploads", express.static(ctx.uploadsDir));

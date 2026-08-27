@@ -175,6 +175,14 @@ export function openDb(dbPath: string): DatabaseSync {
   mkdirSync(dirname(dbPath), { recursive: true });
   const db = new DatabaseSync(dbPath);
   db.exec(INIT_SQL);
+  // 性能 PRAGMA（WAL 模式下最佳平衡）
+  db.exec(`
+    PRAGMA synchronous = NORMAL;
+    PRAGMA cache_size = -64000;
+    PRAGMA mmap_size = 268435456;
+    PRAGMA busy_timeout = 5000;
+    PRAGMA temp_store = MEMORY;
+  `);
   migrateUserColumns(db);
   return db;
 }
