@@ -23,7 +23,6 @@ import { appVersionRouter } from "./api/routes/app-version";
 import { initRelayClient } from "./api/routes/relay";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
-import { assistantRouter } from "./api/routes/assistant";
 
 export interface CreateAppOptions {
   /** 托管前端静态资源目录（桌面 prod 同源加载） */
@@ -155,7 +154,6 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/devices", devicesRouter(ctx));
   app.use("/api/upload", uploadRouter(ctx));
   app.use("/api/app-version", appVersionRouter(ctx));
-  app.use("/api/assistant", assistantRouter(ctx));
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）
   initRelayClient(ctx);
