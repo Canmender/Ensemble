@@ -15,6 +15,79 @@ interface ChangelogEntry {
 
 const changelogData: ChangelogEntry[] = [
   {
+    version: "v0.9.21",
+    date: "2026-08-26",
+    changes: ["更新日志页面修复：现在可正确显示服务器最新版本说明"],
+  },
+  {
+    version: "v0.9.20",
+    date: "2026-08-26",
+    changes: [
+      "GlassCard 三层玻璃封装（iOS原生液态玻璃/Android真实模糊/纯View降级）",
+      "消息入场弹簧动画（FadeInDown + damping:20）",
+    ],
+  },
+  {
+    version: "v0.9.19",
+    date: "2026-08-26",
+    changes: [
+      "消息气泡左滑引用回复/右滑转发（微信级手势交互）",
+      "滑动阈值15px防误触，回弹弹簧damping:20 stiffness:300",
+    ],
+  },
+  {
+    version: "v0.9.18",
+    date: "2026-08-26",
+    changes: [
+      "agent气泡暗色模式可读性修复（双套色板按主题切换）",
+      "AI助手回复辨识度提升（微透明背景+渐变边框）",
+    ],
+  },
+  {
+    version: "v0.9.17",
+    date: "2026-08-26",
+    changes: [
+      "设备互联配对功能：6位码配对 + 已配对列表 + 解绑",
+      "设置页「设备互联」入口",
+    ],
+  },
+  {
+    version: "v0.9.16",
+    date: "2026-08-26",
+    changes: [
+      "消息可靠性升级：按 seq 排序、MessageID 幂等、status 状态渲染",
+      "消息已送达显示、已编辑标记、消息编辑入口（长按）",
+      "chat.edited 事件监听实时更新",
+    ],
+  },
+  {
+    version: "v0.9.15",
+    date: "2026-08-25",
+    changes: ["APK 签名修复（v0.9.14 补签方案升级为 gradle 原生签名整包重出）"],
+  },
+  {
+    version: "v0.9.14",
+    date: "2026-08-25",
+    changes: [
+      "主题切换修复：StyleSheet.create 模块级烘焙样式全量换肤",
+      "聊天白屏修复：libsignal curveasm.js TextDecoder utf-16le 兼容补丁",
+      "curveasm 补丁固化为 patch-package",
+    ],
+  },
+  {
+    version: "v0.9.13",
+    date: "2026-08-24",
+    changes: ["「功能」Tab 入口（用户插件管理主门面）"],
+  },
+  {
+    version: "v0.9.12",
+    date: "2026-08-24",
+    changes: [
+      "主题快照缓存修复（useSyncExternalStore 无限重渲染）",
+      "登录接口跳过旧 token 修复",
+    ],
+  },
+  {
     version: "v0.9.11",
     date: "2026-08-23",
     changes: [
@@ -86,6 +159,15 @@ const changelogData: ChangelogEntry[] = [
     changes: [
       "联系人页智能体分组：进入页面自动加载 Agent 数据",
       "智能体点击进入详情页（查看/编辑/删除）",
+    ],
+  },
+  {
+    version: "v0.9.4",
+    date: "2026-08-22",
+    changes: [
+      "视频通话：发起/接听/静音/摄像头切换/前后翻转",
+      "语音通话新增静音按钮，摄像头不可用自动降级",
+      "通话界面适配刘海屏，画中画避让顶栏",
     ],
   },
   {
