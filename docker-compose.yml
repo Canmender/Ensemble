@@ -31,6 +31,7 @@ services:
       - CLOUD_HOST=${CLOUD_HOST:-}
     volumes:
       - ensemble-data:/data
+      - /data/backups:/data/backups
     restart: unless-stopped
     networks:
       - ensemble-net

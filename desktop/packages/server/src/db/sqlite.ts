@@ -168,6 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_run ON jobs(run_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run ON run_events(run_id);
 CREATE INDEX IF NOT EXISTS idx_chat_run ON chat_messages(run_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
+CREATE INDEX IF NOT EXISTS idx_conv_user_updated ON conversations(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_jobs_run_agent ON jobs(run_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run_job ON run_events(run_id, job_id);
 
