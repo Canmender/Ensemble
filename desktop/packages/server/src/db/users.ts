@@ -23,7 +23,7 @@ export interface UserRow {
   updatedAt: string;
 }
 
-const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 天
+const DEFAULT_SESSION_TTL_DAYS = 30;
 
 /** 用户与会话存储（users / sessions 表），密码 scrypt 哈希（node:crypto，零依赖） */
 export class UserStore {
@@ -64,9 +64,10 @@ export class UserStore {
   }
 
   /** 创建会话，返回 token + 过期时间 */
-  createSession(userId: string, deviceInfo?: string): { token: string; expiresAt: string } {
+  createSession(userId: string, deviceInfo?: string, sessionTtlDays?: number): { token: string; expiresAt: string } {
     const token = randomBytes(32).toString("hex");
-    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    const ttlMs = (sessionTtlDays ?? DEFAULT_SESSION_TTL_DAYS) * 24 * 60 * 60 * 1000;
+    const expiresAt = new Date(Date.now() + ttlMs).toISOString();
     this.db
       .prepare("INSERT INTO sessions (token, user_id, created_at, expires_at, device_info) VALUES (?,?,?,?,?)")
       .run(token, userId, new Date().toISOString(), expiresAt, deviceInfo ?? null);

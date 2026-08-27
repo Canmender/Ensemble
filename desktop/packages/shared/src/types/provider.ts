@@ -58,4 +58,16 @@ export interface AppSettings {
     /** 危险命令开关（rm -rf / format / shutdown 等） */
     allowDangerousCommands?: boolean;
   };
+  /** IM / 平台运行时配置（不设时行为与硬编码默认值一致） */
+  im?: {
+    dedupWindowMs?: number;           // 默认 2000
+    dedupCleanupIntervalMs?: number;  // 默认 60000
+    sessionTtlDays?: number;          // 默认 30
+    maxUploadMb?: number;             // 默认 100
+    toolConfirmTimeoutMin?: number;   // 默认 5
+    maxTokens?: number;               // 默认 1024
+    maintenanceIntervalH?: number;    // 默认 24
+    rateLimit?: { windowMs?: number; max?: number };
+    ws?: { maxPayloadMb?: number; pingIntervalS?: number; batchIntervalMs?: number };
+  };
 }

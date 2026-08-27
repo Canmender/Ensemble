@@ -6,7 +6,7 @@ import type { AppContext } from "../../context";
 import { asyncH, fail, ok } from "./helpers";
 import { newId } from "../../util/id";
 
-const MAX_UPLOAD_BYTES = 100 * 1024 * 1024; // 100MB（对齐 V-IM）
+const DEFAULT_MAX_UPLOAD_MB = 100;
 
 /** 从文件名提取安全扩展名（仅字母数字，防路径穿越） */
 function extFromName(name: string): string {
@@ -50,8 +50,9 @@ export function uploadRouter(ctx: AppContext): Router {
         return fail(res, new Error("invalid base64"), 400);
       }
       if (buf.length === 0) return fail(res, new Error("empty file"), 400);
-      if (buf.length > MAX_UPLOAD_BYTES) {
-        return fail(res, new Error(`文件过大（上限 ${MAX_UPLOAD_BYTES / 1024 / 1024}MB）`), 413);
+      const maxUploadBytes = (ctx.config.getSettings().im?.maxUploadMb ?? DEFAULT_MAX_UPLOAD_MB) * 1024 * 1024;
+      if (buf.length > maxUploadBytes) {
+        return fail(res, new Error(`文件过大（上限 ${maxUploadBytes / 1024 / 1024}MB）`), 413);
       }
 
       // MD5 去重：查询是否已存在相同文件

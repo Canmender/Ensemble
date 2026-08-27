@@ -145,9 +145,8 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   );
 
   // 全部写端点速率限制（POST/PUT/PATCH/DELETE，每分钟最多 60 次/ IP）。
-  // 覆盖 agents/mcp/providers/settings/workflows/tasks/chat/skills/memory 等，
-  // 防止批量注册 MCP 进程、批量消耗 LLM 额度等滥用。
-  const writeRateLimiter = createWriteRateLimiter();
+  const imRl = ctx.config.getSettings().im?.rateLimit;
+  const writeRateLimiter = createWriteRateLimiter(imRl?.windowMs, imRl?.max);
   app.use("/api", writeRateLimiter);
 
   // 路由统一经 RouterRegistry 注册后按序挂载（R3-C）：内置 21 条先注册即先挂，
@@ -221,6 +220,16 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
     const status = (err as any)?.status ?? 500;
     if (status >= 500) console.error("[error]", message);
     res.status(status).json({ error: { code: (err as any)?.code ?? "internal", message } });
+  });
+
+  // SIGTERM 优雅关机：通知客户端 → 等待重连 → 关闭 WS → 关闭 DB → 退出
+  process.on("SIGTERM", async () => {
+    console.log("[shutdown] 收到 SIGTERM，开始优雅关机...");
+    ctx.hub.broadcastShutdown("服务器即将重启，请稍后重连");
+    await new Promise((resolve) => setTimeout(resolve, 30_000));
+    ctx.hub.close();
+    ctx.db.close();
+    process.exit(0);
   });
 
   return app;

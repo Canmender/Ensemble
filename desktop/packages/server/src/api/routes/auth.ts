@@ -33,7 +33,8 @@ export function authRouter(ctx: AppContext): Router {
       typeof displayName === "string" ? displayName : undefined,
     );
     if (!user) return fail(res, new Error("用户名已存在"), 409);
-    const { token, expiresAt } = ctx.userStore.createSession(user.id);
+    const sessionTtlDays = ctx.config.getSettings().im?.sessionTtlDays;
+    const { token, expiresAt } = ctx.userStore.createSession(user.id, undefined, sessionTtlDays);
     ok(res, { token, user, expiresAt }, 201);
   });
 
@@ -47,7 +48,8 @@ export function authRouter(ctx: AppContext): Router {
     if (!user || !ctx.userStore.verifyPassword(user, password)) {
       return fail(res, new Error("用户名或密码错误"), 401);
     }
-    const { token, expiresAt } = ctx.userStore.createSession(user.id);
+    const sessionTtlDays2 = ctx.config.getSettings().im?.sessionTtlDays;
+    const { token, expiresAt } = ctx.userStore.createSession(user.id, undefined, sessionTtlDays2);
     ok(res, {
       token,
       expiresAt,

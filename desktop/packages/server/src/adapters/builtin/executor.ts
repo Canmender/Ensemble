@@ -80,7 +80,7 @@ export class BuiltinAgentExecutor implements AgentAdapter {
         const r = await provider.chat({
           model: this.cfg.memory?.model ?? this.cfg.model,
           messages: msgs,
-          maxTokens: 1024,
+          maxTokens: this.deps.appSettings().im?.maxTokens ?? 1024,
         });
         return r.text;
       },

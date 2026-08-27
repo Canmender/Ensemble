@@ -130,6 +130,7 @@ export function createAppContext(
   const hub = new WsHub();
   // headless/Docker 部署：用固定 API key 覆盖随机 session token（HTTP + WS 统一凭证）
   if (env.apiKey) hub.overrideToken(env.apiKey);
+  hub.getSettings = () => config.getSettings();
 
   // 事件总线（R3）：hub/engine 解耦的枢纽——engine emit chat/message，hub 挂观察者广播
   const pluginHost = new PluginHost();
@@ -253,7 +254,10 @@ export function createAppContext(
       logger.error(`maintenance timer error: ${String(err)}`);
     }
   };
-  void pluginHost.register(maintenancePlugin({ runMaintenance }));
+  void pluginHost.register(maintenancePlugin({
+    runMaintenance,
+    intervalMs: (config.getSettings().im?.maintenanceIntervalH ?? 24) * 3600_000,
+  }));
 
   // Skill 池（逐个补写内置 skill：已存在的跳过，新增的会补上）
   const skillRoot = join(dataDir, "skills");

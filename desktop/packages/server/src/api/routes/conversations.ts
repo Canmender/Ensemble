@@ -237,8 +237,9 @@ export function conversationsRouter(ctx: AppContext): Router {
       if (!content && !attachment) {
         return fail(res, new Error("content 或 attachment 必填"), 400);
       }
-      // 服务端防重复提交（同用户+同会话+同内容 2秒内不重复）
-      if (content && isDuplicateMessage(req.user?.id ?? "user", String(req.params.id), content)) {
+      // 服务端防重复提交（同用户+同会话+同内容 窗口时间内不重复）
+      const dedupWindowMs = ctx.config.getSettings().im?.dedupWindowMs;
+      if (content && isDuplicateMessage(req.user?.id ?? "user", String(req.params.id), content, dedupWindowMs)) {
         return fail(res, new Error("消息发送过快，请稍后再试"), 429);
       }
 
