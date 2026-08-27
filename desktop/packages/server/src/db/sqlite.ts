@@ -460,4 +460,9 @@ function migrateUserColumns(db: DatabaseSync): void {
   if (!convCols.some((c) => c.name === "visibility")) {
     db.exec("ALTER TABLE conversations ADD COLUMN visibility TEXT NOT NULL DEFAULT 'members'");
   }
+  // devices.push_token（P1 推送通知：Expo Push Token）
+  const devCols = db.prepare("PRAGMA table_info(devices)").all() as Array<{ name: string }>;
+  if (!devCols.some((c) => c.name === "push_token")) {
+    db.exec("ALTER TABLE devices ADD COLUMN push_token TEXT");
+  }
 }

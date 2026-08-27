@@ -8,6 +8,7 @@ import { UserStore } from "./db/users";
 import { detectAgents } from "./discovery/detect";
 import { syncAgent } from "./discovery/sync";
 import { AdapterRegistry } from "./adapters/registry";
+import { sendExpoPushBatch } from "./push/push";
 import { OrchestrationEngine } from "./orchestration/engine";
 import { WsHub } from "./api/ws/hub";
 import type { RunEvent } from "./api/ws/protocol";
@@ -117,6 +118,37 @@ export interface AppContext {
 export interface CreateContextDeps {
   /** 密钥存储（桌面版传 Electron safeStorage 实现；缺省明文文件） */
   keyStore?: KeyStore;
+}
+
+/** 向离线用户设备发送推送通知（chat-broadcaster 调用；尽力而为，失败静默） */
+async function pushOfflineUsers(
+  store: Store,
+  hub: WsHub,
+  runId: string,
+  content: string,
+  agentId: string,
+): Promise<void> {
+  try {
+    const conv = store.getConversationByRunId(runId);
+    if (!conv || conv.muted) return;
+    const participants = conv.participantIds;
+    if (!participants.length) return;
+    const title = conv.title || "新消息";
+    const body = content.length > 100 ? content.slice(0, 100) + "..." : content;
+    for (const uid of participants) {
+      // 跳过发送者自身（不给自己推）
+      if (uid === agentId) continue;
+      // 在线用户不推送（WS 实时送达）
+      const onlineDevices = hub.getOnlineDeviceIds(uid);
+      if (onlineDevices.size > 0) continue;
+      const tokens = store.getPushTokens(uid);
+      if (tokens.length > 0) {
+        await sendExpoPushBatch(tokens, { title, body, data: { convId: conv.id, type: "chat" }, priority: "high" });
+      }
+    }
+  } catch (err) {
+    logger.warn(`push notification error: ${String(err)}`);
+  }
 }
 
 export function createAppContext(
@@ -295,7 +327,7 @@ export function createAppContext(
     name: "chat-broadcaster",
     install: (ctx) => {
       ctx.on("chat/message", (payload) => {
-        const m = payload as { runId: string; id: string; seq: number; jobId?: string; agentId: string; content: string; attachment?: unknown };
+        const m = payload as { runId: string; id: string; seq: number; jobId?: string; agentId: string; content: string; attachment?: unknown; userId?: string };
         hub.broadcast(m.runId, 0, {
           type: "chat.message",
           jobId: m.jobId ?? "",
@@ -305,6 +337,8 @@ export function createAppContext(
           id: m.id,
           seq: m.seq,
         });
+        // 推送通知：离线用户设备（尽力而为，失败不影响消息投递）
+        pushOfflineUsers(store, hub, m.runId, m.content, m.agentId);
       });
     },
   }).catch(() => {});
