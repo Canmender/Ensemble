@@ -1,92 +1,12 @@
 /**
  * 更新日志页
- * 顶部从服务器拉取最新版本 note，下方为硬编码历史版本
+ * 完整版本历史记录
  */
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
-import { colors, spacing, radius, fontSize, ms } from "../theme";
-import { useDeviceStore } from "../store/deviceStore";
+import { colors, spacing, radius, fontSize , ms } from "../theme";
 
-interface ChangelogEntry {
-  version: string;
-  date?: string;
-  changes: string[];
-}
-
-const changelogData: ChangelogEntry[] = [
-  {
-    version: "v0.9.21",
-    date: "2026-08-26",
-    changes: ["更新日志页面修复：现在可正确显示服务器最新版本说明"],
-  },
-  {
-    version: "v0.9.20",
-    date: "2026-08-26",
-    changes: [
-      "GlassCard 三层玻璃封装（iOS原生液态玻璃/Android真实模糊/纯View降级）",
-      "消息入场弹簧动画（FadeInDown + damping:20）",
-    ],
-  },
-  {
-    version: "v0.9.19",
-    date: "2026-08-26",
-    changes: [
-      "消息气泡左滑引用回复/右滑转发（微信级手势交互）",
-      "滑动阈值15px防误触，回弹弹簧damping:20 stiffness:300",
-    ],
-  },
-  {
-    version: "v0.9.18",
-    date: "2026-08-26",
-    changes: [
-      "agent气泡暗色模式可读性修复（双套色板按主题切换）",
-      "AI助手回复辨识度提升（微透明背景+渐变边框）",
-    ],
-  },
-  {
-    version: "v0.9.17",
-    date: "2026-08-26",
-    changes: [
-      "设备互联配对功能：6位码配对 + 已配对列表 + 解绑",
-      "设置页「设备互联」入口",
-    ],
-  },
-  {
-    version: "v0.9.16",
-    date: "2026-08-26",
-    changes: [
-      "消息可靠性升级：按 seq 排序、MessageID 幂等、status 状态渲染",
-      "消息已送达显示、已编辑标记、消息编辑入口（长按）",
-      "chat.edited 事件监听实时更新",
-    ],
-  },
-  {
-    version: "v0.9.15",
-    date: "2026-08-25",
-    changes: ["APK 签名修复（v0.9.14 补签方案升级为 gradle 原生签名整包重出）"],
-  },
-  {
-    version: "v0.9.14",
-    date: "2026-08-25",
-    changes: [
-      "主题切换修复：StyleSheet.create 模块级烘焙样式全量换肤",
-      "聊天白屏修复：libsignal curveasm.js TextDecoder utf-16le 兼容补丁",
-      "curveasm 补丁固化为 patch-package",
-    ],
-  },
-  {
-    version: "v0.9.13",
-    date: "2026-08-24",
-    changes: ["「功能」Tab 入口（用户插件管理主门面）"],
-  },
-  {
-    version: "v0.9.12",
-    date: "2026-08-24",
-    changes: [
-      "主题快照缓存修复（useSyncExternalStore 无限重渲染）",
-      "登录接口跳过旧 token 修复",
-    ],
-  },
+const changelogData = [
   {
     version: "v0.9.11",
     date: "2026-08-23",
@@ -159,15 +79,6 @@ const changelogData: ChangelogEntry[] = [
     changes: [
       "联系人页智能体分组：进入页面自动加载 Agent 数据",
       "智能体点击进入详情页（查看/编辑/删除）",
-    ],
-  },
-  {
-    version: "v0.9.4",
-    date: "2026-08-22",
-    changes: [
-      "视频通话：发起/接听/静音/摄像头切换/前后翻转",
-      "语音通话新增静音按钮，摄像头不可用自动降级",
-      "通话界面适配刘海屏，画中画避让顶栏",
     ],
   },
   {
@@ -332,45 +243,13 @@ const changelogData: ChangelogEntry[] = [
 ];
 
 export default function ChangelogPage() {
-  const [latest, setLatest] = useState<ChangelogEntry | null>(null);
-  const connectedDevice = useDeviceStore((s) => s.connectedDevice);
-
-  useEffect(() => {
-    const base = connectedDevice
-      ? `http://${connectedDevice.ip}:${connectedDevice.httpPort}`
-      : null;
-    if (!base) return;
-
-    // 拉取服务器最新版本 note，失败则回退到硬编码列表
-    fetch(`${base}/api/app-version`, { signal: AbortSignal.timeout(5000) })
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.data?.version && d.data?.note) {
-          const lines = d.data.note.split(/\n/).filter((l: string) => l.trim());
-          setLatest({
-            version: `v${d.data.version}`,
-            changes: lines.map((l: string) => l.replace(/^[•·\-\s]+/, "").trim()).filter(Boolean),
-          });
-        }
-      })
-      .catch(() => {});
-  }, [connectedDevice]);
-
-  const allEntries = latest ? [latest, ...changelogData] : changelogData;
-
   return (
     <ScrollView style={styles.container}>
-      {allEntries.map((entry, idx) => (
+      {changelogData.map((entry, idx) => (
         <View key={idx} style={styles.entry}>
           <View style={styles.entryHeader}>
-            <Text style={[styles.version, idx === 0 && latest && styles.versionLatest]}>
-              {entry.version}
-            </Text>
-            {idx === 0 && latest ? (
-              <Text style={styles.latestTag}>最新版本</Text>
-            ) : entry.date ? (
-              <Text style={styles.date}>{entry.date}</Text>
-            ) : null}
+            <Text style={styles.version}>{entry.version}</Text>
+            <Text style={styles.date}>{entry.date}</Text>
           </View>
           {entry.changes.map((change, ci) => (
             <View key={ci} style={styles.changeRow}>
@@ -389,12 +268,6 @@ const styles = ms({
   entry: { marginBottom: spacing.xl },
   entryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
   version: { color: colors.text, fontSize: fontSize.lg, fontWeight: "700" },
-  versionLatest: { color: colors.primary },
-  latestTag: {
-    color: colors.primaryFg, backgroundColor: colors.primary,
-    fontSize: fontSize.xs, fontWeight: "700", paddingHorizontal: spacing.sm,
-    paddingVertical: 2, borderRadius: radius.full,
-  },
   date: { color: colors.textMuted, fontSize: fontSize.sm },
   changeRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: spacing.xs },
   bullet: { color: colors.textMuted, marginRight: spacing.sm, marginTop: 2 },
