@@ -65,10 +65,7 @@ export default function AssistantPage({ navigation }: { navigation: any }) {
 
     try {
       // Try to call the server's AI assistant endpoint
-      const res = await api.request("/api/assistant/chat", {
-        method: "POST",
-        body: JSON.stringify({ message: question }),
-      });
+      const res = await api.assistantChat(question);
 
       const assistantMsg: Message = {
         id: `assistant-${Date.now()}`,

@@ -16,6 +16,8 @@ import {
   TextInput,
   Alert,
 } from "react-native";
+import Animated from "react-native-reanimated";
+import { useLayoutSpring } from "../utils/motion";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -145,7 +147,14 @@ export default function ChatPage() {
           }
         },
       });
-      return unsub;
+      // WS 断线重连成功 → 刷新会话列表（找回断线窗口内漏掉的未读/最后消息）
+      const offResync = wsLink.onResync(() => {
+        void loadConversations();
+      });
+      return () => {
+        unsub();
+        offResync();
+      };
     }, [loadConversations]),
   );
 
@@ -277,7 +286,11 @@ export default function ChatPage() {
     return undefined;
   };
 
+  // 列表布局转场弹簧（顶层调用 hooks；系统减弱动态时为 undefined = 跳过动画）
+  const itemLayoutSpring = useLayoutSpring();
+
   const renderItem = ({ item }: { item: Conversation }) => (
+    <Animated.View layout={itemLayoutSpring}>
     <TouchableOpacity
       style={[styles.convCard, item.muted && styles.convCardMuted]}
       onPress={() => openConv(item)}
@@ -312,6 +325,7 @@ export default function ChatPage() {
         {item.unread > 0 && !item.muted && <Text style={styles.convUnread}>{item.unread}</Text>}
       </View>
     </TouchableOpacity>
+    </Animated.View>
   );
 
   return (

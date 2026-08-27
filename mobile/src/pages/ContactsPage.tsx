@@ -29,7 +29,7 @@ import { wsLink } from "../services/wslink";
 import { colors, spacing, radius, fontSize } from "../theme";
 import { Avatar } from "../components/Avatar";
 import { AddFriendSheet } from "../components/AddFriendSheet";
-import type { AgentConfig } from "@ensemble/shared-protocol";
+import type { AgentConfig } from "@ensemble/shared";
 
 const GROUPS_KEY = "@ensemble/contact-groups";
 

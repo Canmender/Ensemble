@@ -20,7 +20,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
-import type { TaskMode } from "@ensemble/shared-protocol";
 import { colors, spacing, radius, fontSize } from "../theme";
 
 export default function TasksPage({ navigation }: { navigation: any }) {
@@ -28,7 +27,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
   const { connectionState } = useDeviceStore();
   const [modalVisible, setModalVisible] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskMode, setNewTaskMode] = useState<TaskMode>("single");
+  const [newTaskMode, setNewTaskMode] = useState<"single" | "workflow" | "chat">("single");
   const [newTaskPrompt, setNewTaskPrompt] = useState("");
   const [creating, setCreating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -303,7 +302,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             />
 
             <View style={styles.modeSelector}>
-              {(["single", "workflow", "chat"] as TaskMode[]).map((mode) => (
+              {(["single", "workflow", "chat"] as const).map((mode) => (
                 <TouchableOpacity
                   key={mode}
                   style={[

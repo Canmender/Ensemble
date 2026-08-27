@@ -4,8 +4,8 @@
     "strict": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@ensemble/shared-protocol": ["../shared/src"]
+      "@ensemble/shared": ["../desktop/packages/shared/src"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx", "../shared/src/**/*.ts"]
+  "include": ["**/*.ts", "**/*.tsx", "../desktop/packages/shared/src/**/*.ts"]
 }

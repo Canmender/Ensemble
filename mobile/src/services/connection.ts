@@ -20,8 +20,8 @@ import type {
   Job,
   ChatMessage,
   AgentConfig,
-} from "@ensemble/shared-protocol";
-import { createMessage, isValidMessage } from "@ensemble/shared-protocol";
+} from "@ensemble/shared";
+import { createMessage, isValidMessage } from "@ensemble/shared";
 import { useDeviceStore } from "../store/deviceStore";
 import { useTaskStore } from "../store/taskStore";
 import { api } from "./api";
@@ -248,7 +248,7 @@ class ConnectionService {
       name: await this.getDeviceName(),
       type: "mobile",
       os: "React Native",
-      appVersion: Application.nativeApplicationVersion ?? "0.8.29",
+      appVersion: Application.nativeApplicationVersion ?? "0.9.9",
       wsPort: 0,
       httpPort: 0,
       ip: "0.0.0.0",
@@ -580,7 +580,7 @@ class ConnectionService {
     } else {
       // 局域网直连模式：直接发送
       const message = createMessage(
-        type as keyof import("@ensemble/shared-protocol").MessageTypeMap,
+        type as keyof import("@ensemble/shared").MessageTypeMap,
         this.currentDeviceId,
         targetDeviceId,
         payload as never
@@ -606,7 +606,7 @@ class ConnectionService {
     } else {
       // 局域网直连模式
       const message = createMessage(
-        type as keyof import("@ensemble/shared-protocol").MessageTypeMap,
+        type as keyof import("@ensemble/shared").MessageTypeMap,
         this.currentDeviceId,
         null,
         payload as never

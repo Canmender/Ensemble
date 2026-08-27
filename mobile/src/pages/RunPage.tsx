@@ -16,7 +16,7 @@ import {
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
-import type { AgentEvent, RunStatus } from "@ensemble/shared-protocol";
+import type { AgentEvent, RunStatus } from "@ensemble/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
 import { colors } from "../theme";

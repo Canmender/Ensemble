@@ -15,6 +15,7 @@ import { checkAndPromptUpdate, bootstrapUpdate } from "./services/appUpdate";
 import { UpdateManager } from "./components/UpdateManager";
 import { CallModal } from "./components/CallModal";
 import { bootstrapCallService, setCallIdentityAndReload } from "./services/callService";
+import { bootstrapResync } from "./services/resync";
 import { wsLink } from "./services/wslink";
 import { api } from "./services/api";
 import { useAuthGate } from "./store/authGateStore";
@@ -47,7 +48,7 @@ import { LiquidGlass } from "./components/Glass";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 // Theme
-import { colors, radius } from "./theme";
+import { colors, radius, initTheme, useTheme } from "./theme";
 
 /** 根导航栈参数表 */
 export type RootStackParamList = {
@@ -252,17 +253,19 @@ function MainTabs() {
 
 /** 已登录主界面 */
 function MainApp() {
+  const { colors: c, scheme, epoch } = useTheme();
   return (
     <NavigationContainer
+      key={epoch}
       theme={{
-        dark: false,
+        dark: scheme === "dark",
         colors: {
-          primary: colors.primary,
-          background: colors.bg,
-          card: colors.surface,
-          text: colors.text,
-          border: colors.border,
-          notification: colors.primary,
+          primary: c.primary,
+          background: c.bg,
+          card: c.surface,
+          text: c.text,
+          border: c.border,
+          notification: c.primary,
         },
         fonts: {
           regular: { fontFamily: "System", fontWeight: "400" },
@@ -378,15 +381,16 @@ function MainApp() {
           }}
         />
       </Stack.Navigator>
-      <StatusBar style="dark" />
+      <StatusBar style={scheme === "dark" ? "light" : "dark"} />
     </NavigationContainer>
   );
 }
 
 /** 启动加载屏 */
 function LoadingScreen() {
+  const { colors: c, epoch } = useTheme();
   return (
-    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}>
+    <View key={epoch} style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.bg }}>
       <Image source={require("../assets/icon.png")} style={{ width: 72, height: 72, borderRadius: 18, overflow: "hidden", marginBottom: 16 }} resizeMode="contain" />
       <ActivityIndicator color={colors.primary} />
     </View>
@@ -414,6 +418,12 @@ const styles = StyleSheet.create({
 export default function App() {
   const gate = useAuthGate((s) => s.gate);
   const setGate = useAuthGate((s) => s.setGate);
+  const { epoch } = useTheme();
+
+  // 主题：恢复持久化偏好 + 系统外观监听（一次性）
+  useEffect(() => {
+    initTheme();
+  }, []);
 
   // 启动：初始化通知 → 连接云端 → 读取登录态 → 进登录页或主界面
   useEffect(() => {
@@ -432,6 +442,7 @@ export default function App() {
         await connectionService.connectToCloud();
         const me = await api.getMe();
         bootstrapCallService();
+        bootstrapResync();
         if (me.data) {
           setGate("in");
           setCallIdentityAndReload(me.data.id, me.data.displayName ?? me.data.username);
@@ -463,7 +474,7 @@ export default function App() {
   }, [gate]);
 
   return (
-    <ErrorBoundary>
+    <ErrorBoundary key={epoch}>
       <SafeAreaProvider>
         {gate === "loading" && <LoadingScreen />}
         {gate === "out" && <LoginPage />}

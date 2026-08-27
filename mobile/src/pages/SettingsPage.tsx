@@ -24,14 +24,16 @@ import { Avatar } from "../components/Avatar";
 import { useMeStore } from "../store/meStore";
 import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { colors, spacing, radius, fontSize, elevation, useTheme, setThemeMode } from "../theme";
+import type { ThemeMode } from "../theme";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.9.0";
+const APP_VERSION = nativeApplicationVersion ?? "0.9.10";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
   const { currentDevice, connectionState, lastError } = useDeviceStore();
   const setGate = useAuthGate((s) => s.setGate);
+  const { mode: themeMode } = useTheme();
 
   const me = useMeStore((s) => s.me);
   const loadingMe = useMeStore((s) => s.loading);
@@ -130,7 +132,7 @@ export default function SettingsPage() {
       onPress: () => navigation.navigate("SettingsLLM"),
     },
     {
-      icon: "brain-outline" as const,
+      icon: "library-outline" as const,
       title: "记忆管理",
       desc: "查看和管理智能体记忆",
       onPress: () => navigation.navigate("SettingsMemory"),
@@ -176,6 +178,37 @@ export default function SettingsPage() {
         </Text>
       </View>
       {lastError && <Text style={styles.errorText}>{lastError}</Text>}
+
+      {/* 外观（跟随系统 / 浅色 / 深色） */}
+      <View style={styles.menu}>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>外观</Text>
+        </View>
+        <View style={styles.appearanceRow}>
+          {(
+            [
+              { value: "system", label: "跟随系统", icon: "phone-portrait-outline" as const },
+              { value: "light", label: "浅色", icon: "sunny-outline" as const },
+              { value: "dark", label: "深色", icon: "moon-outline" as const },
+            ] as const satisfies readonly { value: ThemeMode; label: string; icon: "phone-portrait-outline" | "sunny-outline" | "moon-outline" }[]
+          ).map((opt) => {
+            const active = themeMode === opt.value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.appearanceOption, active && styles.appearanceOptionActive]}
+                onPress={() => setThemeMode(opt.value)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name={opt.icon} size={18} color={active ? colors.primary : colors.textMuted} />
+                <Text style={[styles.appearanceLabel, active && styles.appearanceLabelActive]}>
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
 
       {/* 菜单（二级页面入口，可自定义扩充） */}
       <View style={styles.menu}>
@@ -265,6 +298,28 @@ const styles = StyleSheet.create({
   statusText: { color: colors.textMuted, fontSize: fontSize.xs, fontWeight: "600" },
   serverInfo: { color: colors.textFaint, fontSize: fontSize.xs, marginLeft: "auto" },
   errorText: { color: colors.danger, fontSize: fontSize.xs, marginHorizontal: spacing.lg, marginTop: 6 },
+  appearanceRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  appearanceOption: {
+    flex: 1,
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  appearanceOptionActive: {
+    backgroundColor: colors.primarySoft,
+    borderColor: colors.primary,
+  },
+  appearanceLabel: { color: colors.textMuted, fontSize: fontSize.sm, fontWeight: "500" },
+  appearanceLabelActive: { color: colors.primary, fontWeight: "700" },
   menu: {
     backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,

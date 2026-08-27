@@ -17,6 +17,7 @@ import {
   Alert,
   Modal,
   PanResponder,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -29,7 +30,23 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useUnreadStore } from "../store/unreadStore";
 import { useMeStore } from "../store/meStore";
 import { wsLink } from "../services/wslink";
+import Animated from "react-native-reanimated";
+import { useLayoutSpringGentle } from "../utils/motion";
+import { bubbleVariantOf, bubbleStyles } from "../components/bubble";
+import { GlassSurface } from "../components/GlassSurface";
 import { startCall } from "../services/callService";
+// E2E 服务懒加载：e2eService 及其密码学依赖不进 App 启动的 import 树——
+// 即使该模块链出问题（如 v0.9.7 白屏事故）也只影响聊天加解密，不拖垮整个应用
+let e2eModulePromise: Promise<typeof import("../services/e2e/e2eService")> | null = null;
+function loadE2e() {
+  if (!e2eModulePromise) {
+    e2eModulePromise = import("../services/e2e/e2eService").catch((e) => {
+      e2eModulePromise = null; // 失败可重试
+      throw e;
+    });
+  }
+  return e2eModulePromise;
+}
 import { EmptyState } from "../components/ui";
 import { Avatar } from "../components/Avatar";
 import { EmojiPicker } from "../components/EmojiPicker";
@@ -41,7 +58,7 @@ import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
 import { colors, spacing, radius, fontSize } from "../theme";
 import { LiquidGlass } from "../components/Glass";
-import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared-protocol";
+import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared";
 import type { RootStackParamList } from "../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ChatRoom">;
@@ -56,10 +73,13 @@ type MessageItem = {
   mentions?: string[];
   deleted?: boolean;
   ts: string;
+  /** 会话内单调 seq（服务端 v0.8.3+；补拉游标） */
+  seq?: number;
 };
 
-/** 相邻去重：WS 回显 + 乐观追加会产生相同消息（如群聊/agent 会话里自己的发言），按 content + role 合并 */
+/** 追加消息：按 id 精确去重（WS 回显/乐观追加/补拉合并），相邻同 content+role 兜底合并 */
 function appendMessage(list: MessageItem[], msg: MessageItem): MessageItem[] {
+  if (msg.id && list.some((m) => m.id === msg.id)) return list;
   const last = list[list.length - 1];
   if (last && last.content === msg.content && last.role === msg.role) return list;
   const next = [...list, msg];
@@ -249,6 +269,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     return items;
   }, [conv, usersById, agentsById, meId]);
 
+  // E2E 标记：1:1 用户会话且已知对方 userId 时启用加密/解密
+  const e2ePeer = useMemo(() => callPeer(conv), [conv, usersById, meId]);
+
   // @提及：输入框输入时检测 @，显示/隐藏 picker，支持按名称过滤；同时保存草稿
   const onInputChange = useCallback((text: string) => {
     setInputText(text);
@@ -331,8 +354,28 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       api.getMe(),
     ]);
     if (histRes.data) {
+      // E2E 解密：1:1 用户会话中，仅对端消息可解密（自己发的密文无对应私钥，保持本地版本）
+      const rawMsgs = histRes.data.messages;
+      const isE2e = !!e2ePeer;
+      let decryptedMsgs = rawMsgs;
+      if (isE2e) {
+        try {
+          const { decryptFrom } = await loadE2e();
+          decryptedMsgs = await Promise.all(
+            rawMsgs.map(async (m) => {
+              const content =
+                m.role === "assistant" && m.agentId === e2ePeer.userId
+                  ? await decryptFrom(e2ePeer.userId, m.content)
+                  : m.content;
+              return { ...m, content };
+            }),
+          );
+        } catch {
+          /* E2E 模块加载失败：按明文渲染（历史里本就有明文消息） */
+        }
+      }
       setMessages(
-        histRes.data.messages.map((m) => ({
+        decryptedMsgs.map((m) => ({
           id: m.id,
           role: m.role,
           content: m.content,
@@ -342,6 +385,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
           mentions: m.mentions,
           deleted: m.deleted,
           ts: m.ts,
+          seq: m.seq,
         })),
       );
       setHasMore(histRes.data.messages.length >= 20);
@@ -366,9 +410,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
       }
     }
     void api.markConversationRead(convId);
-  }, [convId]);
-
-  // 加载更多消息（滚动到顶部时调用，保持视口位置）
+  }, [convId, e2ePeer]);
   const loadMoreMessages = useCallback(async () => {
     if (loadingMore || !hasMore || messages.length === 0) return;
     setLoadingMore(true);
@@ -415,32 +457,39 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     });
   }, [loadMessages, convId]);
 
-  // WS 实时：新消息推送到当前会话
+  // WS 实时：新消息推送到当前会话（E2E 消息异步解密后追加）
   useEffect(() => {
     const unsub = wsLink.on({
-      onChatMessage: (msg) => {
+      onChatMessage: async (msg) => {
         if (msg.runId === activeRunIdRef.current) {
-          // agent 会话中用户发言会被广播回发送者（agentId="user"），与乐观追加去重；agentId 非 "user" 视为对方消息
           const isSelf = msg.agentId === "user";
+          let content = msg.content;
+          // E2E 解密：仅 1:1 用户会话中来自 peer 的消息（自己发的密文无法解，保持本地版本）
+          if (e2ePeer && !isSelf && msg.agentId === e2ePeer.userId) {
+            try {
+              const { decryptFrom } = await loadE2e();
+              content = await decryptFrom(e2ePeer.userId, msg.content);
+            } catch {}
+          }
           setMessages((prev) =>
             appendMessage(prev, {
-              id: `${msg.agentId}-${Date.now()}`,
+              id: msg.id ?? `${msg.agentId}-${Date.now()}`,
               role: isSelf ? "user" : "assistant",
-              content: msg.content,
+              content,
               agentName: msg.agentId,
               attachment: msg.attachment,
               replyTo: msg.replyTo,
               mentions: msg.mentions,
               ts: new Date().toISOString(),
+              seq: msg.seq,
             }),
           );
-          // 正在看当前会话：收到消息即时重新标记已读（对方实时看到「已读」）
           void api.markConversationRead(convId);
         }
       },
     });
     return unsub;
-  }, [convId]);
+  }, [convId, e2ePeer]);
 
   // 已读回执实时更新：对方读了会话 → 更新已读状态
   useEffect(() => {
@@ -464,44 +513,80 @@ export default function ChatRoomPage({ route, navigation }: Props) {
 
   // 断线重连后增量补拉当前会话新消息（只拉最后一条消息之后的）
   const prevConnRef = useRef(connectionState);
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  /** 增量补拉：有 seq 游标时走服务端裁剪（afterSeq，v0.8.10+）；无游标的旧数据回退时间戳过滤；按 id 去重合并 */
+  const catchupNewMessages = useCallback(async () => {
+    const cur = messagesRef.current;
+    if (cur.length === 0) return;
+    const seqList = cur.map((m) => m.seq).filter((s): s is number => typeof s === "number");
+    const useSeq = seqList.length > 0;
+    const maxSeq = useSeq ? Math.max(...seqList) : undefined;
+    const lastTs = cur[cur.length - 1].ts;
+    try {
+      // 服务端裁剪：只传回 maxSeq 之后的消息（旧服务端忽略参数返回全量，下方过滤兜底）
+      const res = await api.getConversationMessages(convId, undefined, 100, maxSeq);
+      if (res.data) {
+        const filtered = res.data.messages.filter((m) => (useSeq ? (m.seq ?? 0) > (maxSeq ?? 0) : m.ts > lastTs));
+        const e2eMod = e2ePeer ? await loadE2e().catch(() => null) : null;
+        const newMsgs = await Promise.all(
+          filtered.map(async (m) => {
+            let content = m.content;
+            // E2E 解密：仅 1:1 用户会话中来自 peer 的消息
+            if (e2eMod && e2ePeer && m.role === "assistant" && m.agentId === e2ePeer.userId) {
+              try { content = await e2eMod.decryptFrom(e2ePeer.userId, m.content); } catch {}
+            }
+            return {
+              id: m.id,
+              role: m.role,
+              content,
+              agentName: m.agentId,
+              attachment: m.attachment,
+              replyTo: m.replyTo,
+              mentions: m.mentions,
+              deleted: m.deleted,
+              ts: m.ts,
+              seq: m.seq,
+            };
+          }),
+        );
+        if (newMsgs.length > 0) {
+          setMessages((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
+            if (fresh.length === 0) return prev;
+            // 补拉窗口内可能有多条，按 seq/ts 归位排序后合并
+            const merged = [...prev, ...fresh];
+            merged.sort((a, b) => {
+              if (typeof a.seq === "number" && typeof b.seq === "number") return a.seq - b.seq;
+              return a.ts.localeCompare(b.ts);
+            });
+            return merged;
+          });
+        }
+      }
+    } finally {
+      void api.markConversationRead(convId);
+    }
+  }, [convId, e2ePeer]);
+
+  // 连接状态由断转连（socket.io/中继层信号）→ 增量补拉
   useEffect(() => {
     const prev = prevConnRef.current;
     prevConnRef.current = connectionState;
     if (connectionState === "connected" && prev !== "connected") {
-      // 增量拉取：用最后一条消息的时间戳作为 before 游标
-      const lastTs = messages.length > 0 ? messages[messages.length - 1].ts : undefined;
-      if (lastTs) {
-        void (async () => {
-          const res = await api.getConversationMessages(convId, undefined, 100);
-          if (res.data) {
-            const newMsgs = res.data.messages
-              .filter((m) => m.ts > lastTs)
-              .map((m) => ({
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                agentName: m.agentId,
-                attachment: m.attachment,
-                replyTo: m.replyTo,
-                mentions: m.mentions,
-                deleted: m.deleted,
-                ts: m.ts,
-              }));
-            if (newMsgs.length > 0) {
-              setMessages((prev) => {
-                const existingIds = new Set(prev.map((m) => m.id));
-                const fresh = newMsgs.filter((m) => !existingIds.has(m.id));
-                return fresh.length > 0 ? [...prev, ...fresh] : prev;
-              });
-            }
-          }
-          void api.markConversationRead(convId);
-        })();
-      } else {
-        void loadMessages();
-      }
+      if (messagesRef.current.length > 0) void catchupNewMessages();
+      else void loadMessages();
     }
-  }, [connectionState, loadMessages, convId, messages]);
+  }, [connectionState, catchupNewMessages, loadMessages]);
+
+  // WS 层（wsLink）重连成功 → 同样增量补拉。
+  // 云端模式下 handleWsState 不回写 deviceStore.connectionState，
+  // 仅靠上面的状态监听会漏掉「WS 断了但中继还连着」的窗口。
+  useEffect(() => wsLink.onResync(() => { void catchupNewMessages(); }), [catchupNewMessages]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -524,7 +609,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     lastSendRef.current = { content: text, ts: Date.now() };
     setIsSending(true);
     setSendError(null);
-    const tempId = `u-${Date.now()}`;
+    // 临时 ID 同时作为 clientMsgId：服务端以它幂等入库，WS 回显带同一 ID → 按 id 精确去重
+    const tempId = `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const mentions = parseMentions(text);
     // 乐观追加（临时 ID）
     setMessages((prev) =>
@@ -544,16 +630,29 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     setShowMentionPicker(false);
     setTimeout(() => inputRef.current?.focus(), 80);
 
+    // E2E 加密：1:1 用户会话纯文字消息（无附件）且双方均已注册时加密；失败回退明文
+    let wireContent = text;
+    if (e2ePeer && text && !draftAttachment) {
+      try {
+        const { encryptFor } = await loadE2e();
+        const encrypted = await encryptFor(e2ePeer.userId, text);
+        if (encrypted) wireContent = encrypted;
+      } catch {
+        /* 加密失败不中断发送：灰度共存，明文送达 */
+      }
+    }
+
     // 重试逻辑：最多 3 次，间隔递增
     let lastError: string | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const res = await api.sendConversationMessage(
           convId,
-          text,
+          wireContent,
           draftAttachment ?? undefined,
           quoting ?? undefined,
           mentions.length > 0 ? mentions : undefined,
+          tempId,
         );
         if (res.error) {
           lastError = res.error;
@@ -576,7 +675,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     // 3 次都失败
     setSendError(lastError || "发送失败，请重试");
     setIsSending(false);
-  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages, parseMentions]);
+  }, [inputText, convId, draftAttachment, quoting, isConnected, isSending, uploading, loadMessages, parseMentions, e2ePeer]);
 
   // 撤回消息（长按自己的消息触发）
   const recallMessage = useCallback(
@@ -901,6 +1000,9 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     );
   };
 
+  // 消息气泡布局转场弹簧（顶层调用 hooks；系统减弱动态时为 undefined）
+  const bubbleLayoutSpring = useLayoutSpringGentle();
+
   const renderMessage = ({ item }: { item: MessageItem }) => {
     const isUser = isMyMessage(item);
     const isGroup = conv && !conv.runId.startsWith("conv_");
@@ -917,8 +1019,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     }
     const senderName = item.agentName ? resolveSenderName(item.agentName) : "";
     const senderAvatar = item.agentName ? usersById.get(item.agentName)?.avatarUrl : undefined;
+    // Bubble/Message 分层（对齐桌面 v0.8.15）：variant+tint 在此算好传给表面样式
+    const isDirectAgent = !!conv && !conv.runId.startsWith("conv_") && !isGroup;
+    const { variant, tint } = bubbleVariantOf(isUser, item.agentName ?? "", isDirectAgent, item.role);
+    const bs = bubbleStyles(variant, tint);
     return (
-      <View style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
+      <Animated.View layout={bubbleLayoutSpring} style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
         {/* 多选模式：点击选中/取消 */}
         {selectMode && (
           <TouchableOpacity onPress={() => toggleSelect(item.id)} style={styles.selectCheck} hitSlop={8}>
@@ -929,11 +1035,11 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             />
           </TouchableOpacity>
         )}
-        {!isUser && (
+        {!isUser && variant !== "ai-ghost" && (
           <Avatar name={senderName} avatarUrl={senderAvatar} size={32} />
         )}
         <TouchableOpacity
-          style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}
+          style={[styles.bubble, bs.surface]}
           activeOpacity={0.6}
           delayLongPress={350}
           onLongPress={() => setMenuMsg(item)}
@@ -950,12 +1056,12 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                   </Text>
                 </View>
               )}
-              {!isUser && item.agentName && (
-                <Text style={styles.bubbleAgentName}>{resolveSenderName(item.agentName)}</Text>
+              {!isUser && variant !== "ai-ghost" && item.agentName && (
+                <Text style={[styles.bubbleAgentName, bs.nameText]}>{resolveSenderName(item.agentName)}</Text>
               )}
               {item.attachment && renderAttachment(item.attachment, isUser, item.content)}
               {!!item.content && (
-                <Text style={[styles.bubbleText, isUser && styles.bubbleTextUser]}>
+                <Text style={[styles.bubbleText, bs.text]}>
                   {item.content.split(/(@[\p{L}\p{N}_]{1,20})/gu).map((part, i) =>
                     /^@[\p{L}\p{N}_]{1,20}$/u.test(part) ? (
                       <Text key={i} style={[styles.mentionText, isUser && styles.mentionTextUser]}>{part}</Text>
@@ -978,7 +1084,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             ) : null}
           </View>
         </TouchableOpacity>
-      </View>
+      </Animated.View>
     );
   };
 
@@ -1108,7 +1214,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         </View>
       )}
 
-      {/* 「+」扩展栏：语音通话 / 相册 / 视频 / 文件 */}
+      {/* 「+」扩展栏：语音通话 / 视频通话 / 相册 / 视频 / 文件 */}
       {showExtend && (
         <View style={styles.extendBar}>
           {canSendAttachment && (
@@ -1124,6 +1230,21 @@ export default function ChatRoomPage({ route, navigation }: Props) {
                 <Ionicons name="call" size={24} color={colors.success} />
               </View>
               <Text style={styles.extendLabel}>语音通话</Text>
+            </TouchableOpacity>
+          )}
+          {canSendAttachment && (
+            <TouchableOpacity
+              style={styles.extendItem}
+              onPress={() => {
+                const peer = callPeer(conv);
+                if (peer) void startCall(peer, { video: true });
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.extendIcon}>
+                <Ionicons name="videocam" size={24} color={colors.success} />
+              </View>
+              <Text style={styles.extendLabel}>视频通话</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={styles.extendItem} onPress={pickImage} disabled={!canSendAttachment || uploading || isSending} activeOpacity={0.7}>
@@ -1164,16 +1285,18 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         />
       )}
 
-      {/* 输入栏 */}
-      <View style={[styles.inputBar, { paddingBottom: keyboardHeight + spacing.md }]}>
-        <TouchableOpacity
-          style={styles.emojiBtn}
-          onPress={() => { setShowEmoji((v) => !v); if (showExtend) setShowExtend(false); }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name={showEmoji ? "close-circle" : "happy-outline"} size={24} color={showEmoji ? colors.primary : colors.text} />
-        </TouchableOpacity>
-        {showVoiceRecorder ? (
+      {/* 输入栏 —— 玻璃浮层（iOS26+ 原生液态玻璃；Android/其他 半透明浮面。
+          不用 BlurTargetView 包裹模式：与键盘动态 bottom 避让叠加会反复重建模糊纹理） */}
+      <GlassSurface radius={radius.xl} intensity="bar" fallback={Platform.OS !== "ios"} style={[styles.inputDock, { bottom: keyboardHeight }]}>
+        <View style={styles.inputBar}>
+          <TouchableOpacity
+            style={styles.emojiBtn}
+            onPress={() => { setShowEmoji((v) => !v); if (showExtend) setShowExtend(false); }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name={showEmoji ? "close-circle" : "happy-outline"} size={24} color={showEmoji ? colors.primary : colors.text} />
+          </TouchableOpacity>
+          {showVoiceRecorder ? (
           /* 按住说话 */
           <VoiceRecorder
             onSend={(url, dur) => {
@@ -1230,7 +1353,8 @@ export default function ChatRoomPage({ route, navigation }: Props) {
         >
           <Ionicons name={showVoiceRecorder ? "keypad" : "mic"} size={24} color={showVoiceRecorder ? colors.primary : colors.text} />
         </TouchableOpacity>
-      </View>
+        </View>
+      </GlassSurface>
 
       {/* @提及选择列表（输入框上方弹出） */}
       {showMentionPicker && mentionableParticipants.length > 0 && (
@@ -1576,14 +1700,16 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   draftName: { color: colors.textMuted, fontSize: fontSize.sm, flex: 1 },
+  inputDock: {
+    position: "absolute",
+    left: spacing.sm,
+    right: spacing.sm,
+  },
   inputBar: {
     flexDirection: "row",
     alignItems: "flex-end",
     padding: spacing.sm + 2,
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
     gap: spacing.xs,
   },
   attachBtn: { width: 36, height: 40, alignItems: "center", justifyContent: "center" },
