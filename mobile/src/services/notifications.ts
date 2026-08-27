@@ -35,33 +35,44 @@ function previewOf(msg: ChatWsMessage): string {
 
 /** 注册推送 token：获取 expo push token 并 POST 到服务端 */
 async function registerPushToken(): Promise<void> {
-  if (!Device.isDevice) return; // 模拟器不注册
+  if (!Device.isDevice) return;
 
-  const { status } = await Notifications.getPermissionsAsync();
-  if (status !== "granted") {
-    await Notifications.requestPermissionsAsync();
+  const { status: existingStatus } = await Notifications.getPermissionsAsync();
+  let finalStatus = existingStatus;
+  if (existingStatus !== "granted") {
+    const { status } = await Notifications.requestPermissionsAsync();
+    finalStatus = status;
   }
-
-  const { status: finalStatus } = await Notifications.getPermissionsAsync();
   if (finalStatus !== "granted") return;
 
-  const tokenData = await Notifications.getExpoPushTokenAsync();
-  const pushToken = tokenData.data;
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("default", {
+      name: "default",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#FF231F7C",
+    });
+  }
 
-  // POST 到服务端（connectedDevice 不可用时跳过）
+  const token = (
+    await Notifications.getExpoPushTokenAsync({
+      projectId: "51970ac4-af3c-4345-bed2-b1ac8bee96bb",
+    })
+  ).data;
+
+  // 注册到服务器
   const { connectedDevice } = useDeviceStore.getState();
   if (!connectedDevice) return;
   const baseUrl = `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
-  const deviceId = connectedDevice.id;
-  try {
-    await fetch(`${baseUrl}/api/devices/push-token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId, token: pushToken, platform: Platform.OS }),
-    });
-  } catch {
-    /* token 注册失败不影响主流程 */
-  }
+  await fetch(`${baseUrl}/api/devices/push-token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      deviceId: Device.osInternalBuildId || "unknown",
+      token,
+      platform: Platform.OS,
+    }),
+  }).catch(() => {});
 }
 
 /** 初始化通知：推送 token 注册 + Android channel + 全局 WS 监听 + 通知点击处理 */
@@ -75,17 +86,15 @@ export function initNotifications(): void {
     sound: null,
   }).catch(() => {});
 
-  // 注册推送 token
+  // 推送 token 注册
   void registerPushToken();
 
   // 通知点击处理：跳转到对应会话
   Notifications.addNotificationResponseListener((response) => {
     const convId = response.notification.request.content.data?.convId;
     if (convId) {
-      // 导航由 App.tsx 监听处理（避免循环依赖）
       const { lastActiveConvId } = useUnreadStore.getState();
       if (lastActiveConvId !== convId) {
-        // 触发导航（通过 WS 回调或其他机制）
         useUnreadStore.getState().setLastActiveConvId(convId);
       }
     }
