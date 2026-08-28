@@ -57,15 +57,4 @@ TencentDB-Agent-Memory/
 # reference IM codebases and scratch
 IM/
 image/
-
-# 本地部署/运维脚本与真实配置（含敏感信息，绝不入仓库 —— 见隐私约定）
-/*.py
-/ensemble-cloud/start.local.bat
-
-# 变体目录的 packages 拷贝已废弃（v0.8.2 起统一从 desktop/ 启动原生版）。
-# 保留磁盘副本仅为兼容，不再入库。如确认无需可整目录删除。
-ensemble-local/packages/
-ensemble-cloud/packages/
-
-# electron-builder 产物
-release/
+*.docx

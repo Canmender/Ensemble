@@ -2,549 +2,88 @@
 
 合鸣（Ensemble）多 Agent 协作平台的版本更新记录。
 
-## v0.8.32 (2026-08-24) — P0 登录修复：云端请求改走主进程代理
-
-用户反馈云端版无法登录（"网络连接问题"）。CDP 探针逐层定位：renderer 的跨源
-fetch 被 Electron 43 的 webRequest/CSP 层拦截——connect-src 白名单无论具体 host
-还是协议通配都拦（同源正常），主进程 net.fetch 不受此限。
-
-- **cloudFetch IPC 代理**：主进程 net.fetch 转发 renderer 的云端 REST 请求
-  （方法白名单+30s 超时）；preload 暴露 window.desktop.cloudFetch
-- **统一出口 cloudHttp.ts**：api 客户端/auth 登录登出/注册页的跨源请求全部
-  改走代理；浏览器版无桌面桥自动回退直连（依赖服务端 CORS）
-- CSP connect-src 同步改为协议通配（http:/https:/ws:）——白名单形态已证明无效，
-  协议级放行对桌面客户端语义合理（自建服务器地址不固定）
-
-验收（CDP 在真实打包应用页面上下文实测）：settings 注入 ✓ → 桥存在 ✓ →
-经代理的登录请求到达云端并返回预期响应 ✓。全新环境安装→登录链路全程无 CSP/
-webRequest 拦截点。
-
-**版本**: desktop 0.8.31 → 0.8.32
-
-## v0.8.31 (2026-08-24) — 云端版开箱即连：server.config.js 打进安装包
-
-用户反馈：云端版应装好打开就默认连服务器、直接见登录界面。根因：extraResources
-没打 server.config.js 且仓库无此文件（gitignored 两份式）——干净环境打出的包
-首启 cloudHost 为空，用户必须手填。
-
-- **ensure-server-config.mjs**：打包前置脚本——已有配置保留；缺失时从构建机
-  gitignored .env 读 CLOUD_HOST 生成本地文件（真实地址不进 git 只进产物；
-  来源优先级 环境变量→检出向上找 .env→主检出 .env）；解析不到报错退出
-  （宁可构建失败不可打出坏包）
-- electron-builder.cloud.yml extraResources 加 server.config.js；
-  package:cloud 脚本串上前置
-- 验证：模拟全新安装（清 settings.json），首启 settings API 即返回
-  cloudHost=生产地址 → 直接见登录页 ✓
-
-**版本**: desktop 0.8.30 → 0.8.31
-
-## v0.8.30 (2026-08-24) — 插件列表端点透传 settings（manifest 即 UI 断点修复）
-
-移动端做「功能」Tab 时发现 v0.8.25 遗留缺口：GET /api/users/me/plugins 列表端点
-走 listCandidates()，该路从未透传 manifest.settings（v0.8.25 只修了 listForUser
-已启用投影那条）——两端配置按钮点了都是空表单。
-
-- 修复取自移动端 3e84720（审查认可）：settings: enabled.get(m.id)?.settings ?? m.settings
-  （已启用用实例投影、未启用回退候选 manifest，两态覆盖）
-- 按云端唯一测试环境共识：修完直接部署生产
-
-验证: typecheck 0错; 188 测试全过
-
-**版本**: desktop 0.8.29 → 0.8.30
-
-## v0.8.29 (2026-08-24) — 「功能」页：插件从设置 tab 升级为一等公民导航
-
-用户新产品决策：插件的扩展内容单独一个页面罗列，左侧导航栏命名「功能」。
-
-- **导航项**：NAV_ITEMS 在「记忆」与「Token用量」之间加 { to: "/plugins", label: "功能", icon: Puzzle }；
-  路由 /plugins 双布局分支注册（懒加载分包）
-- **PluginsPage**：Bento 卡片网格（sm:2列/lg:3列自适应，名称/描述/版本/定时标记/
-  启停开关/manifest.settings 自动渲染的配置表单）——从 PluginsPanel 迁移并舒展，
-  旧组件文件删除；底部预留 U5 市场入口挂载点
-- **本地模式引导态**：「登录后可用 · 功能由你自定义」+ 前往登录按钮
-- **设置页插件 tab 移除**：避免两处维护（tabs 数组/渲染分支/state 类型/imports 全清）
-
-验收: typecheck 0错; web/desktop build 通过; 云端版冒烟 0 错误
-
-**版本**: desktop 0.8.28 → 0.8.29
-
-## v0.8.26 (2026-08-23) — 卡片动作 endpoint 契约修正（双端联调前置）
-
-移动端核对 curl 基准时发现 web 动作 URL 双前缀：poll 卡片的 endpoint 带
-"/actions/vote"，而 web 拼接端已含 /actions 段 → 实际请求 /actions/actions/vote。
-
-- **采纳单一定义**：endpoint 相对插件 actions 根、形如 "/vote"、勿带 /actions 前缀——
-  poll buildCard 修正；shared 与 web 两处 CardAction 类型注释补契约说明
-- 排查其余插件动作声明点：仅 poll 使用卡片 actions，无同病
-
-**版本**: desktop 0.8.25 → 0.8.26
-
-## v0.8.25 (2026-08-23) — manifest 即 UI：settings schema 自动渲染（CONFIG_FIELDS 演进项清偿）
-
-- **manifest.settings 字段声明**：zod schema（key/label/placeholder/type），注册时
-  解析补默认值（PluginManifest 声明侧可选 / ResolvedManifest 解析后必填两态分离）
-- **listForUser 透传 settings** → web PluginsPanel 按 manifest 自动渲染表单，
-  手写 CONFIG_FIELDS 表删除——插件新增配置项零前端改动
-- **联调基准**：scripts/poll-curl-demo.sh（token 获取→启用→create→vote 全流程
-  curl 可复现，双端对帧用）
-- daily-reminder manifest 补 settings 声明；timer 闸门测试适配单插件上限 5
-
-验收: typecheck 0 错; 187 测试全过; web/desktop build 通过
-
-**版本**: desktop 0.8.24 → 0.8.25
-
-## v0.8.24 (2026-08-23) — U1 卡片协议 + poll 投票插件 + web 渲染
-
-用户主权插件体系第一个完整闭环（发起→渲染→点击→计票→刷新）：
-
-- **卡片协议定稿**（shared/types/plugin-card.ts，双端契约）：PluginCardPayload/
-  CardAction/PollCardState 类型 + isPluginCard 守卫；MessageAttachment 加
-  "plugin-card" 变体内联传输；未识别 cardType → 折叠框降级永不白屏（写进类型注释）
-- **poll 插件**：/actions/create 发起投票（发 poll 卡片经 events 总线）、
-  /actions/vote 计票并广播新版本卡片；state 落 PluginUserKv 重启不丢；
-  动作表键含 userId 维度——同名插件各用户的实例互不覆盖
-- **插件动作端点**：POST /api/users/me/plugins/:id/actions/:action 统一分发，
-  实例未启用即拒绝（清单即权限的运行时体现）
-- **web 渲染**：五个内置模板（投票/列表/统计/进度/图文）+ actions 点击转发器 +
-  未识别类型 FallbackCard 折叠框
-
-验收: 187 测试全过（含 isPluginCard 守卫用例）；typecheck/build 全绿；冒烟正常。
-移动端渲染接入由移动会话按 shared 协议并行进行。
-
-**版本**: desktop 0.8.23 → 0.8.24
-
-## v0.8.23 (2026-08-23) — 插件体系收尾：监听器硬超时 + SDK 文档
-
-插件体系进入"可对外交付"状态：
-
-- **waterfallAsync 硬超时**（《性能工程》§三 定死值）：整条监听器链 3s 内未完成
-  即放弃等待走 fallback——防"挂起不返回"的坏插件拖死调用方（chat 管线阻塞类风险）；
-  已启动的监听器无法强杀，只能不再等它
-- **decideAsync 决策链限时变体**：仅对监听器链计时、超时返回"未决策"而非误判——
-  tool/confirm 采用此形态：插件策略 3s 内答完，WS 弹窗 fallback 分钟级不受限
-- **docs/插件开发指南.md**：三章（第一个插件/事件与KV/配置与settings表单），
-  daily-reminder 全文作素材，含 API 速查表与上线检查单；写文档过程完成 API 面
-  终审——接口形态确认无别扭之处
-
-验收: 185 测试全过（新增挂起监听器被砍/decideAsync 超时未决策两用例）
-
-**版本**: desktop 0.8.22 → 0.8.23
-
-## v0.8.22 (2026-08-23) — 插件化重构 R4：per-user 插件 + 管理 API（用户主权模型）
-
-按「云端只做中转，插件是用户资产」宗旨落地：
-
-- **PerUserPluginManager**（plugins/per-user.ts）：内核零改动的 per-user 层——
-  每个 (userId, pluginId) 实例 = PluginHost 里命名空间化插件 user:<uid>:<pid>，
-  隔离语义由管理层保证（规避内核单例假设风险点）
-- **plugin_kv / user_plugins 表**：(userId, pluginId, key) 三元主键 KV +
-  用户启用清单/配置持久化；PluginUserKv 命名空间视图让插件拿不到别人的数据
-- **manifest 校验**：zod schema（id/name/version/scheduled/eventsOn），清单即权限
-- **性能闸门定死**：每用户 timer 上限 20（mount 时校验累计 scheduled）
-- **daily-reminder 官方示范插件**：manifest 声明 scheduled+配置；到点经
-  EventBus.emit("chat/message") 发提醒（吃自己种的菜，与 hub 广播同链路）；
-  下次触发时间落 kv 持久化（重启不丢不重发）
-- **管理 API**：GET /api/users/me/plugins + enable/disable + config 读写
-  （enable=该用户作用域 mount、disable=unmount 命名空间实例，其他用户零感知；
-  setConfig 热重启实例）
-- **设置页「插件」卡片**：候选列表+启停开关+配置表单（本地模式静默空态）
-
-验收: 183 测试全过（含 6 个多租户隔离用例——A disable 后 B 零感知/KV 三元键
-互不可见/timer 闸门拒绝/配置热重启）；web/desktop build 通过；冒烟正常
-
-**版本**: desktop 0.8.21 → 0.8.22
-
-## v0.8.21 (2026-08-23) — 插件化重构 R3：事件总线 + RouterRegistry
-
-按研究任务书在自研内核上完成 engine↔hub 解耦：
-
-- **EventBus**（plugins/events.ts）：内核 waterfall 之上的语义事件封装——
-  chat/message（engine 落库后 emit，hub 挂观察者广播）、device/status（设备上下线，
-  观察者插件写表+定向广播）、tool/confirm（HITL 异步短路瀑布：返回 {approved} 即决策
-  含拒绝、undefined 交下游、异常监听器不中断管线、无人应答 fallback 到 WS 弹窗）
-- **三处接线反转**：engine.broadcastChatMessage 尾部直调 → events.emit（保留直调兜底
-  渐进迁移）；hub.onDeviceStatus 回调体迁入 device-status-recorder 插件；
-  wsAskConfirm 走 requestToolConfirm 瀑布——插件可先于 UI 决策（自动审批策略挂载点）
-- **RouterRegistry**（plugins/routers.ts）：21 条内置路由改注册制按序统一挂载，
-  契约不变；ctx.routerRegistry 开放给插件挂子路由
-- **插件事件权限面**：监听白名单前缀（chat/ run/ device/），emit 强制插件 id 命名空间
-- **kernel.waterfallAsync**：新增异步瀑布（分钟级等待场景），短路/委托/容错语义与同步版一致
-
-验收: 177 测试全过（含 8 个 R3 验收用例）；云端版冒烟 WS 连接正常
-
-**版本**: desktop 0.8.20 → 0.8.21
-
-## v0.8.20 (2026-08-23) — 插件化重构 R0+R2：参数名回归锁定 + 定时器 effect 化
-
-按研究会话《插件化重构实施手册》推进，载体为 v0.8.16 自研内核（不引入 cordis 本体，整合评估见会话记录）：
-
-- **R0 回归锁定**：GET /api/runs/:id/events 的 afterSeq/since 双参数兼容此前只有实现无测试——
-  新增 3 个 HTTP 级用例钉死（afterSeq 裁剪 / since 等价 / 无参全量），防止未来重构回退
-- **R2⑤ 维护定时器 effect 化**：context.ts 手动 setInterval+clearInterval 迁入
-  maintenancePlugin——注册即启动、disposer 清理，日志可观测（scheduled/cleared）；
-  后续常驻服务统一此模式
-- **dispose 链更新**：插件经内核逆序清理，手动 clearInterval 退役
-
-**与手册的差异说明**：R1"引入 cordis"不采纳——自研内核已覆盖四大思想且上线验证；
-R2①-④ Service 化暂缓（ConfigManager/Store/WsHub/Engine 的类改造收益需配合 epoch
-自动传播才完整，显式装配下手动 reload 更诚实）。触发条件：插件实例 >500 或出现
-配置热更新需求时重评。
-
-**版本**: desktop 0.8.19 → 0.8.20
-
-## v0.8.19 (2026-08-23) — 头像全链路修复 + 归档收敛为智能体专属
-
-**头像（深挖全部展示位，零硬编码）**
-- **Avatar 组件内建 URL 解析**：服务端存相对路径 /uploads/avatars/...，multi 模式下
-  页面 origin ≠ 云端 API origin 导致图片 404——组件内 useResolvedAvatarUrl 按
-  cloudBase 拼绝对地址（同步兜底+异步刷新），所有调用点自动修复
-- **消息气泡补发送者头像**：用户会话取对方真实头像，群聊按发送者首字色块，
-  agent 会话取 agent 名——此前消息区只有文字无头像
-- 覆盖位：侧栏/联系人列表/消息气泡/FriendsDialog/GroupSettingsDialog 成员列表/
-  ProfilePage 大头像——全部经 Avatar 组件单点修复
-
-**归档语义收敛**
-- 删除 ChatPage 残留的归档死代码（ContactItem onArchive prop + archiveContact +
-  四处传参）——普通 IM（用户/群聊）彻底无归档概念
-- 归档 = 智能体协作沉淀，入口即侧栏「归档处」（TasksPage 的 chat Run 列表），
-  agent 对话历史天然在此可查
-
-**版本**: desktop 0.8.18 → 0.8.19
-
-## v0.8.19 (2026-08-23) — 联系人头像全链路 + 归档收敛为智能体专属
-
-用户反馈头像展示问题，深挖后修复数据断点 + 收敛归档语义：
-
-### 头像
-- **根因**：服务端 /auth/users 一直返回 avatarUrl，但前端 UserInfo 接口没声明、
-  ChatPage 联系人列表/聊天头部硬编码 lucide 图标——自定义头像从未被展示
-- **ContactAvatar 统一渲染**：user=真实头像优先(色块兜底)/group=群名色块/
-  agent+device=类型图标（无自定义头像概念）；联系人列表与聊天头部两处接入，
-  不再硬编码任何具体用户/群聊
-- loadContacts 数据流补 avatarUrl 字段
-
-### 归档语义收敛
-- 归档按钮仅智能体会话显示——普通 IM（用户私聊/群聊）不提供归档；
-  归档=沉淀 agent 协作结论，不是 IM 会话管理操作。服务端 API 不变（agent 归档仍用）
-
-**版本**: desktop 0.8.18 → 0.8.19
-
-## v0.9.9 (2026-08-23) — 修复 v0.9.7/v0.9.8 白屏
-
-- **根因**：v0.9.7 引入的 `@peculiar/webcrypto` 在**模块加载期**调用 `node:crypto.getCiphers()` 做 AES 探测；Metro 把 `node:crypto` 映射为空模块（打包必需），导致该模块一加载就抛 `crypto.getCiphers is not a function`。它位于 App 的 import 树上（ChatRoomPage → e2eService），模块树加载失败 → 整个应用白屏。
-- **修复**：自写 MinimalWebCrypto（`src/services/e2e/minimalCrypto.ts`）——libsignal 所需四原语（getRandomValues / AES-CBC / HMAC-SHA256 / HKDF）用 audited 纯 JS 库 @noble/ciphers + @noble/hashes 实现，零 node:crypto 依赖；移除 @peculiar/webcrypto。
-- **验证**：模拟 RN 环境（禁用 node:crypto）下 libsignal 全链路 X3DH + 三轮棘轮通过；AES/HMAC/HKDF 与原生 WebCrypto 双向交叉验证线格式一致（桌面端互通不受影响）。
-- 教训：node 实测必须复刻 Metro 的模块替换行为（空模块/不可用），否则测的是错误环境。
-
-**版本**：mobile 0.9.8 → 0.9.9，versionCode 108 → 109
-
-## v0.8.18 (2026-08-23) — 「我的」页面退出登录 + 登出态修复
-
-用户反馈「登录界面没了」：实为保持登录态正常行为 + 无退出入口形成死锁，另发现登出 bug：
-
-- **ProfilePage 退出登录**：「我的」页底部新增退出登录卡片（destructive 红色，
-  两段式确认），明确标注为切换账号入口；确认文案说明本机 E2E 密钥保留、
-  重新登录后历史消息仍可解密
-- **修 logout 模式 bug**：此前登出后 auth 状态硬编码设回 "local"——云端版用户
-  登出会被当本地模式放行进主界面、再也回不到登录页；现按运行模式正确回到
-  guest（multi → /login）
-- 侧栏小 LogOut 图标行为随 auth.tsx 一并修正
-
-**版本**: desktop 0.8.17 → 0.8.18
-
-## v0.8.17 (2026-08-23) — 桌面端自动更新
-
-自研轻量方案（对齐移动端 UpdateManager 行为），不走 GitHub Releases（本网络环境持续不可达）：
-
-- **通道复用**：云端服务器 GET /api/app-version/desktop（apkDir/desktop.json + setup.exe 同目录，
-  部署时写入元数据即可），与移动端 APK 更新同一套基础设施
-- **主进程 updater.ts**：启动 30s 后首检 + 每 4h；仅云端版启用（本地版离线无更新源）；
-  net.fetch 走系统代理，无更新源/网络失败静默降级
-- **下载安装**：流式写临时目录（backpressure 处理）→ size 一致跳过重下（断点续传语义）→
-  拉起 NSIS 安装器 → 本进程退出让出句柄
-- **渲染层 UpdateBanner**：顶部提示条（版本号+说明+一键升级），下载中显示百分比；
-  可关闭稍后提醒
-- **localSettings.ts**：settings.json 主进程只读视图提取共享（window.ts/updater 共用）
-
-部署配套：apkDir 放 desktop.json（{"version":"0.8.x","url":"/apk/合鸣-云端版-0.8.x-setup.exe","size":N}）
-+ 安装包文件即完成发布。
-
-验证: typecheck 0错; web/desktop build 通过; 云端版冒烟跨过检查点无异常
-
-**版本**: desktop 0.8.16 → 0.8.17
-
-## v0.8.16 (2026-08-23) — 插件化 Agent 内核（Cordis 思想落地）
-
-按《Cordis插件系统调研》三篇（概念/源码/生态）落地，自研轻量内核（~230 行）而非引入 cordis 本体：
-
-- **plugins/kernel.ts 四大核心思想**：
-  - 服务容器 + key 发现：provide(name, value) 注册，get() fail-closed（未注册即抛错）
-  - inject 声明依赖：必需服务缺失不安装；服务被移除时级联卸载依赖方
-  - effect 可逆副作用：disposer 逆序清理；**install 失败自动回滚**（cordis 测试钉死的契约）
-  - waterfall 管线：环绕中间件语义（next() 委托下游 / 不调用即短路），供消息管线扩展
-- **工具系统首个消费者**（plugins/tools.ts）：RAG 工具迁入插件形态——配置变更可
-  unregister+register 干净重装，索引资源经 effect 自动清理；内置工具注册同步改造为
-  effect 登记（后续第三方工具包 = 一个 EnsemblePlugin）
-- **有意简化**（与 cordis 差异）：无 Proxy 魔法/无 fiber-epoch 等待唤醒/无 isolate 多租户——
-  显式异步装配场景下这些是过度设计，需要时再加
-
-验证: server typecheck 通过; 166 测试全过（含 10 个内核契约测试钉住 fail-closed/
-回滚/逆序清理/级联卸载/waterfall 语义）; 本地版冒烟 0 错误
-
-**版本**: desktop 0.8.15 → 0.8.16
-
-## v0.9.8 (2026-08-22) — 聊天补拉服务端裁剪
-
-配合服务端 v0.8.10（历史接口 `?afterSeq=N`）：
-
-- 断线重连的消息增量补拉改为传 `afterSeq` 游标，服务端只返回新消息——弱网/长会话下不再全量拉取；旧服务端忽略该参数，客户端本地过滤兜底，完全向后兼容。
-
-**版本**：mobile 0.9.7 → 0.9.8，versionCode 107 → 108
-
-## v0.8.10 (2026-08-22) — 聊天历史 afterSeq 增量补拉（服务端裁剪）
-
-- `listChatMessages` 新增 afterSeq 参数：SQL 层 `COALESCE(seq, 0) > N` 裁剪，
-  非法值（NaN/负数）安全降级为全量。
-- 三个历史端点透传 `?afterSeq=`：GET /api/chat/:runId/messages、
-  /api/chat/history/:runId、/api/conversations/:id/messages——客户端凭本地
-  seq 游标只拉增量，长会话不再全量传输。与 userId 过滤正确叠加
-  （无 userId 的共享消息对所有参与者可见）。
-- 配合移动端 wslink seq 游标（v0.9.6 已就绪的消费侧）。
-
-**验证**：server typecheck 通过，157 测试全过（新增游标/降级/叠加用例）。
-
-**版本**：desktop 0.8.9 → 0.8.10
-
-## v0.8.9 (2026-08-22) — 联机收尾：CORS 收紧 + 变体拷贝出库
-
-- **CORS 收紧**：移除「任意 http:// origin 放行」的兜底（安全审计遗留项），
-  改为白名单判定 `isAllowedOrigin()`——本机任意端口（开发用 Vite/8787）+
-  云端自身地址（env.cloudHost）。新增 4 个单元测试覆盖。
-- **变体 packages 拷贝出库**：`ensemble-local/packages/`、`ensemble-cloud/packages/`
-  从 git 移除并 gitignore（约 -400 文件）。v0.8.2 起两版已统一从 `desktop/`
-  启动原生 Electron，双份源码拷贝是纯维护负担（每轮改动要手动同步三处）；
-  变体目录仅保留 start.bat 入口。README 项目结构同步更正。
-
-**版本**：desktop 0.8.8 → 0.8.9
-
-## v0.8.8 (2026-08-22) — E2E 信封 base64 编码修复（双端互通前置）
-
-移动端联调前审查发现信封编码缺陷，桌面端同步修正：
-
-- **问题**：`encryptMessage` 把 libsignal 的 body（binary string）原样塞进 JSON 信封，
-  未按协议 §4 做 base64。与移动端 v0.9.7 的实现不一致，双端互通必然解不开。
-- **修复**：发送 `binToB64(body)`（btoa，body 每 code unit ≤0xFF 可直接编码）、
-  接收 `b64ToBin(env.ct.body)`（atob 还原 binary string）后进 SessionCipher。
-- **自测升级**：e2e-selftest.mjs 新增「base64 信封 + UTF-8 通道往返」步骤
-  （等价 HTTP JSON / SQLite TEXT / WS 的传输编解码），双向链路全部经信封通道验证；
-  另加 code unit ≤0xFF 安全面断言（btoa 前提）。全部通过。
-
-**版本**：desktop 0.8.7 → 0.8.8
-
-## v0.8.7 (2026-08-22) — 联机方向③续：E2E 桌面客户端接线
-
-按 E2E-PROTOCOL.md 完成桌面端加解密全链路：
-
-- **lib/e2e.ts**：libsignal 封装模块——localStorage 协议存储适配器（identity/prekey/
-  signed-prekey/session）、`ensureEnrolled()` 懒注册（IK+SPK+OPK×100，幂等）、
-  capability 缓存（5 分钟 TTL）、`encryptMessage()/decryptMessage()` 信封收发、
-  OPK 余量低于 20 自动补充 100。
-- **ChatPage 接线**：
-  - 发送：1:1 用户私聊且双方已注册密钥 → content 换成加密信封；建会话失败自动
-    回退明文（灰度共存，不阻断）
-  - 接收/历史：渲染层解密缓存（信封 → 明文查表，未命中异步解密回填）；
-    解密失败显示「🔒 无法解密的消息」占位，绝不报错
-  - 进入聊天页触发懒注册（登录用户，静默）
-- **自测脚本 scripts/e2e-selftest.mjs**：Node 下用真实 libsignal+WebCrypto 复刻
-  封装调用序列——X3DH 建会话（PreKeyWhisperMessage type 3）→ 中文往返
-  （WhisperMessage type 1）→ 连续多棘轮步进，全部通过。
-
-**版本**：desktop 0.8.6 → 0.8.7
-
-## v0.8.6 (2026-08-22) — 联机方向①：双安装包（electron-builder）
-
-- **双包并行**：新增 `electron-builder.cloud.yml`，与默认 yml 的差异仅为
-  产品名（`合鸣云端版` vs `合鸣本地版`）与内置 edition 标识（`resources/edition.txt`）。
-  两包可并行安装，桌面图标和 AUMI 独立分组。
-- **安装包自动锁定版本**：主进程 `resolveEdition` 优先级链条新增 `readResourcesEdition()`
-  （打包 app 读 `process.resourcesPath/edition.txt`），双击启动即识别版本，无需 bat 或命令行参数。
-- **`pnpm package:local` / `package:cloud`**：分别出本地版/云端版 NSIS 安装包；
-  旧 `pnpm package` 保留（默认本地版）。
-- **asar + dist-only 打包**：esbuild 已将 server/shared 全量打进 main bundle，
-  安装包仅含 `dist/` + `package.json`，不带 node_modules（node-llama-cpp 为未使用 external）。
-- **产物命名**：`合鸣-本地版-0.8.6-setup.exe` / `合鸣-云端版-0.8.6-setup.exe`。
-
-### 已知限制
-- 本轮因网络环境未能实测 electron-builder 产物下载（winCodeSign/nsis 下载阻塞），
-  配置参照 electron-builder 文档 + 官方推荐值；在可正常访问 GitHub 的环境首次打包
-  约需下载 ~200MB 工具链（一次性）。
-
-**版本**：desktop 0.8.5 → 0.8.6
-
-## v0.8.5 (2026-08-22) — 联机方向③：E2E 加密（协议规范 + 服务端密钥目录）
-
-依据《IM端到端加密协议调研》选型（X3DH + Double Ratchet），本轮交付协议层：
-
-- **E2E-PROTOCOL.md**：完整协议规范（desktop/docs/E2E-PROTOCOL.md）——
-  两端实现依据。v1 范围：1:1 用户私聊全加密；群聊/附件暂明文（v1.1/v2）。
-  两端统一使用 @privacyresearch/libsignal-protocol-typescript 保证线格式兼容；
-  私钥永不离开设备（桌面 localStorage→DPAPI 加固路线，移动 Android Keystore）。
-- **服务端密钥目录 API**（`/api/e2e/*`，服务器只见公钥）：
-  - PUT /register：注册/轮换身份密钥包（IK + SPK 签名 + OPK 批量）
-  - GET /bundle/:userId：取对端密钥包，**一次性预密钥取走即删**
-  - POST /opks：补充一次性预密钥
-  - GET /capability/:userId：是否已注册（双方注册才加密，灰度共存）
-- **存储**：新表 e2e_identities / e2e_one_time_prekeys（CREATE IF NOT EXISTS，
-  旧库无迁移负担）；base64 字符集校验、数量上限等输入防御。
-
-**验证**：152 个服务端测试全过（新增 6 个 HTTP 级用例覆盖注册校验/bundle 消费/
-OPK 补充/capability）。桌面端客户端加解密接线与移动端实现按协议文档进行中。
-
-**版本**：desktop 0.8.4 → 0.8.5
-
-## v0.8.4 (2026-08-22) — 联机方向②：云端版首启引导
-
-云端版首次启动不再直接抛出登录页，改为三步连接向导：
-
-- **CloudSetupPage**：填写云端地址（host:port）→ 一键测试连通性 → 保存并进入登录。
-  可选展开中继配置（地址 + 密钥，手机遥控用）；保存到云端版独立工作区的 settings。
-- **连通性测试走主进程**：新增 IPC `app:test-cloud-host`，主进程 `net.fetch` 探测
-  `GET http://<host>/api/health`——渲染层 CSP 白名单在窗口创建时固化，新输入的
-  地址不在其中，必须由主进程发起。
-- **App 集成**：multi 模式 guest 态下检测 settings.cloudHost；未配置 → 向导页；
-  已配置 → 正常登录流程。保存后 `clearCloudBase()` 刷新云基址缓存。
-
-### 修复
-- **seq 索引迁移顺序 bug**（v0.8.3 引入）：`idx_chat_run_seq` 原在 INIT_SQL 中创建，
-  旧库此时还没有 seq 列导致启动即崩；已挪到补列迁移之后。已在带数据的真实旧库上
-  冒烟验证自动升级成功。
-
-**版本**：desktop 0.8.3 → 0.8.4
-
-## v0.8.3 (2026-08-22) — 联机方向④：服务端同步/中继稳定性加固
-
-依据《高并发IM服务器架构调研》四项坐实问题，服务端侧全部落地：
-
-- **消息排序改用服务端单调 seq**：`chat_messages` 新增 `seq` 列（会话内单调递增，
-  服务端分配），历史接口按 seq 排序——时间戳不再作排序键（同毫秒不稳定）。
-  旧库自动迁移并按 `(ts, rowid)` 回填存量数据。
-- **幂等投递**：发送消息可携带 `clientMsgId`（POST /api/chat/:runId/messages 与
-  /api/conversations/:id/messages 均支持），服务端 `INSERT OR IGNORE`——超时重发
-  不产生重复消息、不重复推送、不重复计未读；重复命中响应 `duplicate: true`。
-  原 2 秒窗口防重保留为第一道闸。
-- **WS chat.message 事件新增 `id` / `seq` 字段**，客户端可做精确去重与增量游标。
-- **补拉参数名兼容**：GET /api/runs/:id/events 同时接受 `afterSeq` 与移动端历史
-  参数名 `since`（修复调研发现的参数名错配 bug）。
-- **relay-client 三项加固**：内建重连耗尽后转入自愈模式（30s 起步、封顶 5 分钟，
-  长期断网恢复后自动回线上）；服务端主动踢下线时手动重连；重复 connect 先销毁
-  旧 socket 避免双实例竞争。用户主动断开仍保持不自动重连语义。
-
-**验证**：server typecheck 通过；146 个单元测试全过（含新增 seq 分配与幂等用例）。
-移动端侧配套（seq 游标消费、重连补拉、参数对齐）由移动端会话同步交付（72dcb55）。
-
-**版本**：desktop 0.8.2 → 0.8.3
-
-## v0.8.2 (2026-08-22) — 桌面版双工作区完美分离
-
-### 架构调整：告别浏览器版，原生桌面双版本
-- **原生启动**：本地版/云端版均改为直接拉起 Electron 原生窗口（随机端口同源托管），
-  不再经过 tsx+vite 浏览器流程；`合鸣.bat` 与两个变体入口统一走
-  `desktop/launch-desktop.bat`
-- **工作区按版本分区**：userData 分区到 `editions/local` 与 `editions/cloud`——
-  数据库、config、secrets.json、Chromium 存储（登录态/localStorage）全部隔离，
-  彻底解决旧方案同源 localhost:5173 登录态互相污染的问题
-- **两版可同时运行**：单实例锁随 userData 分区作用域，本地版与云端版并存互不干扰
-  （AUMI 亦按版本区分，任务栏分组独立）
-- **版本驱动前端模式**：主进程经 additionalArguments 注入版本号，preload 暴露
-  `window.desktop.edition`；modeOverride 运行时优先——本地版强制 local（免登录），
-  云端版强制 multi（进登录页），同一构建产物两版行为正确
-- **历史数据迁移**：首次以本地版分区启动时，自动迁移旧 userData 根下的
-  config/data/secrets.json；云端版不迁移（业务数据在云端）
-- **无参启动**：沿用上次选择（记录在 edition.txt），默认本地版
-
-### 其他
-- 修复 CSP：connect-src 缺失分号导致 img-src 被吞（冒烟测试日志发现）
-- 新增 `pnpm start:local / start:cloud / dev:local / dev:cloud` 脚本
-- VERSION-MANAGEMENT.md 重写为原生桌面现实（移除过时的软链接/浏览器描述）
-
-### 验证
-- 双版本分别冒烟启动：各自分区目录生成、历史迁移执行、窗口加载、WS 连接正常
-- 两版随机端口（51999 / 12962）互不冲突
-- pnpm -r typecheck 全过
-
-**版本**：desktop 0.8.1 → 0.8.2
-
-## v0.8.1 (2026-08-22) — 修复构建：重建 v0.8.0 未入库源码
-
-### 问题
-v0.8.0 提交时 4 个新源文件未 `git add`（CHANGELOG 记录了功能但代码从未进入任何分支），导致 HEAD 无法编译：
-- `web/src/lib/modeOverride.ts`（构建期强制模式）
-- `web/src/components/AssistantPanel.tsx`（产品助手面板）
-- `web/src/pages/TokenUsagePage.tsx`（Token 用量图表页）
-- `server/src/api/routes/assistant.ts`（产品助手 API）
-
-### 重建内容
-- **modeOverride**：读取 `VITE_FORCE_MODE`（local/multi），云端版/本地版启动时跳过首启模式选择页。
-- **产品助手**：`GET /api/assistant/status` 探测可用性；`POST /api/assistant/ask` 以 chat 模式（maxRounds=1）跑内置助手 agent 一问一答，事件驱动等待回复（60s 超时）。面板含预设问题、加载态、Enter 发送。
-- **Token 用量页**：新增 `GET /api/tokens/stats` 聚合 jobs.usage_json；页面渲染饼图（按 Agent 占比）+ 折线图（按日输入/输出趋势）+ 汇总卡片 + 明细表（recharts，懒加载分包）。
-- **App.tsx**：补 `Monitor` 图标导入（本地模式侧栏）。
-- **根 package.json**：移除引用已删除 `@ensemble/cli` 的 `smoke`/`cli` 脚本；版本 0.8.0 → 0.8.1。
-- 同步以上文件到 `ensemble-local/`、`ensemble-cloud/` 两份运行时拷贝。
-
-### 验证
-- `pnpm -r typecheck` 全过（shared / web / server / desktop）
-- server 145 个单元测试全过
-- web 生产构建通过（TokenUsagePage 懒加载分包 388KB / gzip 111KB）
-
-## v0.9.7 (2026-08-22) — 私聊端到端加密（E2EE Beta）
-
-按 `desktop/docs/E2E-PROTOCOL.md` v1 规范实现的移动端侧：
-
-- **协议**：X3DH 会话建立 + Double Ratchet 棘轮（`@privacyresearch/libsignal-protocol-typescript`，与桌面端同库同线格式）；AES-256-CBC + HMAC-SHA256。
-- **密钥管理**：登录后懒注册（IK/SPK/100 OPK），密钥目录走 `/api/e2e/*`；私钥存 Expo SecureStore（Android Keystore 硬件加密）永不离机；OPK 余量 <20 自动补 100。
-- **收发接入**：1:1 用户会话纯文字消息加密发送；WS 实时、历史加载、重连补拉三路均自动解密；capability 缓存 ≤5 分钟，双方已注册才加密（灰度共存）。
-- **信封格式**：`{"e2e":1,"v":1,"ct":{"type":<1|3>,"body":"<base64>"}}`——libsignal body 是 binary string，base64 编码后过 JSON。
-- **健壮性**：解密失败显示 🔒 占位不崩溃；加密失败回退明文；群聊/附件仍明文（v1 范围外）。
-
-### 关键实现坑（node 实测 8/8 通过后落地）
-- **Buffer 内存池陷阱**：`Buffer.from(s).buffer` 返回内存池（8KB 级），必须 `slice(byteOffset, +byteLength)` 出独立 ArrayBuffer，否则整块池被加密（密文膨胀数百倍且对端无法解密）。
-- **RN 无 WebCrypto**：Hermes 没有 subtle，需 `@peculiar/webcrypto` 纯 JS 实现经 `setWebCrypto()` 注入 libsignal（仅 getRandomValues 不够，AES/HMAC 都走 subtle）。
-
-**版本**：mobile 0.9.6 → 0.9.7，versionCode 106 → 107
-
-## v0.9.6 (2026-08-22) — 重连补拉全量化：事件回填 + 聊天 seq 增量同步
-
-配合服务端 v0.8.3（chat_messages.seq + clientMsgId 幂等）的移动端消费侧：
-
-- **事件级精确回填**：断线重连后按本地 seq 游标调 `getRunEvents(afterSeq)`，按 `{seq, jobId, event}` 三元组归并进对应 job.events（游标=实时已见最大值，严格无重复）；同时兜底刷新 run/job 状态、补进断线期间新建的 job。
-- **聊天增量同步**：WS `chat.message` 携带服务端真实消息 ID 与单调 seq；重连补拉优先按 seq 过滤（无 seq 旧数据回退时间戳），合并后按 seq 排序，不丢消息不错序。
-- **发送幂等**：消息发送携带 clientMsgId（与乐观追加同 ID），弱网 3 次重试不再产生重复消息/重复推送；appendMessage 按 id 精确去重。
-
-**版本**：mobile 0.9.5 → 0.9.6，versionCode 105 → 106
-
-## v0.9.5 (2026-08-22) — 通话质量与体验优化
-
-### 语音/视频通话修复
-- **音频路由**：接入 `react-native-incall-manager`，接通后自动管理听筒/免提与距离传感器灭屏；语音默认听筒、视频默认免提，通话中可一键切换。
-- **回声/降噪**：采集约束显式开启回声消除（AEC）、噪声抑制（NS）、自动增益（AGC）。
-- **降级策略**：视频接听时摄像头权限被拒/设备无摄像头/占用失败，一律自动改为语音接听，不再整通失败。
-- **状态修正**：外呼超时不再误标「未接来电」；未授予麦克风权限给出明确提示。
-- **通话计时**：接通后界面实时显示时长。
-
-### 通话 UI 重做
-- 全面适配刘海/安全区（顶部信息条、底部按钮坞、画中画均动态避让）。
-- 按钮层级重排：挂断为独立红色主行动键；控制键统一圆形图标+标签；接听键绿色放大。
-- 视频远端无画面时显示头像占位与连接提示，替代突兀黑屏。
-
-**版本**：mobile 0.9.4 → 0.9.5，versionCode 104 → 105
-
-## v0.9.4 (2026-08-22) — 移动端视频通话
-- **新增视频通话**：会话页「+」扩展栏新增「视频通话」入口；主叫 offer 携带 `video` 标记，被叫按类型拉起摄像头/麦克风接听。
-- **通话中视频 UI**：远端画面全屏、本端画中画（前置镜像）；控制条支持静音 / 开关摄像头 / 前后摄像头翻转 / 挂断；语音通话同步增加静音键。
-- **健壮性**：摄像头拒绝/不可用自动降级为语音通话；`app.json` 补 CAMERA 权限与 iOS 隐私描述。
-- 顺带修复主干遗留 typecheck 错误：AssistantPage 私有 API 误用、设置页「记忆管理」图标名无效。
-
-**版本**：mobile 发布 0.9.4，versionCode 104（生产线上此前已有未入库的 0.9.3/103，本次从主干源码重建，版本号越过它）
+## v0.9.32 / v0.8.42 (2026-08-29) — 推送通知链路 + P0 修复
+
+### 移动端 (v0.9.25~v0.9.32)
+- **推送通知完整链路**：push_token 存储到服务端 + Expo Push Notification API 发送 + 离线降级
+- **推送 token 注册**：登录后自动获取 Expo Push Token 并上报服务器
+- **通知点击跳转**：推送通知点击后跳转到对应会话页面
+- **P0 问题修复**：4 个关键 bug 修复（消息排序、消息 ID、送达状态、编辑功能）
+
+### 桌面端 (v0.8.38~v0.8.42)
+- **推送服务**：服务端 push_token 存储 + Expo API 发送 + 离线降级
+- **SQLite PRAGMA 优化**：性能调优 + body limit 降级 + 复合索引 + 自动备份脚本
+- **WS 优雅关机**：AppSettings.im.* 配置链 + WebSocket 优雅关闭
+
+---
+
+## v0.9.11~v0.9.24 / v0.8.26~v0.8.37 (2026-08-27~28) — 推送/主题/手势/组织权限/群管理
+
+### 移动端 (v0.9.11~v0.9.24)
+- **推送通知集成**：expo push token 注册 + 通知点击跳转 (v0.9.23)
+- **ChangelogPage 补全**：更新日志页补全 v0.9.12~v0.9.21 缺失版本条目 (v0.9.21~v0.9.22)
+- **GlassCard 三层封装**：消息入场弹簧动画 (v0.9.20)
+- **聊天气泡手势**：左滑引用/右滑转发 (v0.9.19)
+- **暗色模式修复**：agent 气泡可读性 + ai-ghost 辨识度 (v0.9.18)
+- **设备互联 L1-L2**：配对 UI + pairs API (v0.9.17)
+- **消息可靠性 P0**：seq 排序 / MessageID / delivered_at / status / edit (v0.9.16)
+- **curveasm utf-16le 白屏补丁**：patch-package 固化 + 主题烘焙样式全量换肤 (v0.9.14)
+- **「功能」Tab**：用户主权插件移动端主门面 (v0.9.13)
+- **主题快照缓存**：认证接口跳过旧 token (v0.9.12)
+
+### 桌面端 (v0.8.26~v0.8.37)
+- **组织权限 O1**：role 激活 + 部门树 + requireRole + org API (v0.8.37)
+- **Reaction + 存储抽象 + FTS5 搜索** (v0.8.36)
+- **群组管理 P1**：group_members 表 + 角色控制 + 版本号 + 公告 + 搜索 (v0.8.35)
+- **消息可靠性 P0**：status 枚举 + edited_at + delivered_at + 编辑端点 (v0.8.34)
+- **设备互联 L0-L2 服务端**：信封协议 + 配对 API + 补拉日志 (v0.8.33)
+- **P0 云端版登录修复**：跨源请求改走主进程代理 (v0.8.32)
+- **云端版开箱即连**：server.config.js 打包内嵌 (v0.8.31)
+- **插件列表端点补 manifest.settings** (v0.8.30)
+
+---
+
+## v0.9.4~v0.9.10 / v0.8.11~v0.8.25 (2026-08-24~27) — 动态主题/玻璃效果/E2EE/插件化
+
+### 移动端 (v0.9.4~v0.9.10)
+- **动态主题 S2**：三态外观 + 全 App 暗色 + shared 悬空引用修复 (v0.9.10)
+- **插件卡片渲染 U1**：poll 投票卡 + 五模板 + 折叠框降级 (v0.9.11)
+- **E2EE 白屏修复**：@peculiar/webcrypto 换 MinimalWebCrypto（noble 纯 JS）(v0.9.9)
+- **E2EE 模块懒加载**：密码学依赖移出 App 启动 import 树
+- **聊天补拉接 afterSeq**：配合服务端增量补拉 (v0.9.8)
+
+### 桌面端 (v0.8.11~v0.8.25)
+- **设计 token 单源 + Liquid Glass 侧栏 + 会话切换转场** (v0.8.11)
+- **插件化 Agent 内核**：Cordis 思想落地 (v0.8.16)
+- **桌面端自动更新**：自研轻量方案 + 云端存储 + 两包保留策略 (v0.8.17)
+- **安装包瘦身**：219MB → 101MB + 版本号对齐 (v0.8.16)
+- **R4 per-user 插件体系 + 管理 API**：用户主权模型 (v0.8.22)
+- **R3 事件总线 + RouterRegistry**：engine/hub 解耦 (v0.8.21)
+- **R0+R2 插件化重构**：回归锁定 + 定时器 effect 化 (v0.8.20)
+- **U1 卡片协议 + poll 投票插件 + web 渲染** (v0.8.24)
+- **manifest settings 自动渲染表单** (v0.8.25)
+
+---
+
+## v0.8.1~v0.8.10 / v0.9.0~v0.9.3 (2026-08-21~24) — 玻璃效果/UI现代化/手势交互
+
+### 移动端 (v0.9.0~v0.9.3)
+- **玄墨瓷雅 6 色设计系统** + 内部版本号从 native 读取 (v0.8.2)
+- **Liquid Glass 液态玻璃组件** + 浮动 3D Tab Dock (v0.8.2)
+- **real Liquid Glass**：react-native-skia backdrop blur + reanimated + gesture-handler (v0.8.3)
+- **胶囊液态玻璃 Dock**：expo-blur 真实透视 + 光线折射 (v0.8.5)
+- **GlassTabBar 接入 Tab.Navigator** (v0.8.9)
+- **滑动 Tab + 动画胶囊** (v0.8.10 / v0.9.0)
+- **毛玻璃 Dock**：底部 Dock 毛玻璃效果 + 白色文字 + 阴影
+- **配色方案**：浅灰底 (#F5F5F5) + 白色板块 (#FFFFFF)
+- **AI 助手页面** + 表情直接发送 + 任务画布 + 个人信息增强
+
+### 桌面端 (v0.8.1~v0.8.10)
+- **UI 现代化**：Token 体系 / 玻璃效果 / 弹簧动画
+- **CORS 白名单收紧** + 变体拷贝出库 + 打包配置修正 (v0.8.9)
+- **聊天历史接口 afterSeq 增量补拉** (v0.8.10)
+
+---
 
 ## v0.8.0 (2026-08-19) — 版本分离与云端开发
 
@@ -657,7 +196,7 @@ v0.8.0 提交时 4 个新源文件未 `git add`（CHANGELOG 记录了功能但�
 **版本**：0.7.74 → 0.7.75，versionCode 63 → 64
 
 
-- 通话 ICE 配置支持 TURN（自 `server.config.js` 读取，凭据不入库），已部署 coturn 到云服务器 `<SERVER_IP>`（UDP/TCP 3478，中继 49160-49200）。
+- 通话 ICE 配置支持 TURN（自 `server.config.js` 读取，凭据不入库），已部署 coturn 到云服务器 `47.92.39.184`（UDP/TCP 3478，中继 49160-49200）。
 - **需在阿里云安全组放行入方向 UDP 3478 + UDP 49160-49200（+TCP 3478）**，否则跨网络手机无法连通 TURN。
 
 **版本**：0.7.73 → 0.7.74，versionCode 62 → 63

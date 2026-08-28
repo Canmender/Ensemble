@@ -3,8 +3,8 @@
 > 一个本地优先的多 Agent 协作平台。连接 Claude Code、Hermes、OpenCode 等 AI Agent，通过可视化编排让它们协同工作。
 
 [![Release](https://img.shields.io/github/v/release/Canmender/Ensemble)](https://github.com/Canmender/Ensemble/releases)
-[![Mobile](https://img.shields.io/badge/Mobile-v0.9.3-blue)](#移动端)
-[![Desktop](https://img.shields.io/badge/Desktop-v0.8.9-green)](#桌面端)
+[![Mobile](https://img.shields.io/badge/Mobile-v0.9.32-blue)](#移动端)
+[![Desktop](https://img.shields.io/badge/Desktop-v0.8.42-green)](#桌面端)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-145%20passed-brightgreen)](#测试)
 
@@ -38,8 +38,13 @@
 - **工具系统** — 文件操作 / 命令执行 / 网络搜索 / MCP 动态发现
 - **双记忆池** — 显式记忆（长期持久化）+ 隐式记忆（项目/Run 作用域）
 - **实时监控** — WebSocket 推送，日志/时间线/画布三视图
-- **IM 聊天** — 与 Agent 直接对话（消息持久化）+ **用户-用户 IM**（团队 1:1 实时会话，per-user 未读）
-- **移动端** — 账号登录门禁 / 联系人通讯录（好友 + Agent）/ 会话与实时消息，自动直连云端服务器
+- **IM 聊天** — 消息持久化（SQLite）+ 用户-用户 1:1 实时会话 + 群聊（全人类群 / Agent 群 / 混合群）+ 已读回执 + 消息撤回/引用/转发 + 语音消息 + 表情面板 + @提及
+- **组织权限** — 五级线性角色（Owner > Admin > Manager > Member > Guest），部门树 + Guest 访问
+- **群管理** — 群主/管理员角色控制 + 群公告 + 群禁言 + join_type 加入策略 + 成员管理
+- **E2EE 端到端加密** — 用户间消息端到端加密，密钥本地管理
+- **视频通话** — WebRTC 1:1 语音/视频通话 + TURN/STUN 跨网络中继 + 云端 WS 信令
+- **设备互联** — 设备配对 + 信封协议 + Handoff 接力 + 跨设备状态同步
+- **移动端** — 账号登录门禁 / 联系人通讯录（好友 + Agent）/ 会话与实时消息 / 推送通知（Expo Push）
 - **账号系统** — 多用户注册/登录、数据按用户隔离；`ENSEMBLE_API_KEY` 机器级凭证
 - **云部署** — Docker Compose（server + relay + nginx），域名 HTTPS 就绪
 
@@ -83,8 +88,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 ## 版本管理
 
-项目分为两个独立版本的**原生桌面应用**（Electron），共享同一套源代码；
-工作区按版本分区（数据库/配置/密钥/登录态各自独立），互不污染，可同时运行：
+项目分为两个独立版本，共享同一套源代码，配置和数据完全隔离：
 
 | 版本 | 目录 | 用途 | 启动方式 |
 |------|------|------|----------|
@@ -98,10 +102,19 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 .
 ├── 合鸣.bat                    # 版本选择启动器
-├── ensemble-local/             # 本地版入口（start.bat → 原生桌面 local）
-├── ensemble-cloud/             # 云端版入口（start.bat → 原生桌面 cloud）
-├── desktop/                    # 桌面应用（主开发目录 + 原生启动）
-│   ├── launch-desktop.bat      # 统一启动入口（构建并拉起 Electron）
+├── ensemble-local/             # 本地版（完全隔离）
+│   ├── .env                    # 本地配置
+│   ├── start.bat               # 启动脚本
+│   ├── packages/ → desktop/    # 源代码（软链接）
+│   ├── config/                 # 独立配置
+│   └── data/                   # 独立数据
+├── ensemble-cloud/             # 云端版（完全隔离）
+│   ├── .env                    # 云端配置
+│   ├── start.bat               # 启动脚本
+│   ├── packages/ → desktop/    # 源代码（软链接）
+│   ├── config/                 # 独立配置
+│   └── data/                   # 独立数据
+├── desktop/                    # 桌面应用（主开发目录）
 │   ├── packages/
 │   │   ├── shared/             # 共享类型 + Zod schema
 │   │   ├── server/             # 引擎核心
@@ -125,6 +138,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 │                    编排引擎                          │
 │  single / workflow / chat / plan / adversarial      │
 ├─────────────────────────────────────────────────────┤
+│                    IM 层                             │
+│  消息持久化 / 已读回执 / E2EE / 群管理 / 推送通知   │
+├─────────────────────────────────────────────────────┤
 │                    工具系统                          │
 │  文件 / 命令 / 网络 / RAG / MCP / 记忆              │
 ├─────────────────────────────────────────────────────┤
@@ -138,13 +154,13 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 - [多 Agent 架构](desktop/docs/MULTI_AGENT_ARCHITECTURE.md) — 编排协议、RAG、对抗迭代
 - [性能优化](desktop/docs/PERFORMANCE.md) — 前端/引擎优化措施
 - [完整 Wiki](desktop/docs/WIKI.md) — 模块详解、开发指南、故障排查
-- [更新日志](CHANGELOG.md) — 版本历史与发布说明（v0.1.0 → v0.7.24）
+- [更新日志](CHANGELOG.md) — 版本历史与发布说明（v0.1.0 → v0.9.32）
 
 ---
 
 ## 安全
 
-项目经过两轮深度安全审查，修复了 16 项高危问题：
+项目经过多轮深度安全审查，修复了 16+ 项高危问题：
 
 | 措施 | 说明 |
 |------|------|
@@ -156,10 +172,16 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 | SSRF 防护 | 私有 IP 检测 + DNS 重绑定防护 |
 | 速率限制 | API + WebSocket 双层限流 |
 | 输入验证 | Zod schema + 字段白名单 + 路径穿越防护 |
+| E2EE 加密 | 端到端加密，消息在设备间传输加密，服务端不可读 |
+| 推送安全 | Expo Push token 绑定用户，push_token 安全存储 |
+| 组织权限 | 五级角色权限体系 + 部门级数据隔离 |
 
-### 移动端直连（局域网）
+### 云端直连
 
-桌面端默认仅绑定 `127.0.0.1`。如需手机直连，启动桌面端前设置：
+移动端默认直连云端服务器（REST + 原生 WebSocket），无需局域网发现。
+应用启动自动连接已配置的云端地址，支持登录鉴权、实时消息推送和推送通知（Expo Push）。
+
+如需桌面端局域网直连，启动前设置：
 
 ```bash
 # 绑定局域网并自动发布 mDNS（手机端可发现）
@@ -168,8 +190,7 @@ ENSEMBLE_LAN_HOST=0.0.0.0
 ENSEMBLE_API_KEY=your-secret-key
 ```
 
-手机端通过 REST + 原生 WebSocket 直连桌面端（认证、任务创建、实时事件流），
-或通过 `relay-server` 走云端中继（跨网络）。详见 [relay-server/README.md](relay-server/README.md)。
+手机端也可通过 `relay-server` 走云端中继（跨网络）。详见 [relay-server/README.md](relay-server/README.md)。
 
 ---
 
@@ -216,9 +237,10 @@ pnpm -r typecheck                      # 全量类型检查
 | 层 | 技术 |
 |----|------|
 | 前端 | React 18 / TypeScript / Tailwind CSS / @xyflow/react / Zustand |
-| 后端 | Express 5 / WebSocket / SQLite (node:sqlite) / Zod |
+| 后端 | Express 5 / WebSocket / SQLite WAL 模式 (node:sqlite) / Zod |
 | 桌面 | Electron 43 / esbuild |
-| 手机 | Expo / React Native |
+| 手机 | Expo / React Native / expo-notifications (推送) / react-native-webrtc (视频通话) |
+| 加密 | E2EE 端到端加密（用户消息） |
 | 部署 | Docker Compose / Nginx |
 | 测试 | Vitest |
 

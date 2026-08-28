@@ -207,66 +207,73 @@ reactNativeArchitectures=arm64-v8a,armeabi-v7a
 8. **版本号管理**：不要频繁 bump，一个版本内完成所有改动
 9. **APK 架构配置**：用 `reactNativeArchitectures` gradle property，不用 abiFilters
 10. **prebuild 后检查**：signingConfig、gradle.properties、local.properties 都会丢失
+11. **expo 陈旧 bundle**：expo start 后改了代码但设备仍显示旧版，需 `npx expo start --clear` 清缓存
+12. **Hermes TextDecoder utf-16le**：curveasm 模块在 Hermes 引擎下触发 utf-16le 编码崩溃，需 patch-package 固化补丁
+13. **网络安全配置烘焙**：改 server.config.js 后必须重新 prebuild，network_security_config.xml 在 prebuild 时烘焙进 APK
 
-## 10. Worktree 长路径导致 Android 构建失败
+## 13. Android 16 + React Native bridgeless 模式白屏
 
-**问题**：在 `.claude/worktrees/<name>/mobile` 这类深层路径下跑 gradle，原生模块（reanimated/expo-modules-core 等）CMake 编译报 `ninja: error: manifest 'build.ninja' still dirty after 100 tries`。根因是 CMake 目标文件路径超限（有明确警告 `object file directory ... has NNN characters, maximum 250`），ninja 对超长路径 stat 循环失败。
+### 13.1 newArchEnabled=false 白屏
 
-**踩过的弯路**：
-- 删 `.cxx` 缓存重试 → 无效（路径本身就超限）
-- `subst Z:` 映射盘符 → expo autolinking 在 settings 阶段就挂（命令退出 1）
-- 把带构建产物的 android/ 复制到短路径目录 → 无效且更糟（产物里固化了旧绝对路径，Gradle 复用后又指回长路径）
+**问题**：Android 16 (API 36) 设备上 React Native 应用启动后白屏，Logcat 显示 bridgeless 模式初始化失败。
 
-**正确做法（2026-08-22 验证通过）**——从 git 导出纯净源码到短路径临时目录构建：
-```bash
-git archive HEAD mobile shared | tar -x -C /d/ens-mb   # shared/ 是 metro watch 目录，必需
-cp D:/MultiAgent/mobile/server.config.js D:/MultiAgent/mobile/getui.config.js /d/ens-mb/mobile/  # gitignore 的本地配置，打包必需
-rm -rf /d/ens-mb/mobile/android/.gradle /d/ens-mb/mobile/android/build /d/ens-mb/mobile/android/app/{build,.cxx}  # 若复制过产物必须清掉
-cd /d/ens-mb/mobile && npm ci && node scripts/build-release.cjs
-```
-注意：
-- 构建失败报 `Unable to delete file classes.jar` = 残留 gradle 守护进程锁文件 → `./gradlew --stop` 后重试即可。
-- Hermes 字节码中中文字符串以 UTF-16LE 存储，验证包内容时 grep 中文要用 utf-16-le 编码搜索，utf-8 会假阴性。
+**根因**：React Native 0.76+ 默认启用 new architecture（bridgeless 模式），但部分第三方原生模块（如 expo-blur、react-native-webrtc）尚未适配 bridgeless，导致原生模块注册失败、JS 层无法加载。
 
-## 11. 网络安全配置在 prebuild 时烘焙——只改 server.config.js 重新出包不生效
-
-**问题**：`plugins/withNetworkSecurityConfig.js` 在 `expo prebuild` 时把 `server.config.js` 的 `cleartextDomains` 写进 `android/app/src/main/res/xml/network_security_config.xml`。此后只改 server.config.js 再 gradle 出包，**APK 里的安全配置仍是旧域名**——Android 9+ 直接拦截未列入白名单的明文流量，症状是登录页「未连接服务器」（WS/HTTP 全被系统层拦，App 内无报错）。
-
-**2026-08-23 实例**：短路径构建目录先以本地地址 prebuild 过一次；后来只把 server.config.js 改回云端地址重出包，用户装包连不上。解包才发现 `network_security_config.xml` 里只有 10.0.2.2/localhost。
-
-**规程**：改 server.config.js 的 host/cleartextDomains 后，必须 `npx expo prebuild --platform android --clean` 重新生成 android/ 再出包；出包后用 `aapt dump xmltree ... AndroidManifest.xml` 确认 `networkSecurityConfig` 存在，并解包 grep 安全配置里的域名做终检。
-
-**验证包内地址的方法**（不装包即可查）：
-```bash
-unzip -p app-release.apk assets/index.android.bundle | grep -c <期望地址>   # bundle 内嵌地址
-unzip -o app-release.apk "res/*" -d /tmp/ns && grep -rl cleartextTrafficPermitted /tmp/ns/res  # 安全配置域名
+**修复**：在 `android/gradle.properties` 中显式关闭新架构：
+```properties
+newArchEnabled=false
+hermesEnabled=true
 ```
 
-## 12. expo gradle 插件在构建目录输出陈旧 bundle——--rerun-tasks 也无效
+**注意**：`expo prebuild --clean` 会重置 `gradle.properties`，需在 prebuild 后重新检查并设置 `newArchEnabled=false`。这是 Android 16 适配的临时方案，待上游库全部迁移后可开启。
 
-**问题**：短路径构建目录（/d/ens-mb）上，`createBundleReleaseJsAndAssets` 生成的 `app/build/generated/assets/react/release/index.android.bundle` 是陈旧内容（源码已改、bundle 还是老版本），`--rerun-tasks` 显示 33 个任务 executed 但产物不变；`touch index.ts package.json` 破坏 up-to-date 判定也无效。症状：出包后 bundle 里 grep 不到新代码标记（注意 release bundle 是 Hermes 字节码，文本 grep 需先确认字符串以明文/UTF-16LE 哪种形式存在）。
+**教训**：
+- Android 16 对 React Native 新架构的兼容性要求更严格
+- prebuild 产物是 ephemeral 的，任何自定义 gradle 配置都需在 prebuild 后重新应用
+- 白屏时优先检查 Logcat 中的原生模块注册错误
 
-**2026-08-25 实例**：v0.9.14 出包时 curveasm 补丁和 ms() 工厂都不在 bundle 里，反复 assembleRelease 无效。
+## 14. push token 注册时序问题
 
-**绕过手法**（已验证有效）：
-```bash
-# 1. expo export 出明文 JS bundle（含全部最新源码）
-cd /d/ens-mb/mobile && npx expo export --platform android --dev false --output-dir ./exported
-# 2. hermesc 编译为字节码
-node_modules/hermes-compiler/hermesc/win64-bin/hermesc.exe -O -emit-binary \
-  -out ./exported/index.android.bundle ./exported/_expo/static/js/android/<hash>.js
-# 3. PowerShell ZipArchive 替换 APK 内 bundle 条目（bash 无 zip 命令）
-# 4. 解包核验：unzip -p app.apk assets/index.android.bundle 比对字节数/magic(c61fbc03)
+### 14.1 必须在登录后调用 registerForPushNotificationsAsync
+
+**问题**：在 `initNotifications()`（应用启动时）就调用 `registerForPushNotificationsAsync()`，此时用户尚未登录，没有有效的 session token，导致 push token 无法关联到用户，服务端存储的 push token 无归属。
+
+**根因**：Expo Push Token 的获取只需要 Expo 项目 ID，不需要用户认证；但将 token 存储到服务端需要用户的 session token。如果在登录前注册，服务端无法将 token 与用户关联。
+
+**修复**：将 push token 注册时机从 `initNotifications()`（启动时）移到登录成功后的回调中：
+```typescript
+// 登录成功后
+const token = await registerForPushNotificationsAsync();
+if (token) {
+  await api.request('POST', '/api/auth/push-token', { token });
+}
 ```
 
-**教训**：gradle 的增量任务缓存对 node_modules 变更不可靠；出包后必须解包核验 bundle 内容标记，不能信 BUILD SUCCESSFUL。
+**教训**：
+- push token 获取（本地）和 push token 存储（服务端）是两个独立步骤
+- 存储步骤依赖用户认证，必须在登录后执行
+- App 重启时需在登录后重新注册（token 可能变化）
 
-## 13. Hermes/Expo 的 TextDecoder 不支持 utf-16le——emscripten 依赖加载期即炸
+## 15. Expo 项目 FCM 配置
 
-**问题**：libsignal 的 X25519 后端 `@privacyresearch/curve25519-typescript`（emscripten 产物 curveasm.js）在**模块加载期**执行 `new TextDecoder('utf-16le')`。Hermes 内置 TextDecoder 和 expo winter 装的 polyfill 都只认 utf-8 → RangeError 沿懒加载 require 链炸掉整个聊天房间页（白屏，栈顶 `TextDecoder@`）。
+### 15.1 Android 推送必须配置 Firebase Cloud Messaging
 
-**修复**（b323681）：curveasm.js 内联补丁——try-catch 包住构造，失败回退手写小端解码（`[ensemble-patch]` 标记）。**补丁在 node_modules，一次 `npm install` 就会丢失**——必须用 patch-package 固化（待办）。
+**问题**：Expo 项目的 Android 推送通知在开发模式下工作（Expo Go），但构建独立 APK 后推送无法收到。
 
-**时序陷阱**：给 globalThis.TextDecoder 打全局补丁必须放在 App.tsx 顶层，不能放 index.ts——expo winter 运行时（bundle 中先于 index.ts 执行）用 installGlobal 给 TextDecoder 定义**惰性 getter**，index.ts 先打的补丁会在依赖首次访问时被 getter 返回的 Expo polyfill 架空。
+**根因**：Expo Push Notification 在 Android 上依赖 Firebase Cloud Messaging (FCM)。Expo Go 内置了 Expo 的 FCM 凭据，但独立 APK 需要配置自己的 FCM 项目。
 
-**定位技巧**：Metro dev bundle 的异常栈偏移（如 `1:779931`）在模块结构不变时跨版本稳定，不能作为"新旧 bundle"的判据；判新旧要 grep 内容标记。
+**配置步骤**：
+1. 在 Firebase Console 创建项目，获取 `google-services.json`
+2. 将 `google-services.json` 放入 `mobile/android/app/`
+3. 在 `app.json` 中配置 `expo.plugins` 添加 `expo-notifications`
+4. 将 Firebase 项目 ID 填入 Expo 项目设置（`expo push notification` 配置）
+5. 使用 `EXPO_ACCESS_TOKEN` 环境变量用于服务端发送推送
+
+**注意事项**：
+- `google-services.json` 包含 Firebase 凭据，**不要提交到 git**（已加入 .gitignore）
+- 服务端发送推送需要 `EXPO_ACCESS_TOKEN`，通过 `npx expo push:android:upload --api-key <FCM_SERVER_KEY>` 获取
+- 推送通知在应用被杀后仍可收到（通过 FCM 高优先级通道）
+
+---
+
+## 关键教训总结
