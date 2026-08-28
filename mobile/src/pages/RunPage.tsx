@@ -19,25 +19,25 @@ import { connectionService } from "../services/connection";
 import type { AgentEvent, RunStatus } from "@ensemble/shared";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../App";
-import { colors , ms } from "../theme";
+import { colors } from "../theme";
 
 type RunPageProps = NativeStackScreenProps<RootStackParamList, "Run">;
 
-/** 状态颜色映射（引语义 token，明暗主题自适应） */
+/** 状态颜色映射 */
 function getStatusColor(status: RunStatus | string): string {
   switch (status) {
     case "running":
-      return colors.warning;
+      return "#A9873C";
     case "success":
-      return colors.success;
+      return "#5F7A5A";
     case "error":
-      return colors.danger;
+      return "#B05038";
     case "cancelled":
-      return colors.textFaint;
+      return "#9A918A";
     case "queued":
-      return colors.surfaceTint;
+      return "#3B3F4A";
     default:
-      return colors.textMuted;
+      return "#374151";
   }
 }
 
@@ -150,7 +150,7 @@ function renderEvent(event: AgentEvent, index: number) {
               eventStyles.doneBadge,
               {
                 backgroundColor:
-                  event.outcome === "success" ? colors.success : colors.danger,
+                  event.outcome === "success" ? "#5F7A5A" : "#B05038",
               },
             ]}
           >
@@ -239,7 +239,7 @@ export default function RunPage({ route, navigation }: RunPageProps) {
     navigation.setOptions({
       title: run?.taskTitle || "运行详情",
       headerStyle: { backgroundColor: colors.bg },
-      headerTintColor: colors.text,
+      headerTintColor: "#fff",
     });
   }, [navigation, run?.taskTitle]);
 
@@ -276,7 +276,7 @@ export default function RunPage({ route, navigation }: RunPageProps) {
           {run.status === "running" && (
             <ActivityIndicator
               size="small"
-              color={colors.warning}
+              color="#A9873C"
               style={{ marginLeft: 8 }}
             />
           )}
@@ -432,7 +432,7 @@ export default function RunPage({ route, navigation }: RunPageProps) {
   );
 }
 
-const styles = ms({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -485,7 +485,7 @@ const styles = ms({
     alignItems: "center",
   },
   cancelButton: {
-    backgroundColor: colors.danger,
+    backgroundColor: "#B05038",
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 6,
@@ -518,13 +518,13 @@ const styles = ms({
     textAlign: "right",
   },
   resultCard: {
-    backgroundColor: "rgba(52, 211, 153, 0.1)",
+    backgroundColor: "rgba(16, 185, 129, 0.1)",
     marginHorizontal: 12,
     marginBottom: 12,
     borderRadius: 10,
     padding: 14,
     borderWidth: 1,
-    borderColor: colors.success,
+    borderColor: "#5F7A5A",
   },
   resultTitle: {
     color: colors.primary,
@@ -544,7 +544,7 @@ const styles = ms({
     borderRadius: 10,
     padding: 14,
     borderWidth: 1,
-    borderColor: colors.danger,
+    borderColor: "#B05038",
   },
   errorTitle: {
     color: colors.danger,
@@ -553,7 +553,7 @@ const styles = ms({
     marginBottom: 8,
   },
   errorText: {
-    color: colors.danger,
+    color: "#fca5a5",
     fontSize: 14,
     lineHeight: 20,
   },
@@ -618,7 +618,7 @@ const styles = ms({
     paddingTop: 10,
   },
   jobResultContainer: {
-    backgroundColor: "rgba(52, 211, 153, 0.08)",
+    backgroundColor: "rgba(16, 185, 129, 0.08)",
     borderRadius: 6,
     padding: 10,
     marginTop: 10,
@@ -694,12 +694,12 @@ const eventStyles = StyleSheet.create({
     flexWrap: "wrap",
   },
   outputPrefix: {
-    color: colors.warning,
+    color: "#a78bfa",
     fontSize: 12,
     fontWeight: "500",
   },
   outputText: {
-    color: colors.text,
+    color: "#e5e7eb",
     fontSize: 13,
     lineHeight: 18,
     flex: 1,
@@ -711,7 +711,7 @@ const eventStyles = StyleSheet.create({
     marginBottom: 6,
   },
   toolBadge: {
-    backgroundColor: colors.surfaceTint,
+    backgroundColor: "#3B3F4A",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
@@ -724,7 +724,7 @@ const eventStyles = StyleSheet.create({
     fontWeight: "500",
   },
   toolName: {
-    color: colors.primary,
+    color: "#a5b4fc",
     fontSize: 13,
     fontWeight: "600",
     marginBottom: 4,
@@ -736,13 +736,13 @@ const eventStyles = StyleSheet.create({
     lineHeight: 16,
   },
   toolResultRow: {
-    backgroundColor: "rgba(52, 211, 153, 0.06)",
+    backgroundColor: "rgba(16, 185, 129, 0.06)",
     borderRadius: 6,
     padding: 8,
     marginBottom: 6,
   },
   toolResultBadge: {
-    backgroundColor: colors.success,
+    backgroundColor: "#5F7A5A",
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 3,
@@ -769,12 +769,12 @@ const eventStyles = StyleSheet.create({
     flexWrap: "wrap",
   },
   errorText: {
-    color: colors.danger,
+    color: "#fca5a5",
     fontSize: 13,
     flex: 1,
   },
   doneRow: {
-    backgroundColor: "rgba(148, 163, 184, 0.08)",
+    backgroundColor: "rgba(255, 255, 255, 0.03)",
     borderRadius: 6,
     padding: 8,
     marginBottom: 6,

@@ -10,6 +10,7 @@
 import { io, Socket } from "socket.io-client";
 import { Platform } from "react-native";
 import * as Application from "expo-application";
+import * as Notifications from "expo-notifications";
 import type {
   DeviceInfo,
   EnsembleMessage,
@@ -364,7 +365,17 @@ class ConnectionService {
         dev ? { id: dev.id, name: dev.name, type: "mobile" } : undefined,
       );
 
-      // 4. 拉取初始数据
+      // 4. 注册推送令牌（Expo Push Token）— 非阻塞
+      console.log("[连接] 开始注册推送令牌...");
+      this.registerPushTokenInternal()
+        .then((success) => {
+          console.log("[连接] 推送令牌注册流程完成, success:", success);
+        })
+        .catch((err) => {
+          console.error("[连接] 推送令牌注册异常:", err);
+        });
+
+      // 5. 拉取初始数据
       await this.syncData();
       return true;
     } catch (err) {
@@ -385,6 +396,68 @@ class ConnectionService {
     useDeviceStore.getState().setLastErrorAt(Date.now());
     this.emit("error", message);
     this.emit("connection:state", "error");
+  }
+
+  /** 注册推送令牌（Expo Push Token）*/
+  private async registerPushTokenInternal(): Promise<boolean> {
+    try {
+      console.log("[推送] 开始注册推送令牌");
+
+      // 检查通知权限
+      console.log("[推送] 检查通知权限...");
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      console.log("[推送] 当前权限状态:", existingStatus);
+
+      if (existingStatus !== "granted") {
+        console.log("[推送] 请求通知权限...");
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+        console.log("[推送] 权限请求结果:", status);
+      }
+
+      if (finalStatus !== "granted") {
+        console.log("[推送] 通知权限未授予，跳过推送令牌注册");
+        return false;
+      }
+
+      // 获取 Expo 推送令牌
+      console.log("[推送] 获取 Expo 推送令牌...");
+      const tokenData = await Notifications.getDevicePushTokenAsync();
+      const pushToken = tokenData.data;
+      console.log("[推送] 获取到令牌:", pushToken ? pushToken.substring(0, 30) + "..." : "(null)");
+
+      if (!pushToken) {
+        console.warn("[推送] 无法获取推送令牌");
+        return false;
+      }
+
+      // 注册到服务器
+      console.log("[推送] 注册到服务器...");
+      const dev = useDeviceStore.getState().currentDevice;
+      const deviceId = dev?.id || this.currentDeviceId || "unknown";
+      console.log("[推送] DeviceId:", deviceId);
+
+      const result = await api.registerPushToken({
+        deviceId: deviceId,
+        token: pushToken,
+        platform: Platform.OS,
+        name: dev?.name,
+      });
+
+      console.log("[推送] 服务器响应:", JSON.stringify(result));
+
+      if (result.data?.success) {
+        console.log("[推送] 推送令牌注册成功");
+        return true;
+      } else {
+        console.warn("[推送] 推送令牌注册失败:", result);
+        return false;
+      }
+    } catch (err) {
+      console.error("[推送] 推送令牌注册异常:", err);
+      return false;
+    }
   }
 
   /** WS 事件流状态回调（直连模式） */

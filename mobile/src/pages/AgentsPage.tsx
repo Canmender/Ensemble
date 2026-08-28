@@ -21,7 +21,7 @@ import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { api } from "../services/api";
 import type { AgentConfig } from "@ensemble/shared";
-import { colors , ms } from "../theme";
+import { colors } from "../theme";
 
 interface AgentFormData {
   name: string;
@@ -555,7 +555,7 @@ export default function AgentsPage() {
   );
 }
 
-const styles = ms({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,

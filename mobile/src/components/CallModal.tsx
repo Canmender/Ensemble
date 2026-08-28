@@ -16,7 +16,7 @@ import { useCallStore } from "../store/callStore";
 import { acceptCall, rejectCall, hangup, toggleMic, toggleCam, toggleSpeaker, switchCamera } from "../services/callService";
 import { GlassSurface } from "./GlassSurface";
 import { Avatar } from "./Avatar";
-import { colors, spacing, radius, fontSize, elevation , ms } from "../theme";
+import { colors, spacing, radius, fontSize, elevation } from "../theme";
 
 const DARK = "#14171E";
 const ON_DARK_FAINT = "rgba(255,255,255,0.55)";
@@ -197,7 +197,7 @@ export function CallModal() {
   );
 }
 
-const styles = ms({
+const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: DARK,

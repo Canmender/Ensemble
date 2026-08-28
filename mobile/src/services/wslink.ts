@@ -22,8 +22,6 @@ export interface ChatWsMessage {
   id?: string;
   /** 会话内单调 seq（v0.8.3+，补拉游标） */
   seq?: number;
-  /** 消息状态：1=正常 2=已撤回 3=已编辑（v0.8.34+） */
-  status?: 1 | 2 | 3;
 }
 
 export interface MentionEvent {
@@ -55,7 +53,6 @@ export interface IncomingCallSignal {
 export interface WsLinkCallbacks {
   onChatMessage?: (msg: ChatWsMessage) => void;
   onChatDeleted?: (msg: { runId: string; msgId: string }) => void;
-  onChatEdited?: (msg: { runId: string; msgId: string; content: string; editedAt: string }) => void;
   onChatRead?: (msg: { runId: string; userId: string; readTs: string }) => void;
   onChatMention?: (msg: MentionEvent) => void;
   onDeviceStatus?: (msg: { deviceId: string; name: string; kind: string; online: boolean }) => void;
@@ -367,7 +364,6 @@ export class WsLink {
             mentions: ev.mentions,
             id: ev.id,
             seq: ev.seq,
-            status: ev.status as 1 | 2 | 3 | undefined,
           };
           this.callbacks.onChatMessage?.(chatMsg);
           for (const cb of this.globalChatMessageCbs) {
@@ -401,16 +397,6 @@ export class WsLink {
       case "chat.deleted":
         if (ev.msgId) {
           this.callbacks.onChatDeleted?.({ runId: env.runId, msgId: ev.msgId });
-        }
-        break;
-      case "chat.edited":
-        if (ev.msgId && ev.content) {
-          this.callbacks.onChatEdited?.({
-            runId: env.runId,
-            msgId: ev.msgId,
-            content: ev.content,
-            editedAt: (ev as Record<string, unknown>).editedAt as string ?? "",
-          });
         }
         break;
       case "chat.read":

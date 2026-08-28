@@ -2,10 +2,10 @@
   "expo": {
     "name": "合鸣",
     "slug": "ensemble-mobile",
-    "version": "0.9.21",
+    "version": "0.9.33",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -13,15 +13,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ensemble.mobile",
-      "infoPlist": {
-        "NSCameraUsageDescription": "视频通话需要使用你的摄像头",
-        "NSMicrophoneUsageDescription": "语音/视频通话需要使用你的麦克风"
-      }
+      "bundleIdentifier": "com.ensemble.mobile"
     },
     "android": {
       "package": "com.ensemble.mobile",
-      "versionCode": 121,
+      "versionCode": 133,
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
@@ -35,7 +31,6 @@
         "RECORD_AUDIO",
         "MODIFY_AUDIO_SETTINGS",
         "BLUETOOTH",
-        "CAMERA",
         "REQUEST_INSTALL_PACKAGES"
       ]
     },

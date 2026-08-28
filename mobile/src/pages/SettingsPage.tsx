@@ -24,10 +24,10 @@ import { Avatar } from "../components/Avatar";
 import { useMeStore } from "../store/meStore";
 import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
-import { colors, spacing, radius, fontSize, elevation, useTheme, setThemeMode , ms } from "../theme";
+import { colors, spacing, radius, fontSize, elevation, useTheme, setThemeMode } from "../theme";
 import type { ThemeMode } from "../theme";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.9.11";
+const APP_VERSION = nativeApplicationVersion ?? "0.9.10";
 
 export default function SettingsPage() {
   const navigation = useNavigation<any>();
@@ -91,12 +91,6 @@ export default function SettingsPage() {
       title: "隐私设置",
       desc: "好友验证、私聊权限、信息展示",
       onPress: () => navigation.navigate("PrivacySettings"),
-    },
-    {
-      icon: "link-outline" as const,
-      title: "设备互联",
-      desc: "手机与桌面端配对同步",
-      onPress: () => navigation.navigate("DeviceRemote"),
     },
     {
       icon: "refresh-outline" as const,
@@ -263,7 +257,7 @@ export default function SettingsPage() {
   );
 }
 
-const styles = ms({
+const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   profileCard: {
     flexDirection: "row",

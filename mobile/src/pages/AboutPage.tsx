@@ -5,11 +5,11 @@
 
 import React from "react";
 import { View, Text, StyleSheet, Image } from "react-native";
-import { colors, spacing, radius, fontSize , ms } from "../theme";
+import { colors, spacing, radius, fontSize } from "../theme";
 import { CLOUD_SERVER } from "../services/connection";
 import { nativeApplicationVersion } from "expo-application";
 
-const APP_VERSION = nativeApplicationVersion ?? "0.9.11";
+const APP_VERSION = nativeApplicationVersion ?? "0.9.9";
 
 export default function AboutPage() {
   return (
@@ -31,7 +31,7 @@ export default function AboutPage() {
   );
 }
 
-const styles = ms({
+const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg, padding: spacing.lg },
   logo: {
     alignSelf: "center",

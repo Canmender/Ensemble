@@ -20,7 +20,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTaskStore } from "../store/taskStore";
 import { useDeviceStore } from "../store/deviceStore";
 import { connectionService } from "../services/connection";
-import { colors, spacing, radius, fontSize , ms } from "../theme";
+import { colors, spacing, radius, fontSize } from "../theme";
 
 export default function TasksPage({ navigation }: { navigation: any }) {
   const { tasks, runs, agents } = useTaskStore();
@@ -275,8 +275,8 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.success}
-              colors={[colors.success]}
+              tintColor="#5F7A5A"
+              colors={["#5F7A5A"]}
             />
           }
         />
@@ -296,7 +296,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <TextInput
               style={styles.input}
               placeholder="任务标题"
-              placeholderTextColor={colors.textFaint}
+              placeholderTextColor="#9A918A"
               value={newTaskTitle}
               onChangeText={setNewTaskTitle}
             />
@@ -330,7 +330,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="输入提示词..."
-              placeholderTextColor={colors.textFaint}
+              placeholderTextColor="#9A918A"
               value={newTaskPrompt}
               onChangeText={setNewTaskPrompt}
               multiline
@@ -354,7 +354,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
                 disabled={creating}
               >
                 {creating ? (
-                  <ActivityIndicator size="small" color={colors.white} />
+                  <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.createButtonText}>创建</Text>
                 )}
@@ -367,7 +367,7 @@ export default function TasksPage({ navigation }: { navigation: any }) {
   );
 }
 
-const styles = ms({
+const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -401,7 +401,7 @@ const styles = ms({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: colors.danger === "#DC2626" ? "rgba(239, 68, 68, 0.12)" : "rgba(248, 113, 113, 0.14)",
+    backgroundColor: "rgba(239, 68, 68, 0.15)",
     paddingHorizontal: 16,
     paddingVertical: 10,
   },
@@ -542,7 +542,7 @@ const styles = ms({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: colors.scrim,
+    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     padding: 16,
   },

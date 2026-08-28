@@ -93,21 +93,19 @@ export class WsHub {
   onClientMessage?: (msg: { type: string; runId: string; content?: string; confirmId?: string; approved?: boolean }) => void;
   /** WebRTC 通话信令回调（从某用户发往目标用户；由 app 层路由） */
   onCallSignal?: (fromUserId: string, fromName: string | undefined, targetUserId: string, call: CallSignal) => void;
-  /** 读取 IM 配置（由 context 注入，延迟到运行时读取） */
-  getSettings?: () => import("../../../../shared/src/types/provider").AppSettings;
 
   attach(server: Server, path = "/ws", resolveUser?: (token: string) => AuthUser | undefined): void {
     this.serverPath = path;
     this.resolveUser = resolveUser;
-    const imWs = this.getSettings?.().im?.ws;
 
     // noServer 模式：手动处理 upgrade 以实现 token 验证
     this.wss = new WebSocketServer({
       noServer: true,
-      maxPayload: (imWs?.maxPayloadMb ?? 1) * 1024 * 1024,
+      maxPayload: 1024 * 1024, // 1MB 最大消息体，防止内存耗尽
       perMessageDeflate: {
-        zlibDeflateOptions: { level: 3 },
-        threshold: 256,
+        // 启用 per-message deflate 压缩 JSON 负载
+        zlibDeflateOptions: { level: 3 }, // 低压缩级别，平衡 CPU 和带宽
+        threshold: 256, // 仅压缩 >256 字节的消息
       },
     });
 
@@ -245,7 +243,7 @@ export class WsHub {
       for (const [runId, set] of this.runSubs) {
         this.send(set, runId, 0, { type: "heartbeat" }, now);
       }
-    }, (imWs?.pingIntervalS ?? 15) * 1000);
+    }, 15_000);
     this.heartbeatTimer.unref?.();
   }
 
@@ -521,14 +519,13 @@ export class WsHub {
    * HITL 工具确认：向订阅了该 run 的客户端发送确认请求，等待用户响应。
    * 超时（默认 5 分钟）自动拒绝。
    */
-  requestConfirm(runId: string, tool: string, args: unknown, timeoutMs?: number): Promise<boolean> {
+  requestConfirm(runId: string, tool: string, args: unknown, timeoutMs = 300_000): Promise<boolean> {
     const confirmId = randomBytes(8).toString("hex");
-    const effectiveTimeout = timeoutMs ?? (this.getSettings?.().im?.toolConfirmTimeoutMin ?? 5) * 60_000;
     return new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => {
         this.pendingConfirms.delete(confirmId);
         resolve(false);
-      }, effectiveTimeout);
+      }, timeoutMs);
       timer.unref?.();
 
       this.pendingConfirms.set(confirmId, { resolve, timer });
@@ -550,26 +547,6 @@ export class WsHub {
     this.pendingConfirms.delete(confirmId);
     if (pending.timer) clearTimeout(pending.timer);
     pending.resolve(approved);
-  }
-
-  /** 广播关机通知给所有在线客户端 */
-  broadcastShutdown(message: string, reconnectIn = 30): void {
-    const envelope = JSON.stringify({
-      v: 1, ts: Date.now(), runId: "", seq: 0,
-      event: { type: "system:shutdown", message, reconnectIn },
-    });
-    for (const ws of this.wsSubs.keys()) {
-      if (ws.readyState === WebSocket.OPEN) {
-        try { ws.send(envelope); } catch {}
-      }
-    }
-    for (const sockets of this.userSockets.values()) {
-      for (const ws of sockets) {
-        if (ws.readyState === WebSocket.OPEN) {
-          try { ws.send(envelope); } catch {}
-        }
-      }
-    }
   }
 
   close(): void {
