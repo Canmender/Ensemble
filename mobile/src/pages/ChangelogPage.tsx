@@ -8,6 +8,16 @@ import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.25",
+    date: "2026-08-28",
+    changes: [
+      "修复 Android 16 白屏：禁用 React Native bridgeless 模式（newArchEnabled=false）",
+      "修复 expo-notifications release 构建兼容性（addNotificationResponseListener try-catch）",
+      "推送通知客户端注册（Expo Push Token + POST /api/devices/push-token）",
+      "新增 projectId 配置（expo push token 需要）",
+    ],
+  },
+  {
     version: "v0.9.11",
     date: "2026-08-23",
     changes: [
