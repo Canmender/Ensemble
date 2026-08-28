@@ -68,7 +68,10 @@ async function registerPushToken(): Promise<void> {
     const authToken = await AsyncStorage.getItem("@ensemble/auth_token");
     console.warn("[push] step 5: authToken =", authToken ? "exists" : "null", "baseUrl =", baseUrl);
 
-    if (!authToken) return;
+    if (!authToken) {
+      console.warn("[push] step 5b: no authToken, returning");
+      return;
+    }
 
     const { connectedDevice } = useDeviceStore.getState();
     const deviceId = connectedDevice?.id || "mobile-" + Date.now();
@@ -93,6 +96,7 @@ async function registerPushToken(): Promise<void> {
 export function initNotifications(): void {
   if (initialized) return;
   initialized = true;
+  console.warn("[push] initNotifications called");
 
   void Notifications.setNotificationChannelAsync("messages", {
     name: "消息",
