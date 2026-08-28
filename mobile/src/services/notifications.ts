@@ -8,6 +8,7 @@
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { CLOUD_SERVER } from "./connection";
 import { wsLink, type ChatWsMessage, type MentionEvent } from "./wslink";
 import { useUnreadStore } from "../store/unreadStore";
 import { useDeviceStore } from "../store/deviceStore";
@@ -58,27 +59,25 @@ async function registerPushToken(): Promise<void> {
     })
   ).data;
 
-  // 注册到服务器：等待 connectedDevice 就绪（app 启动时可能为 null）
-  for (let i = 0; i < 10; i++) {
+  // 注册到服务器：直接用 CLOUD_SERVER 地址（不依赖 connectedDevice）
+  try {
+    const baseUrl = `http://${CLOUD_SERVER.host}:${CLOUD_SERVER.port}`;
+    const authToken = await AsyncStorage.getItem("@ensemble/auth_token");
+    if (!authToken) return;
+
     const { connectedDevice } = useDeviceStore.getState();
-    if (connectedDevice) {
-      const baseUrl = `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
-      const authToken = await AsyncStorage.getItem("@ensemble/auth_token");
-      await fetch(`${baseUrl}/api/devices/push-token`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        },
-        body: JSON.stringify({
-          deviceId: connectedDevice.id,
-          token,
-          platform: Platform.OS,
-        }),
-      }).catch((e) => console.warn("[push-token] registration failed:", e));
-      return;
-    }
-    await new Promise((r) => setTimeout(r, 1000));
+    const deviceId = connectedDevice?.id || "mobile-" + Date.now();
+
+    await fetch(`${baseUrl}/api/devices/push-token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ deviceId, token, platform: Platform.OS }),
+    }).then((r) => r.json()).then(console.log).catch(console.error);
+  } catch (e) {
+    console.warn("[push-token] registration failed:", e);
   }
 }
 
