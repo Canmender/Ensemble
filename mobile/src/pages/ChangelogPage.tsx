@@ -8,6 +8,48 @@ import { colors, spacing, radius, fontSize , ms } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.31",
+    date: "2026-08-28",
+    changes: [
+      "推送 token 注册改为登录后调用（解决启动时 authToken 为空的问题）",
+    ],
+  },
+  {
+    version: "v0.9.30",
+    date: "2026-08-28",
+    changes: [
+      "推送 token 诊断日志增强（initNotifications 入口确认 + 每步日志）",
+    ],
+  },
+  {
+    version: "v0.9.29",
+    date: "2026-08-28",
+    changes: [
+      "推送 token 注册加详细日志（7 步诊断）",
+    ],
+  },
+  {
+    version: "v0.9.28",
+    date: "2026-08-28",
+    changes: [
+      "推送 token 注册用 CLOUD_SERVER 地址（不依赖 connectedDevice）",
+    ],
+  },
+  {
+    version: "v0.9.27",
+    date: "2026-08-28",
+    changes: [
+      "推送 token 注册加 Authorization header",
+    ],
+  },
+  {
+    version: "v0.9.26",
+    date: "2026-08-28",
+    changes: [
+      "版本号 bump + ChangelogPage 同步 v0.9.25 条目",
+    ],
+  },
+  {
     version: "v0.9.25",
     date: "2026-08-28",
     changes: [
@@ -15,6 +57,103 @@ const changelogData = [
       "修复 expo-notifications release 构建兼容性（addNotificationResponseListener try-catch）",
       "推送通知客户端注册（Expo Push Token + POST /api/devices/push-token）",
       "新增 projectId 配置（expo push token 需要）",
+    ],
+  },
+  {
+    version: "v0.9.24",
+    date: "2026-08-27",
+    changes: [
+      "新增 Expo projectId 配置（推送 token 需要）",
+    ],
+  },
+  {
+    version: "v0.9.23",
+    date: "2026-08-27",
+    changes: [
+      "推送通知集成（Expo Push Token 注册 + 通知点击跳转）",
+      "服务端新增 /api/devices/push-token 端点",
+    ],
+  },
+  {
+    version: "v0.9.22",
+    date: "2026-08-26",
+    changes: [
+      "ChangelogPage 补全 v0.9.12~v0.9.21 + v0.9.4 缺失版本条目",
+    ],
+  },
+  {
+    version: "v0.9.21",
+    date: "2026-08-26",
+    changes: [
+      "更新日志页面修复：现在可正确显示服务器最新版本说明",
+    ],
+  },
+  {
+    version: "v0.9.20",
+    date: "2026-08-26",
+    changes: [
+      "GlassCard 三层玻璃封装（iOS原生液态玻璃/Android真实模糊/纯View降级）",
+      "消息入场弹簧动画（FadeInDown + damping:20）",
+    ],
+  },
+  {
+    version: "v0.9.19",
+    date: "2026-08-26",
+    changes: [
+      "消息气泡左滑引用回复/右滑转发（微信级手势交互）",
+      "滑动阈值15px防误触，回弹弹簧damping:20 stiffness:300",
+    ],
+  },
+  {
+    version: "v0.9.18",
+    date: "2026-08-26",
+    changes: [
+      "agent气泡暗色模式可读性修复（双套色板按主题切换）",
+      "AI助手回复辨识度提升（微透明背景+渐变边框）",
+    ],
+  },
+  {
+    version: "v0.9.17",
+    date: "2026-08-26",
+    changes: [
+      "设备互联配对功能：6位码配对 + 已配对列表 + 解绑",
+      "设置页「设备互联」入口",
+    ],
+  },
+  {
+    version: "v0.9.16",
+    date: "2026-08-26",
+    changes: [
+      "消息可靠性升级：按 seq 排序、MessageID 幂等、status 状态渲染",
+      "消息已送达显示、已编辑标记、消息编辑入口（长按）",
+      "chat.edited 事件监听实时更新",
+    ],
+  },
+  {
+    version: "v0.9.15",
+    date: "2026-08-25",
+    changes: ["APK 签名修复（v0.9.14 补签方案升级为 gradle 原生签名整包重出）"],
+  },
+  {
+    version: "v0.9.14",
+    date: "2026-08-25",
+    changes: [
+      "主题切换修复：StyleSheet.create 模块级烘焙样式全量换肤",
+      "聊天白屏修复：libsignal curveasm.js TextDecoder utf-16le 兼容补丁",
+      "curveasm 补丁固化为 patch-package",
+    ],
+  },
+  {
+    version: "v0.9.13",
+    date: "2026-08-24",
+    changes: ["「功能」Tab 入口（用户插件管理主门面）"],
+  },
+  {
+    version: "v0.9.12",
+    date: "2026-08-24",
+    changes: [
+      "主题快照缓存修复（useSyncExternalStore 无限重渲染）",
+      "登录接口跳过旧 token 修复",
     ],
   },
   {
