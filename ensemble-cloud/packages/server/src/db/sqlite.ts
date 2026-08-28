@@ -287,4 +287,9 @@ function migrateUserColumns(db: DatabaseSync): void {
   if (!crCols.some((c) => c.name === "read_ts")) {
     db.exec("ALTER TABLE conversation_reads ADD COLUMN read_ts TEXT");
   }
+  // devices.push_token（推送通知：存储设备推送 token）
+  const devCols = db.prepare("PRAGMA table_info(devices)").all() as Array<{ name: string }>;
+  if (!devCols.some((c) => c.name === "push_token")) {
+    db.exec("ALTER TABLE devices ADD COLUMN push_token TEXT");
+  }
 }

@@ -109,6 +109,8 @@ export function createAppContext(
   const hub = new WsHub();
   // headless/Docker 部署：用固定 API key 覆盖随机 session token（HTTP + WS 统一凭证）
   if (env.apiKey) hub.overrideToken(env.apiKey);
+  // 设置 store 引用（用于离线推送）
+  hub.store = store;
   // 设备多端在线：WS 上线注册设备表，下线/上线广播给同用户其他设备
   hub.onDeviceStatus = (userId, device, online) => {
     if (online) {

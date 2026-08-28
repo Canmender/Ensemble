@@ -115,7 +115,7 @@ export class Store {
       upsertUnread: db.prepare("INSERT INTO conversation_reads (conv_id, user_id, unread) VALUES (?, ?, 1) ON CONFLICT(conv_id, user_id) DO UPDATE SET unread = unread + 1"),
       touchRead: db.prepare("INSERT INTO conversation_reads (conv_id, user_id, unread, read_ts) VALUES (?, ?, 0, ?) ON CONFLICT(conv_id, user_id) DO UPDATE SET unread = 0, read_ts = excluded.read_ts"),
       listConversationReads: db.prepare("SELECT user_id, read_ts FROM conversation_reads WHERE conv_id = ? AND read_ts IS NOT NULL"),
-      upsertDevice: db.prepare("INSERT INTO devices (id, user_id, name, type, last_seen_at, created_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, last_seen_at = excluded.last_seen_at"),
+      upsertDevice: db.prepare("INSERT INTO devices (id, user_id, name, type, push_token, last_seen_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, push_token = COALESCE(excluded.push_token, devices.push_token), last_seen_at = excluded.last_seen_at"),
       deleteDevice: db.prepare("DELETE FROM devices WHERE user_id = ? AND id = ?"),
       listDevices: db.prepare("SELECT * FROM devices WHERE user_id = ? ORDER BY created_at ASC"),
     };
@@ -522,25 +522,27 @@ export class Store {
   }
 
   /** 注册 / 更新设备（WS 连接时上报；last_seen_at 更新） */
-  upsertDevice(device: { id: string; userId: string; name: string; type: string }): void {
+  upsertDevice(device: { id: string; userId: string; name: string; type: string; pushToken?: string }): void {
     this.stmts.upsertDevice.run(
       device.id,
       device.userId,
       device.name,
       device.type,
+      device.pushToken || null,
       new Date().toISOString(),
       new Date().toISOString(),
     );
   }
 
   /** 当前用户的所有设备（含离线的，在线状态由 hub 实时判定） */
-  listDevices(userId: string): Array<{ id: string; userId: string; name: string; type: string; lastSeenAt?: string }> {
+  listDevices(userId: string): Array<{ id: string; userId: string; name: string; type: string; pushToken?: string; lastSeenAt?: string }> {
     const rows = this.stmts.listDevices.all(userId) as any[];
     return rows.map((r) => ({
       id: String(r.id),
       userId: String(r.user_id),
       name: String(r.name),
       type: String(r.type),
+      pushToken: r.push_token ? String(r.push_token) : undefined,
       lastSeenAt: r.last_seen_at ? String(r.last_seen_at) : undefined,
     }));
   }

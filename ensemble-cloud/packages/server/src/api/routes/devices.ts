@@ -16,5 +16,29 @@ export function devicesRouter(ctx: AppContext): Router {
     ok(res, ctx.store.listDevices(userId).map((d) => ({ ...d, online: online.has(d.id) })));
   });
 
+  // POST /api/devices/push-token - 注册推送 token
+  r.post("/push-token", (req, res) => {
+    const userId = req.user?.id;
+    if (!userId) return fail(res, new Error("未认证"), 401);
+
+    const { deviceId, token, platform } = req.body;
+    if (!deviceId || !token) {
+      return fail(res, new Error("deviceId 和 token 必填"), 400);
+    }
+
+    try {
+      ctx.store.upsertDevice({
+        id: deviceId,
+        userId,
+        name: req.body.name || "",
+        type: platform || "mobile",
+        pushToken: token,
+      });
+      ok(res, { success: true });
+    } catch (err) {
+      fail(res, err instanceof Error ? err : new Error(String(err)));
+    }
+  });
+
   return r;
 }

@@ -5,6 +5,7 @@ import type { Duplex } from "node:stream";
 import { parseClientMsg, type RunEvent, type WsEnvelope, type CallSignal } from "./protocol";
 import { logger } from "../../util/logger";
 import type { AuthUser } from "../../db/users";
+import { sendExpoPush } from "../../push/push";
 
 /**
  * WebSocket Hub：管理客户端订阅（按 runId），广播 run 事件帧。
@@ -74,6 +75,9 @@ export class WsHub {
   private wsDevices = new Map<WebSocket, { userId: string; deviceId: string; name: string; type: string }>();
   /** 设备状态回调（context 注入：注册设备表 + 广播给同用户其他设备） */
   onDeviceStatus?: (userId: string, device: { id: string; name: string; type: string }, online: boolean) => void;
+
+  /** store 引用（用于离线推送） */
+  store?: { listDevices: (userId: string) => Array<{ id: string; userId: string; name: string; type: string; pushToken?: string; lastSeenAt?: string }> };
 
   /** 获取当前 session token（前端用于建立 WebSocket 连接） */
   get sessionToken(): string {
@@ -343,10 +347,60 @@ export class WsHub {
   /** 推送给指定用户的全部在线连接（用户-用户 IM） */
   sendToUser(userId: string, event: RunEvent, runId = ""): void {
     const sockets = this.userSockets.get(userId);
-    if (!sockets || sockets.size === 0) return;
-    const envelope = JSON.stringify({ v: 1, ts: Date.now(), runId, seq: 0, event });
-    for (const ws of sockets) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(envelope);
+    const hasOnlineSockets = sockets && sockets.size > 0;
+
+    // 在线推送
+    if (hasOnlineSockets) {
+      const envelope = JSON.stringify({ v: 1, ts: Date.now(), runId, seq: 0, event });
+      for (const ws of sockets!) {
+        if (ws.readyState === WebSocket.OPEN) ws.send(envelope);
+      }
+    }
+
+    // 离线推送降级：如果没有在线连接，尝试发送推送通知
+    if (!hasOnlineSockets && this.onDeviceStatus) {
+      // 异步获取设备列表并发送推送（不阻塞主流程）
+      this.sendOfflinePush(userId, event, runId).catch((err) => {
+        logger.warn("Failed to send offline push:", err);
+      });
+    }
+  }
+
+  /** 发送离线推送通知 */
+  private async sendOfflinePush(userId: string, event: RunEvent, runId: string): Promise<void> {
+    // 从 event 中提取推送内容
+    let title = "新消息";
+    let body = "";
+
+    if (event.type === "chat.message") {
+      const chatEvent = event as any;
+      body = chatEvent.content || "您有新消息";
+      if (chatEvent.fromName) {
+        title = chatEvent.fromName;
+      }
+    } else if (event.type === "agent.event") {
+      body = (event as any).content || "Agent 有新消息";
+    } else {
+      body = `事件: ${event.type}`;
+    }
+
+    // 获取用户的设备列表
+    const devices = this.store?.listDevices(userId);
+    if (!devices || devices.length === 0) return;
+
+    // 发送推送给所有有 push_token 的设备
+    for (const device of devices) {
+      if (device.pushToken) {
+        try {
+          await sendExpoPush(device.pushToken, title, body, {
+            runId,
+            eventType: event.type,
+          });
+          logger.info(`Push sent to device ${device.id} for user ${userId}`);
+        } catch (err) {
+          logger.warn(`Failed to send push to device ${device.id}:`, err);
+        }
+      }
     }
   }
 

@@ -768,6 +768,16 @@ class ApiService {
     return this.request("GET", "/api/devices");
   }
 
+  /** 注册推送令牌（Expo Push Token） */
+  async registerPushToken(input: {
+    deviceId: string;
+    token: string;
+    platform: string;
+    name?: string;
+  }): Promise<ApiResponse<{ success: boolean }>> {
+    return this.request<{ success: boolean }>("POST", "/api/devices/push-token", input);
+  }
+
   // ========== Memory API ==========
 
   /** 获取记忆摘要 */
