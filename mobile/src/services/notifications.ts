@@ -36,12 +36,14 @@ function previewOf(msg: ChatWsMessage): string {
 
 /** 注册推送 token：获取 expo push token 并 POST 到服务端 */
 async function registerPushToken(): Promise<void> {
+  console.warn("[push] step 1: checking permissions");
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
   if (existingStatus !== "granted") {
     const { status } = await Notifications.requestPermissionsAsync();
     finalStatus = status;
   }
+  console.warn("[push] step 2: permission status =", finalStatus);
   if (finalStatus !== "granted") return;
 
   if (Platform.OS === "android") {
@@ -53,31 +55,37 @@ async function registerPushToken(): Promise<void> {
     });
   }
 
+  console.warn("[push] step 3: getting expo push token");
   const token = (
     await Notifications.getExpoPushTokenAsync({
       projectId: "51970ac4-af3c-4345-bed2-b1ac8bee96bb",
     })
   ).data;
+  console.warn("[push] step 4: got token =", token);
 
-  // 注册到服务器：直接用 CLOUD_SERVER 地址（不依赖 connectedDevice）
   try {
     const baseUrl = `http://${CLOUD_SERVER.host}:${CLOUD_SERVER.port}`;
     const authToken = await AsyncStorage.getItem("@ensemble/auth_token");
+    console.warn("[push] step 5: authToken =", authToken ? "exists" : "null", "baseUrl =", baseUrl);
+
     if (!authToken) return;
 
     const { connectedDevice } = useDeviceStore.getState();
     const deviceId = connectedDevice?.id || "mobile-" + Date.now();
+    console.warn("[push] step 6: calling API with deviceId =", deviceId);
 
-    await fetch(`${baseUrl}/api/devices/push-token`, {
+    const res = await fetch(`${baseUrl}/api/devices/push-token`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify({ deviceId, token, platform: Platform.OS }),
-    }).then((r) => r.json()).then(console.log).catch(console.error);
+    });
+    const json = await res.json();
+    console.warn("[push] step 7: API response =", JSON.stringify(json));
   } catch (e) {
-    console.warn("[push-token] registration failed:", e);
+    console.warn("[push] ERROR:", e);
   }
 }
 
