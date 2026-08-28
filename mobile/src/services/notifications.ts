@@ -34,8 +34,8 @@ function previewOf(msg: ChatWsMessage): string {
   return "新消息";
 }
 
-/** 注册推送 token：获取 expo push token 并 POST 到服务端 */
-async function registerPushToken(): Promise<void> {
+/** 注册推送 token：获取 expo push token 并 POST 到服务端（需在登录后调用） */
+export async function registerPushToken(): Promise<void> {
   console.warn("[push] step 1: checking permissions");
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
@@ -104,8 +104,7 @@ export function initNotifications(): void {
     sound: null,
   }).catch(() => {});
 
-  // 推送 token 注册
-  void registerPushToken().catch(() => {});
+  // 推送 token 注册（改为在登录成功后调用，不在这里调用）
 
   // 通知点击处理：跳转到对应会话
   try {

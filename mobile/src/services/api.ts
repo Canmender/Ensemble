@@ -5,6 +5,7 @@
 
 import { useDeviceStore } from "../store/deviceStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { registerPushToken } from "./notifications";
 import type {
   AgentConfig,
   Task,
@@ -631,6 +632,8 @@ class ApiService {
       } catch {
         /* 存储不可用时仅内存 */
       }
+      // 登录成功后注册推送 token
+      void registerPushToken();
     }
     return res;
   }
@@ -649,6 +652,8 @@ class ApiService {
       } catch {
         /* ignore */
       }
+      // 注册成功后也注册推送 token
+      void registerPushToken();
     }
     return res;
   }
