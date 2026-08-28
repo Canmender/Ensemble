@@ -57,19 +57,24 @@ async function registerPushToken(): Promise<void> {
     })
   ).data;
 
-  // 注册到服务器
-  const { connectedDevice } = useDeviceStore.getState();
-  if (!connectedDevice) return;
-  const baseUrl = `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
-  await fetch(`${baseUrl}/api/devices/push-token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      deviceId: connectedDevice.id,
-      token,
-      platform: Platform.OS,
-    }),
-  }).catch(() => {});
+  // 注册到服务器：等待 connectedDevice 就绪（app 启动时可能为 null）
+  for (let i = 0; i < 10; i++) {
+    const { connectedDevice } = useDeviceStore.getState();
+    if (connectedDevice) {
+      const baseUrl = `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
+      await fetch(`${baseUrl}/api/devices/push-token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          deviceId: connectedDevice.id,
+          token,
+          platform: Platform.OS,
+        }),
+      }).catch(() => {});
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
 }
 
 /** 初始化通知：推送 token 注册 + Android channel + 全局 WS 监听 + 通知点击处理 */
