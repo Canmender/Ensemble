@@ -6,7 +6,6 @@
  * - 推送 token 注册：app 启动时获取 expo push token 并 POST 到服务端
  */
 import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
 import { Platform } from "react-native";
 import { wsLink, type ChatWsMessage, type MentionEvent } from "./wslink";
 import { useUnreadStore } from "../store/unreadStore";
@@ -35,8 +34,6 @@ function previewOf(msg: ChatWsMessage): string {
 
 /** 注册推送 token：获取 expo push token 并 POST 到服务端 */
 async function registerPushToken(): Promise<void> {
-  if (!Device.isDevice) return;
-
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
   if (existingStatus !== "granted") {
@@ -68,7 +65,7 @@ async function registerPushToken(): Promise<void> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      deviceId: Device.osInternalBuildId || "unknown",
+      deviceId: connectedDevice.id,
       token,
       platform: Platform.OS,
     }),
@@ -87,18 +84,22 @@ export function initNotifications(): void {
   }).catch(() => {});
 
   // 推送 token 注册
-  void registerPushToken();
+  void registerPushToken().catch(() => {});
 
   // 通知点击处理：跳转到对应会话
-  Notifications.addNotificationResponseListener((response) => {
-    const convId = response.notification.request.content.data?.convId;
-    if (convId) {
-      const { lastActiveConvId } = useUnreadStore.getState();
-      if (lastActiveConvId !== convId) {
-        useUnreadStore.getState().setLastActiveConvId(convId);
+  try {
+    Notifications.addNotificationResponseListener((response) => {
+      const convId = response.notification.request.content.data?.convId;
+      if (convId) {
+        const { lastActiveConvId } = useUnreadStore.getState();
+        if (lastActiveConvId !== convId) {
+          useUnreadStore.getState().setLastActiveConvId(convId);
+        }
       }
-    }
-  });
+    });
+  } catch {
+    /* 通知响应监听器注册失败不影响主流程 */
+  }
 
   wsLink.onGlobalChatMessage((msg) => {
     const { lastActiveConvId, mutedRunIds, addUnread } = useUnreadStore.getState();
