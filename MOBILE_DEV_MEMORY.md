@@ -97,14 +97,33 @@
 - 使用软链接共享源代码
 - 配置和数据完全隔离
 
-### 移动端 v0.9.3
+### 移动端 v0.9.32
 - 毛玻璃 Dock 效果
 - AI 助手页面
 - 表情直接发送
 - 浅灰+白色配色
+- 动态主题 S2（三态外观 + 全 App 暗色）
+- 液态玻璃 Liquid Glass（expo-blur 真实透视 + 光线折射）
+- 聊天气泡手势（左滑引用/右滑转发）
+- GlassCard 三层封装 + 消息入场弹簧动画
+- E2EE 端到端加密（MinimalWebCrypto noble 纯 JS）
+- 推送通知完整链路（Expo Push Notification）
+- 设备互联 L1-L2（配对 UI + pairs API）
+- 消息可靠性（seq 排序/MessageID/delivered_at/status/edit）
+- ChangelogPage 全量同步
+- Android 16 bridgeless 白屏修复（newArchEnabled=false）
 
-### 桌面端 v0.8.0
+### 桌面端 v0.8.42
 - Token 使用量图表
 - 设备在线状态
 - 日志换行修复
 - 隐私设置位置调整
+- 插件化 Agent 内核（Cordis 思想）
+- 桌面端自动更新（自研轻量方案）
+- 安装包瘦身 219MB → 101MB
+- 组织权限 O1（role 激活 + 部门树 + requireRole）
+- 群组管理 P1（group_members + 角色控制 + 公告 + 搜索）
+- 消息可靠性 P0（status 枚举 + edited_at + delivered_at）
+- 设备互联 L0-L2 服务端（信封协议 + 配对 API）
+- SQLite PRAGMA 优化 + 自动备份脚本
+- 推送服务（push_token 存储 + Expo API 发送）

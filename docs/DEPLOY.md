@@ -86,11 +86,12 @@ RELAY_AUTH_KEY=<RELAY_AUTH_KEY>
 
 ### 4. DB 迁移自动执行
 
-新增数据库列（如 `attachment`、`deleted`、`reply_to`、`read_ts`、`devices` 表）的迁移在 server 启动时自动跑（`sqlite.ts` 的 `migrateUserColumns` 函数：`PRAGMA table_info` 检测 → `ALTER TABLE ADD COLUMN`）。**无需手动执行 SQL**。
+新增数据库列（如 `attachment`、`deleted`、`reply_to`、`read_ts`、`push_token`、`devices` 表）的迁移在 server 启动时自动跑（`sqlite.ts` 的 `migrateUserColumns` 函数：`PRAGMA table_info` 检测 → `ALTER TABLE ADD COLUMN`）。**无需手动执行 SQL**。
 
 旧库兼容设计：
 - 无 `user_id` 列 → 重建 chat_messages 表（移除外键 + 加列）
 - 无 `attachment` / `reply_to` / `deleted` / `read_ts` → `ALTER TABLE ADD COLUMN`
+- 无 `push_token` 列 → `ALTER TABLE users ADD COLUMN push_token TEXT`
 
 ### 5. devices 端点对 API key 返回 401
 
@@ -140,6 +141,44 @@ npx expo prebuild --platform android
 - 域名 `<备案域名>` 的 80/443 端口被阿里云备案拦截
 - nginx 证书已就绪，待备案合规后切换 `https://`
 - 证书有效期至 **2026-08-15**，届时需续期
+
+### 11. 推送通知部署
+
+服务端发送 Expo Push Notification 需要 `EXPO_ACCESS_TOKEN` 环境变量。
+
+**获取 EXPO_ACCESS_TOKEN**：
+```bash
+# 在本地 Expo 项目目录执行（需先登录 expo）
+npx expo login
+npx expo access:token list
+# 或直接在 Expo 网站 https://expo.dev/accounts/[username]/settings/access-tokens 创建
+```
+
+**docker-compose.yml 配置**：
+```yaml
+services:
+  server:
+    environment:
+      - ENSEMBLE_API_KEY=<API_KEY>
+      - RELAY_AUTH_KEY=<RELAY_AUTH_KEY>
+      - EXPO_ACCESS_TOKEN=<EXPO_ACCESS_TOKEN>
+```
+
+或在 `.env` 文件中添加：
+```
+EXPO_ACCESS_TOKEN=<EXPO_ACCESS_TOKEN>
+```
+
+**push_token 列迁移**：服务端启动时自动执行，无需手动 SQL。`users` 表新增 `push_token TEXT` 列，用于存储每个用户的 Expo Push Token。
+
+**验证推送功能**：
+```bash
+# 检查服务端是否读取到 EXPO_ACCESS_TOKEN
+docker exec ensemble-server printenv | grep EXPO
+
+# 登录移动端后，检查用户 push_token 是否存储
+curl -s -H "Authorization: Bearer <USER_TOKEN>" http://localhost:8787/api/auth/me | grep push_token
+```
 
 ---
 

@@ -207,3 +207,73 @@ reactNativeArchitectures=arm64-v8a,armeabi-v7a
 8. **版本号管理**：不要频繁 bump，一个版本内完成所有改动
 9. **APK 架构配置**：用 `reactNativeArchitectures` gradle property，不用 abiFilters
 10. **prebuild 后检查**：signingConfig、gradle.properties、local.properties 都会丢失
+11. **expo 陈旧 bundle**：expo start 后改了代码但设备仍显示旧版，需 `npx expo start --clear` 清缓存
+12. **Hermes TextDecoder utf-16le**：curveasm 模块在 Hermes 引擎下触发 utf-16le 编码崩溃，需 patch-package 固化补丁
+13. **网络安全配置烘焙**：改 server.config.js 后必须重新 prebuild，network_security_config.xml 在 prebuild 时烘焙进 APK
+
+## 13. Android 16 + React Native bridgeless 模式白屏
+
+### 13.1 newArchEnabled=false 白屏
+
+**问题**：Android 16 (API 36) 设备上 React Native 应用启动后白屏，Logcat 显示 bridgeless 模式初始化失败。
+
+**根因**：React Native 0.76+ 默认启用 new architecture（bridgeless 模式），但部分第三方原生模块（如 expo-blur、react-native-webrtc）尚未适配 bridgeless，导致原生模块注册失败、JS 层无法加载。
+
+**修复**：在 `android/gradle.properties` 中显式关闭新架构：
+```properties
+newArchEnabled=false
+hermesEnabled=true
+```
+
+**注意**：`expo prebuild --clean` 会重置 `gradle.properties`，需在 prebuild 后重新检查并设置 `newArchEnabled=false`。这是 Android 16 适配的临时方案，待上游库全部迁移后可开启。
+
+**教训**：
+- Android 16 对 React Native 新架构的兼容性要求更严格
+- prebuild 产物是 ephemeral 的，任何自定义 gradle 配置都需在 prebuild 后重新应用
+- 白屏时优先检查 Logcat 中的原生模块注册错误
+
+## 14. push token 注册时序问题
+
+### 14.1 必须在登录后调用 registerForPushNotificationsAsync
+
+**问题**：在 `initNotifications()`（应用启动时）就调用 `registerForPushNotificationsAsync()`，此时用户尚未登录，没有有效的 session token，导致 push token 无法关联到用户，服务端存储的 push token 无归属。
+
+**根因**：Expo Push Token 的获取只需要 Expo 项目 ID，不需要用户认证；但将 token 存储到服务端需要用户的 session token。如果在登录前注册，服务端无法将 token 与用户关联。
+
+**修复**：将 push token 注册时机从 `initNotifications()`（启动时）移到登录成功后的回调中：
+```typescript
+// 登录成功后
+const token = await registerForPushNotificationsAsync();
+if (token) {
+  await api.request('POST', '/api/auth/push-token', { token });
+}
+```
+
+**教训**：
+- push token 获取（本地）和 push token 存储（服务端）是两个独立步骤
+- 存储步骤依赖用户认证，必须在登录后执行
+- App 重启时需在登录后重新注册（token 可能变化）
+
+## 15. Expo 项目 FCM 配置
+
+### 15.1 Android 推送必须配置 Firebase Cloud Messaging
+
+**问题**：Expo 项目的 Android 推送通知在开发模式下工作（Expo Go），但构建独立 APK 后推送无法收到。
+
+**根因**：Expo Push Notification 在 Android 上依赖 Firebase Cloud Messaging (FCM)。Expo Go 内置了 Expo 的 FCM 凭据，但独立 APK 需要配置自己的 FCM 项目。
+
+**配置步骤**：
+1. 在 Firebase Console 创建项目，获取 `google-services.json`
+2. 将 `google-services.json` 放入 `mobile/android/app/`
+3. 在 `app.json` 中配置 `expo.plugins` 添加 `expo-notifications`
+4. 将 Firebase 项目 ID 填入 Expo 项目设置（`expo push notification` 配置）
+5. 使用 `EXPO_ACCESS_TOKEN` 环境变量用于服务端发送推送
+
+**注意事项**：
+- `google-services.json` 包含 Firebase 凭据，**不要提交到 git**（已加入 .gitignore）
+- 服务端发送推送需要 `EXPO_ACCESS_TOKEN`，通过 `npx expo push:android:upload --api-key <FCM_SERVER_KEY>` 获取
+- 推送通知在应用被杀后仍可收到（通过 FCM 高优先级通道）
+
+---
+
+## 关键教训总结
