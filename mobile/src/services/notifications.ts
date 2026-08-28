@@ -7,6 +7,7 @@
  */
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { wsLink, type ChatWsMessage, type MentionEvent } from "./wslink";
 import { useUnreadStore } from "../store/unreadStore";
 import { useDeviceStore } from "../store/deviceStore";
@@ -62,15 +63,19 @@ async function registerPushToken(): Promise<void> {
     const { connectedDevice } = useDeviceStore.getState();
     if (connectedDevice) {
       const baseUrl = `http://${connectedDevice.ip}:${connectedDevice.httpPort}`;
+      const authToken = await AsyncStorage.getItem("@ensemble/auth_token");
       await fetch(`${baseUrl}/api/devices/push-token`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
         body: JSON.stringify({
           deviceId: connectedDevice.id,
           token,
           platform: Platform.OS,
         }),
-      }).catch(() => {});
+      }).catch((e) => console.warn("[push-token] registration failed:", e));
       return;
     }
     await new Promise((r) => setTimeout(r, 1000));
