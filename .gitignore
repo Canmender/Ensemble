@@ -57,3 +57,4 @@ TencentDB-Agent-Memory/
 # reference IM codebases and scratch
 IM/
 image/
+*.docx
