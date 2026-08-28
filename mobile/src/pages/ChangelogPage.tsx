@@ -8,6 +8,17 @@ import { colors, spacing, radius, fontSize } from "../theme";
 
 const changelogData = [
   {
+    version: "v0.9.9",
+    date: "2026-08-28",
+    changes: [
+      "服务器端组织权限体系基础：role 激活 + 部门树 + requireRole 中间件",
+      "群组管理增强：group_members 表 + 角色控制 + 版本号 + 公告 + 搜索",
+      "消息可靠性提升：status 枚举 + edited_at + delivered_at + 编辑端点",
+      "设备互联优化：信封协议 + 设备配对 API + 补拉日志",
+      "平台能力扩展：Reaction 表情 + 存储抽象层 + FTS5 全文搜索",
+    ],
+  },
+  {
     version: "v0.9.8",
     date: "2026-08-22",
     changes: [
