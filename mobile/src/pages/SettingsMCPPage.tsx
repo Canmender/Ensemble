@@ -42,7 +42,7 @@ export default function SettingsMCPPage() {
 
   const loadServices = useCallback(async () => {
     try {
-      const data = await api.get<MCPService[]>("/mcp");
+      const data = await api.get<MCPService[]>("/api/mcp");
       setServices(data);
     } catch (e) {
       console.error("加载 MCP 服务失败:", e);
@@ -69,9 +69,9 @@ export default function SettingsMCPPage() {
 
     try {
       if (editingService) {
-        await api.put(`/mcp/${editingService.id}`, form);
+        await api.put(`/api/mcp/${editingService.id}`, form);
       } else {
-        await api.post("/mcp", form);
+        await api.post("/api/mcp", form);
       }
       setShowAddModal(false);
       setEditingService(null);
@@ -90,7 +90,7 @@ export default function SettingsMCPPage() {
         style: "destructive",
         onPress: async () => {
           try {
-            await api.delete(`/mcp/${service.id}`);
+            await api.delete(`/api/mcp/${service.id}`);
             void loadServices();
           } catch (e) {
             Alert.alert("错误", (e as Error).message || "删除失败");
@@ -102,7 +102,7 @@ export default function SettingsMCPPage() {
 
   const handleToggleActive = async (service: MCPService) => {
     try {
-      await api.put(`/mcp/${service.id}`, { isActive: !service.isActive });
+      await api.put(`/api/mcp/${service.id}`, { isActive: !service.isActive });
       void loadServices();
     } catch (e) {
       Alert.alert("错误", (e as Error).message || "切换失败");

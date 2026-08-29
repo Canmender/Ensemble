@@ -44,7 +44,7 @@ export default function SettingsLLMPage() {
 
   const loadProviders = useCallback(async () => {
     try {
-      const data = await api.get<LLMProvider[]>("/providers");
+      const data = await api.get<LLMProvider[]>("/api/providers");
       setProviders(data);
     } catch (e) {
       console.error("加载提供商失败:", e);
@@ -71,9 +71,9 @@ export default function SettingsLLMPage() {
 
     try {
       if (editingProvider) {
-        await api.put(`/providers/${editingProvider.id}`, form);
+        await api.put(`/api/providers/${editingProvider.id}`, form);
       } else {
-        await api.post("/providers", form);
+        await api.post("/api/providers", form);
       }
       setShowAddModal(false);
       setEditingProvider(null);
@@ -92,7 +92,7 @@ export default function SettingsLLMPage() {
         style: "destructive",
         onPress: async () => {
           try {
-            await api.delete(`/providers/${provider.id}`);
+            await api.delete(`/api/providers/${provider.id}`);
             void loadProviders();
           } catch (e) {
             Alert.alert("错误", (e as Error).message || "删除失败");
@@ -104,7 +104,7 @@ export default function SettingsLLMPage() {
 
   const handleToggleActive = async (provider: LLMProvider) => {
     try {
-      await api.put(`/providers/${provider.id}`, { isActive: !provider.isActive });
+      await api.put(`/api/providers/${provider.id}`, { isActive: !provider.isActive });
       void loadProviders();
     } catch (e) {
       Alert.alert("错误", (e as Error).message || "切换失败");

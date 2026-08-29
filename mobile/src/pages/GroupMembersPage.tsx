@@ -67,7 +67,7 @@ export default function GroupMembersPage() {
   const loadMembers = useCallback(async () => {
     if (!convId) return;
     try {
-      const data = await api.get<MemberInfo[]>(`/conversations/${convId}/members`);
+      const data = await api.get<MemberInfo[]>(`/api/groups/${convId}/members`);
       setMembers(data);
     } catch (e) {
       console.error("加载成员失败:", e);
@@ -93,7 +93,7 @@ export default function GroupMembersPage() {
       return;
     }
     try {
-      const data = await api.get(`/users/search?q=${encodeURIComponent(q)}&limit=20`);
+      const data = await api.get(`/api/users/search?q=${encodeURIComponent(q)}&limit=20`);
       setInviteResults(data);
     } catch (e) {
       console.error("搜索用户失败:", e);
@@ -102,7 +102,7 @@ export default function GroupMembersPage() {
 
   const setRole = async (userId: string, role: string) => {
     try {
-      await api.put(`/groups/${convId}/members/${userId}/role`, { role });
+      await api.put(`/api/groups/${convId}/members/${userId}/role`, { role });
       setMembers((ms) => ms.map((m) => (m.userId === userId ? { ...m, role } : m)));
       Alert.alert("成功", "已更新角色");
     } catch (e) {
@@ -118,7 +118,7 @@ export default function GroupMembersPage() {
         style: "destructive",
         onPress: async () => {
           try {
-            await api.post(`/groups/${convId}/members/${userId}/kick`);
+            await api.post(`/api/groups/${convId}/members/${userId}/kick`);
             setMembers((ms) => ms.filter((m) => m.userId !== userId));
             Alert.alert("成功", "已踢出");
           } catch (e) {
@@ -131,7 +131,7 @@ export default function GroupMembersPage() {
 
   const invite = async (userId: string) => {
     try {
-      await api.post(`/groups/${convId}/members/${userId}/role`, { role: "3" });
+      await api.post(`/api/groups/${convId}/members/${userId}/role`, { role: "3" });
       Alert.alert("成功", "已邀请");
       setShowInvite(false);
       setInviteQuery("");

@@ -40,7 +40,7 @@ export default function SettingsMemoryPage() {
 
   const loadMemories = useCallback(async () => {
     try {
-      const data = await api.get<Memory[]>("/memory");
+      const data = await api.get<Memory[]>("/api/memory");
       setMemories(data);
     } catch (e) {
       console.error("加载记忆失败:", e);
@@ -66,7 +66,7 @@ export default function SettingsMemoryPage() {
     }
 
     try {
-      await api.post("/memory", form);
+      await api.post("/api/memory", form);
       setShowAddModal(false);
       setForm({ key: "", value: "", category: "user" });
       void loadMemories();
@@ -76,20 +76,8 @@ export default function SettingsMemoryPage() {
   };
 
   const handleDelete = async (memory: Memory) => {
-    Alert.alert("确认删除", `确定删除记忆 "${memory.key}"？`, [
-      { text: "取消", style: "cancel" },
-      {
-        text: "删除",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await api.delete(`/memory/${memory.id}`);
-            void loadMemories();
-          } catch (e) {
-            Alert.alert("错误", (e as Error).message || "删除失败");
-          }
-        },
-      },
+    Alert.alert("提示", "删除功能暂未开放，请联系管理员", [
+      { text: "确定", style: "cancel" },
     ]);
   };
 

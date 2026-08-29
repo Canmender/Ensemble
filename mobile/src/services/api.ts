@@ -837,6 +837,43 @@ class ApiService {
   async getHealth(): Promise<ApiResponse<HealthResponse>> {
     return this.request<HealthResponse>("GET", "/api/health");
   }
+
+  // ========== 通用 API 方法（供新页面使用） ==========
+
+  /** GET 请求 */
+  async get<T>(path: string): Promise<T> {
+    const res = await this.request<T>("GET", path);
+    if (res.error) throw new Error(res.error);
+    return res.data as T;
+  }
+
+  /** POST 请求 */
+  async post<T>(path: string, body?: unknown): Promise<T> {
+    const res = await this.request<T>("POST", path, body);
+    if (res.error) throw new Error(res.error);
+    return res.data as T;
+  }
+
+  /** PUT 请求 */
+  async put<T>(path: string, body?: unknown): Promise<T> {
+    const res = await this.request<T>("PUT", path, body);
+    if (res.error) throw new Error(res.error);
+    return res.data as T;
+  }
+
+  /** PATCH 请求 */
+  async patch<T>(path: string, body?: unknown): Promise<T> {
+    const res = await this.request<T>("PATCH", path, body);
+    if (res.error) throw new Error(res.error);
+    return res.data as T;
+  }
+
+  /** DELETE 请求 */
+  async delete<T>(path: string): Promise<T> {
+    const res = await this.request<T>("DELETE", path);
+    if (res.error) throw new Error(res.error);
+    return res.data as T;
+  }
 }
 
 export const api = new ApiService();

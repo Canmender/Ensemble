@@ -47,7 +47,7 @@ export default function WorkflowsPage() {
 
   const loadWorkflows = useCallback(async () => {
     try {
-      const data = await api.get<Workflow[]>("/workflows");
+      const data = await api.get<Workflow[]>("/api/workflows");
       setWorkflows(data);
     } catch (e) {
       console.error("加载工作流失败:", e);
@@ -74,9 +74,9 @@ export default function WorkflowsPage() {
 
     try {
       if (editingWorkflow) {
-        await api.put(`/workflows/${editingWorkflow.id}`, form);
+        await api.put(`/api/workflows/${editingWorkflow.id}`, form);
       } else {
-        await api.post("/workflows", form);
+        await api.post("/api/workflows", form);
       }
       setShowAddModal(false);
       setEditingWorkflow(null);
@@ -95,7 +95,7 @@ export default function WorkflowsPage() {
         style: "destructive",
         onPress: async () => {
           try {
-            await api.delete(`/workflows/${workflow.id}`);
+            await api.delete(`/api/workflows/${workflow.id}`);
             void loadWorkflows();
           } catch (e) {
             Alert.alert("错误", (e as Error).message || "删除失败");
@@ -106,23 +106,8 @@ export default function WorkflowsPage() {
   };
 
   const handleRun = async (workflow: Workflow) => {
-    Alert.alert("运行工作流", `确定运行 "${workflow.name}"？`, [
-      { text: "取消", style: "cancel" },
-      {
-        text: "运行",
-        onPress: async () => {
-          try {
-            setRunningId(workflow.id);
-            const result = await api.post<{ runId: string }>(`/workflows/${workflow.id}/run`);
-            setRunningId(null);
-            Alert.alert("已启动", `运行 ID: ${result.runId}`);
-            void loadWorkflows();
-          } catch (e) {
-            setRunningId(null);
-            Alert.alert("错误", (e as Error).message || "运行失败");
-          }
-        },
-      },
+    Alert.alert("提示", "工作流运行功能暂未开放，敬请期待", [
+      { text: "确定", style: "cancel" },
     ]);
   };
 

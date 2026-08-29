@@ -43,7 +43,7 @@ export default function SettingsSkillsPage() {
 
   const loadSkills = useCallback(async () => {
     try {
-      const data = await api.get<Skill[]>("/skills");
+      const data = await api.get<Skill[]>("/api/skills");
       setSkills(data);
     } catch (e) {
       console.error("加载技能失败:", e);
@@ -70,9 +70,9 @@ export default function SettingsSkillsPage() {
 
     try {
       if (editingSkill) {
-        await api.put(`/skills/${editingSkill.id}`, form);
+        await api.put(`/api/skills/${editingSkill.id}`, form);
       } else {
-        await api.post("/skills", form);
+        await api.post("/api/skills", form);
       }
       setShowAddModal(false);
       setEditingSkill(null);
@@ -91,7 +91,7 @@ export default function SettingsSkillsPage() {
         style: "destructive",
         onPress: async () => {
           try {
-            await api.delete(`/skills/${skill.id}`);
+            await api.delete(`/api/skills/${skill.id}`);
             void loadSkills();
           } catch (e) {
             Alert.alert("错误", (e as Error).message || "删除失败");
@@ -103,7 +103,7 @@ export default function SettingsSkillsPage() {
 
   const handleToggleActive = async (skill: Skill) => {
     try {
-      await api.put(`/skills/${skill.id}`, { isActive: !skill.isActive });
+      await api.put(`/api/skills/${skill.id}`, { isActive: !skill.isActive });
       void loadSkills();
     } catch (e) {
       Alert.alert("错误", (e as Error).message || "切换失败");

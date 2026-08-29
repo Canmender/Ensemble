@@ -44,7 +44,7 @@ export default function TokenUsagePage() {
 
   const loadStats = useCallback(async () => {
     try {
-      const data = await api.get<TokenStats>("/tokens/stats");
+      const data = await api.get<TokenStats>("/api/tokens/stats");
       setStats(data);
       setError(null);
     } catch (e) {

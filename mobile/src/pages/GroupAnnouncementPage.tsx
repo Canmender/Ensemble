@@ -38,7 +38,7 @@ export default function GroupAnnouncementPage() {
   const loadAnnouncement = useCallback(async () => {
     if (!convId) return;
     try {
-      const data = await api.get<{ announcement?: string }>(`/conversations/${convId}`);
+      const data = await api.get<{ announcement?: string }>(`/api/conversations/${convId}`);
       const announcement = data.announcement || "";
       setContent(announcement);
       setOriginal(announcement);
@@ -64,7 +64,7 @@ export default function GroupAnnouncementPage() {
 
     setSaving(true);
     try {
-      await api.put(`/groups/${convId}/announcement`, { text: content.trim() });
+      await api.put(`/api/groups/${convId}/announcement`, { text: content.trim() });
       setOriginal(content.trim());
       Alert.alert("成功", "公告已更新");
     } catch (e) {
