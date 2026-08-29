@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { AppContext } from "../../context";
-import { fail, ok } from "./helpers";
+import { asyncH, fail, ok } from "./helpers";
 
 export function workflowsRouter(ctx: AppContext): Router {
   const r = Router();
@@ -28,6 +28,24 @@ export function workflowsRouter(ctx: AppContext): Router {
     await ctx.config.deleteWorkflow(req.params.id);
     ok(res, { deleted: req.params.id });
   });
+
+  r.post(
+    "/:id/run",
+    asyncH(async (req, res) => {
+      const def = ctx.config.getWorkflow(req.params.id);
+      if (!def) return fail(res, new Error(`workflow not found: ${req.params.id}`), 404);
+
+      const { prompt } = (req.body ?? {}) as { prompt?: string };
+      if (!prompt) return fail(res, new Error("prompt is required"), 400);
+
+      const run = await ctx.engine.createAndExecuteTask(
+        `Run workflow: ${def.name ?? def.id}`,
+        { mode: "workflow", workflowId: def.id, prompt },
+        req.user?.id,
+      );
+      ok(res, run, 201);
+    }),
+  );
 
   return r;
 }
