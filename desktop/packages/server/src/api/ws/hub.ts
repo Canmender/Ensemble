@@ -5,7 +5,7 @@ import type { Duplex } from "node:stream";
 import { parseClientMsg, type RunEvent, type WsEnvelope, type CallSignal } from "./protocol";
 import { logger } from "../../util/logger";
 import type { AuthUser } from "../../db/users";
-import { sendExpoPush } from "../../push/push";
+import { sendExpoPush, sendNtfyPush } from "../../push/push";
 
 /**
  * WebSocket Hub：管理客户端订阅（按 runId），广播 run 事件帧。
@@ -402,6 +402,12 @@ export class WsHub {
         } catch (err) {
           logger.warn(`Failed to send push to device ${device.id}:`, err);
         }
+      }
+      // ntfy 推送
+      if (device.pushToken && device.pushToken.startsWith("ntfy:")) {
+        const topic = device.pushToken.replace("ntfy:", "");
+        await sendNtfyPush(topic, title, body);
+        logger.info(`ntfy push sent to topic ${topic} for user ${userId}`);
       }
     }
   }
