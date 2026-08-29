@@ -216,7 +216,7 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
           )}
         </View>
         <FlatList
-          data={users}
+          data={users.slice(0, 5)}
           keyExtractor={(u) => u.id}
           renderItem={({ item: u }) => (
             <View style={styles.memberRow}>
@@ -241,6 +241,40 @@ export default function GroupSettingsPage({ route, navigation }: Props) {
           )}
           scrollEnabled={false}
         />
+        {users.length > 5 && (
+          <TouchableOpacity
+            style={styles.viewAllBtn}
+            onPress={() => navigation.navigate("GroupMembers", { convId, title: `${conv?.title || "群"} - 成员` })}
+          >
+            <Text style={styles.viewAllBtnText}>查看全部 {users.length} 名成员</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* 快捷入口 */}
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigation.navigate("GroupMembers", { convId, title: `${conv?.title || "群"} - 成员` })}
+        >
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="people-outline" size={20} color={colors.primary} />
+            <Text style={styles.menuItemText}>群成员管理</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+        </TouchableOpacity>
+        <View style={styles.menuDivider} />
+        <TouchableOpacity
+          style={styles.menuItem}
+          onPress={() => navigation.navigate("GroupAnnouncement", { convId, title: `${conv?.title || "群"} - 公告` })}
+        >
+          <View style={styles.menuItemLeft}>
+            <Ionicons name="megaphone-outline" size={20} color={colors.primary} />
+            <Text style={styles.menuItemText}>群公告</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textFaint} />
+        </TouchableOpacity>
       </View>
 
       {/* 添加成员弹窗 */}
@@ -448,6 +482,32 @@ const styles = ms({
   },
   modalTitle: { color: colors.text, fontSize: fontSize.lg, fontWeight: "600" },
   emptyText: { color: colors.textMuted, textAlign: "center", paddingVertical: spacing.xl },
+  viewAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
+  },
+  viewAllBtnText: { color: colors.primary, fontSize: fontSize.sm, fontWeight: "600" },
+  menuItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.md,
+  },
+  menuItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+  },
+  menuItemText: { color: colors.text, fontSize: fontSize.md },
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+  },
   dissolveBtn: {
     flexDirection: "row",
     alignItems: "center",
