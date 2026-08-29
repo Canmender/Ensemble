@@ -29,5 +29,19 @@ export function memoryRouter(ctx: AppContext): Router {
     }),
   );
 
+  r.delete(
+    "/:id",
+    asyncH(async (req, res) => {
+      const userId = req.user?.id;
+      if (!userId) return fail(res, new Error("未认证"), 401);
+      try {
+        ctx.memoryPoolManager.deleteExplicit(req.params.id);
+        ok(res, { success: true });
+      } catch (err) {
+        fail(res, err instanceof Error ? err : new Error(String(err)));
+      }
+    }),
+  );
+
   return r;
 }
