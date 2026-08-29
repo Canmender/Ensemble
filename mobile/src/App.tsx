@@ -41,6 +41,14 @@ import LoginPage from "./pages/LoginPage";
 import ChangelogPage from "./pages/ChangelogPage";
 import AgentDetailPage from "./pages/AgentDetailPage";
 import AssistantPage from "./pages/AssistantPage";
+import SettingsLLMPage from "./pages/SettingsLLMPage";
+import SettingsMemoryPage from "./pages/SettingsMemoryPage";
+import SettingsMCPPage from "./pages/SettingsMCPPage";
+import SettingsSkillsPage from "./pages/SettingsSkillsPage";
+import WorkflowsPage from "./pages/WorkflowsPage";
+import TokenUsagePage from "./pages/TokenUsagePage";
+import GroupMembersPage from "./pages/GroupMembersPage";
+import GroupAnnouncementPage from "./pages/GroupAnnouncementPage";
 import { AppHeader } from "./components/AppHeader";
 import { LiquidGlass } from "./components/Glass";
 
@@ -56,6 +64,8 @@ export type RootStackParamList = {
   Run: { runId: string };
   ChatRoom: { convId: string; runId?: string; title?: string };
   GroupSettings: { convId: string; title?: string };
+  GroupMembers: { convId: string; title?: string };
+  GroupAnnouncement: { convId: string; title?: string };
   Profile: undefined;
   NotificationSettings: undefined;
   About: undefined;
@@ -69,6 +79,8 @@ export type RootStackParamList = {
   SettingsMemory: undefined;
   SettingsMCP: undefined;
   SettingsSkills: undefined;
+  Workflows: undefined;
+  TokenUsage: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -378,6 +390,74 @@ function MainApp() {
           options={{
             headerShown: true,
             header: () => <AppHeader title="AI 助手" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="GroupMembers"
+          component={GroupMembersPage}
+          options={{
+            headerShown: true,
+            header: ({ route }) => (
+              <AppHeader title={(route.params as { title?: string })?.title || "群成员"} showBack showAvatar={false} />
+            ),
+          }}
+        />
+        <Stack.Screen
+          name="GroupAnnouncement"
+          component={GroupAnnouncementPage}
+          options={{
+            headerShown: true,
+            header: ({ route }) => (
+              <AppHeader title={(route.params as { title?: string })?.title || "群公告"} showBack showAvatar={false} />
+            ),
+          }}
+        />
+        <Stack.Screen
+          name="SettingsLLM"
+          component={SettingsLLMPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="LLM 设置" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="SettingsMemory"
+          component={SettingsMemoryPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="记忆管理" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="SettingsMCP"
+          component={SettingsMCPPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="MCP 服务" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="SettingsSkills"
+          component={SettingsSkillsPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="技能管理" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="Workflows"
+          component={WorkflowsPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="工作流" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="TokenUsage"
+          component={TokenUsagePage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="Token 用量" showBack showAvatar={false} />,
           }}
         />
       </Stack.Navigator>
