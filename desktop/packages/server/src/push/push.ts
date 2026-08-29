@@ -1,5 +1,6 @@
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
 const token = process.env.EXPO_ACCESS_TOKEN;
+const NTFY_SERVER = process.env.NTFY_SERVER;
 
 export interface PushMessage {
   to: string;
@@ -74,4 +75,21 @@ export async function sendExpoPushBatch(
   }
 
   return res.json() as Promise<PushResponse>;
+}
+
+export async function sendNtfyPush(topic: string, title: string, message: string) {
+  if (!NTFY_SERVER) return;
+  try {
+    await fetch(`${NTFY_SERVER}/${topic}`, {
+      method: "POST",
+      headers: {
+        "Title": title,
+        "Tags": "ensemble",
+        "Priority": "high",
+      },
+      body: message,
+    });
+  } catch (err) {
+    console.error("[ntfy] push failed:", err);
+  }
 }
