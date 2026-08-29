@@ -11,6 +11,7 @@ import { io, Socket } from "socket.io-client";
 import { Platform } from "react-native";
 import * as Application from "expo-application";
 import * as Notifications from "expo-notifications";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {
   DeviceInfo,
   EnsembleMessage,
@@ -398,10 +399,10 @@ class ConnectionService {
     this.emit("connection:state", "error");
   }
 
-  /** 注册推送令牌（Expo Push Token）*/
+  /** 注册推送令牌（ntfy topic 格式）*/
   private async registerPushTokenInternal(): Promise<boolean> {
     try {
-      console.log("[推送] 开始注册推送令牌");
+      console.log("[推送] 开始注册 ntfy topic");
 
       // 检查通知权限
       console.log("[推送] 检查通知权限...");
@@ -417,45 +418,64 @@ class ConnectionService {
       }
 
       if (finalStatus !== "granted") {
-        console.log("[推送] 通知权限未授予，跳过推送令牌注册");
+        console.warn("[推送] 通知权限未授予，跳过 topic 注册");
         return false;
       }
 
-      // 获取 Expo 推送令牌
-      console.log("[推送] 获取 Expo 推送令牌...");
-      const tokenData = await Notifications.getDevicePushTokenAsync();
-      const pushToken = tokenData.data;
-      console.log("[推送] 获取到令牌:", pushToken ? pushToken.substring(0, 30) + "..." : "(null)");
+      // 生成唯一的 ntfy topic（基于 userId）
+      console.log("[推送] 生成 ntfy topic...");
+      const userId = await AsyncStorage.getItem("@ensemble/user_id");
+      const topic = userId ? `ensemble-${userId}` : `ensemble-${Date.now()}`;
+      console.log("[推送] Topic:", topic);
 
-      if (!pushToken) {
-        console.warn("[推送] 无法获取推送令牌");
-        return false;
-      }
-
-      // 注册到服务器
+      // 注册到服务器（用 ntfy: 前缀标识）
       console.log("[推送] 注册到服务器...");
       const dev = useDeviceStore.getState().currentDevice;
       const deviceId = dev?.id || this.currentDeviceId || "unknown";
       console.log("[推送] DeviceId:", deviceId);
 
-      const result = await api.registerPushToken({
-        deviceId: deviceId,
-        token: pushToken,
-        platform: Platform.OS,
-        name: dev?.name,
+      const authToken = await AsyncStorage.getItem("@ensemble/auth_token");
+      if (!authToken) {
+        console.warn("[推送] 未找到 auth token，跳过注册");
+        return false;
+      }
+
+      const { connectedDevice } = useDeviceStore.getState();
+      const baseUrl = connectedDevice
+        ? `http://${connectedDevice.ip}:${connectedDevice.httpPort}`
+        : null;
+
+      if (!baseUrl) {
+        console.warn("[推送] 未连接到服务器，跳过注册");
+        return false;
+      }
+
+      const response = await fetch(`${baseUrl}/api/devices/push-token`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          deviceId: deviceId,
+          token: `ntfy:${topic}`,  // ntfy: 前缀
+          platform: Platform.OS,
+          name: dev?.name,
+        }),
       });
 
+      const result = await response.json();
       console.log("[推送] 服务器响应:", JSON.stringify(result));
 
       if (result.data?.success) {
-        console.log("[推送] 推送令牌注册成功");
+        console.log("[推送] ntfy topic 注册成功");
         return true;
       } else {
-        console.warn("[推送] 推送令牌注册失败:", result);
+        console.warn("[推送] ntfy topic 注册失败:", result);
         return false;
       }
     } catch (err) {
-      console.error("[推送] 推送令牌注册异常:", err);
+      console.error("[推送] ntfy topic 注册异常:", err);
       return false;
     }
   }
