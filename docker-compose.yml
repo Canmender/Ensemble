@@ -29,6 +29,7 @@ services:
       - RELAY_URL=${RELAY_URL:-}
       - RELAY_AUTH_KEY=${RELAY_AUTH_KEY:-}
       - CLOUD_HOST=${CLOUD_HOST:-}
+      - NTFY_SERVER=${NTFY_SERVER:-}
     volumes:
       - ensemble-data:/data
       - /data/backups:/data/backups
