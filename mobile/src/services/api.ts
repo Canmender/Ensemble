@@ -840,39 +840,70 @@ class ApiService {
 
   // ========== 通用 API 方法（供新页面使用） ==========
 
+  /** 获取请求头（含认证） */
+  private async headers(): Promise<Record<string, string>> {
+    const token = await this.getToken();
+    return {
+      Accept: "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  }
+
   /** GET 请求 */
-  async get<T>(path: string): Promise<T> {
-    const res = await this.request<T>("GET", path);
-    if (res.error) throw new Error(res.error);
-    return res.data as T;
+  async get<T = unknown>(url: string): Promise<T> {
+    const baseUrl = this.getBaseUrl();
+    if (!baseUrl) throw new Error("未连接到服务器");
+    const res = await fetch(`${baseUrl}${url}`, { headers: await this.headers() });
+    const json = await res.json();
+    return (json.data ?? json) as T;
   }
 
   /** POST 请求 */
-  async post<T>(path: string, body?: unknown): Promise<T> {
-    const res = await this.request<T>("POST", path, body);
-    if (res.error) throw new Error(res.error);
-    return res.data as T;
+  async post<T = unknown>(url: string, body?: unknown): Promise<T> {
+    const baseUrl = this.getBaseUrl();
+    if (!baseUrl) throw new Error("未连接到服务器");
+    const res = await fetch(`${baseUrl}${url}`, {
+      method: "POST",
+      headers: { ...(await this.headers()), "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const json = await res.json();
+    return (json.data ?? json) as T;
   }
 
   /** PUT 请求 */
-  async put<T>(path: string, body?: unknown): Promise<T> {
-    const res = await this.request<T>("PUT", path, body);
-    if (res.error) throw new Error(res.error);
-    return res.data as T;
+  async put<T = unknown>(url: string, body?: unknown): Promise<T> {
+    const baseUrl = this.getBaseUrl();
+    if (!baseUrl) throw new Error("未连接到服务器");
+    const res = await fetch(`${baseUrl}${url}`, {
+      method: "PUT",
+      headers: { ...(await this.headers()), "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const json = await res.json();
+    return (json.data ?? json) as T;
   }
 
   /** PATCH 请求 */
-  async patch<T>(path: string, body?: unknown): Promise<T> {
-    const res = await this.request<T>("PATCH", path, body);
-    if (res.error) throw new Error(res.error);
-    return res.data as T;
+  async patch<T = unknown>(url: string, body?: unknown): Promise<T> {
+    const baseUrl = this.getBaseUrl();
+    if (!baseUrl) throw new Error("未连接到服务器");
+    const res = await fetch(`${baseUrl}${url}`, {
+      method: "PATCH",
+      headers: { ...(await this.headers()), "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const json = await res.json();
+    return (json.data ?? json) as T;
   }
 
   /** DELETE 请求 */
-  async delete<T>(path: string): Promise<T> {
-    const res = await this.request<T>("DELETE", path);
-    if (res.error) throw new Error(res.error);
-    return res.data as T;
+  async delete<T = unknown>(url: string): Promise<T> {
+    const baseUrl = this.getBaseUrl();
+    if (!baseUrl) throw new Error("未连接到服务器");
+    const res = await fetch(`${baseUrl}${url}`, { method: "DELETE", headers: await this.headers() });
+    const json = await res.json();
+    return (json.data ?? json) as T;
   }
 }
 

@@ -29,7 +29,7 @@ interface LLMProvider {
   type: string;
   apiKey?: string;
   baseUrl?: string;
-  isActive: boolean;
+  enabled: boolean;
   createdAt: string;
 }
 
@@ -104,7 +104,7 @@ export default function SettingsLLMPage() {
 
   const handleToggleActive = async (provider: LLMProvider) => {
     try {
-      await api.put(`/api/providers/${provider.id}`, { isActive: !provider.isActive });
+      await api.put(`/api/providers/${provider.id}`, { enabled: !provider.enabled });
       void loadProviders();
     } catch (e) {
       Alert.alert("错误", (e as Error).message || "切换失败");
@@ -127,7 +127,7 @@ export default function SettingsLLMPage() {
             <Text style={styles.cardTitle}>{provider.name}</Text>
           </View>
           <TouchableOpacity onPress={() => handleToggleActive(provider)} style={styles.toggleBtn}>
-            <View style={[styles.toggleDot, provider.isActive && styles.toggleDotActive]} />
+            <View style={[styles.toggleDot, provider.enabled && styles.toggleDotActive]} />
           </TouchableOpacity>
         </View>
         <Text style={styles.cardDesc}>类型: {provider.type.toUpperCase()}</Text>
