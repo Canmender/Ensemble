@@ -22,6 +22,7 @@ export class Store {
   // 内存 seq 计数器（避免每次 appendRunEvent 查询 SELECT MAX）
   private eventSeqCounters = new Map<string, number>();
   private jobSeqCounters = new Map<string, number>();
+  private chatSeqCounters = new Map<string, number>();
 
   // 预编译语句（构造时 prepare，生命周期内复用）
   private stmts: {
@@ -94,8 +95,8 @@ export class Store {
       insertRunEvent: db.prepare("INSERT INTO run_events (run_id, seq, job_id, user_id, event_json, ts) VALUES (?, ?, ?, ?, ?, ?)"),
       getRunEvents: db.prepare("SELECT seq, job_id, event_json FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq"),
       // Chat messages
-      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
-      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY ts"),
+      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, seq, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY seq, ts"),
       deleteChatMessage: db.prepare("UPDATE chat_messages SET deleted = 1 WHERE id = ?"),
       // Workflows
       listWorkflows: db.prepare("SELECT * FROM workflows ORDER BY name"),
@@ -309,6 +310,7 @@ export class Store {
   cleanupRunSeqCounters(runId: string): void {
     this.eventSeqCounters.delete(runId);
     this.jobSeqCounters.delete(runId);
+    this.chatSeqCounters.delete(runId);
   }
 
   getRunEvents(runId: string, afterSeq = 0): Array<{ seq: number; jobId?: string; event: AgentEvent }> {
@@ -321,11 +323,21 @@ export class Store {
   }
 
   // ---------- Chat messages ----------
-  /** @returns 写入成功返回 1（新消息），幂等命中返回 null */
+  /** @returns 写入成功返回 seq（自增序号），幂等命中返回 null */
   createChatMessage(msg: ChatMessage): number | null {
+    // 计算该 run 的下一个 seq
+    const cached = this.chatSeqCounters.get(msg.runId);
+    let seq: number;
+    if (cached !== undefined) {
+      seq = cached + 1;
+    } else {
+      const row = this.db.prepare("SELECT COALESCE(MAX(seq), 0) AS max_seq FROM chat_messages WHERE run_id = ?").get(msg.runId) as any;
+      seq = Number(row?.max_seq ?? 0) + 1;
+    }
     try {
-      this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts);
-      return 1;
+      this.stmts.createChatMessage.run(msg.id, msg.runId, seq, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts);
+      this.chatSeqCounters.set(msg.runId, seq);
+      return seq;
     } catch {
       return null;
     }
@@ -343,14 +355,30 @@ export class Store {
   }
 
   listChatMessages(runId: string, userId?: string, afterSeq?: number): ChatMessage[] {
-    const rows = userId
-      ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') AND (ts > (SELECT ts FROM chat_messages WHERE run_id = ? AND deleted = 0 ORDER BY ts LIMIT 1 OFFSET ?) OR ? IS NULL) ORDER BY ts").all(runId, userId, runId, afterSeq ?? null, afterSeq ?? null) as any[])
-      : afterSeq !== undefined
-        ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (ts > (SELECT ts FROM chat_messages WHERE run_id = ? AND deleted = 0 ORDER BY ts LIMIT 1 OFFSET ?) OR ? IS NULL) ORDER BY ts").all(runId, runId, afterSeq, afterSeq) as any[])
-        : (this.stmts.listChatMessages.all(runId) as any[]);
+    let rows: any[];
+    if (userId) {
+      if (afterSeq !== undefined && afterSeq > 0) {
+        rows = this.db.prepare(
+          "SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') AND seq > ? ORDER BY seq, ts"
+        ).all(runId, userId, afterSeq) as any[];
+      } else {
+        rows = this.db.prepare(
+          "SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') ORDER BY seq, ts"
+        ).all(runId, userId) as any[];
+      }
+    } else {
+      if (afterSeq !== undefined && afterSeq > 0) {
+        rows = this.db.prepare(
+          "SELECT * FROM chat_messages WHERE run_id = ? AND seq > ? ORDER BY seq, ts"
+        ).all(runId, afterSeq) as any[];
+      } else {
+        rows = this.stmts.listChatMessages.all(runId) as any[];
+      }
+    }
     return rows.map((r) => ({
       id: r.id,
       runId: r.run_id,
+      seq: Number(r.seq),
       jobId: r.job_id ?? undefined,
       agentId: r.agent_id,
       role: r.role,

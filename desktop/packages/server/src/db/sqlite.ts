@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS run_events (
 CREATE TABLE IF NOT EXISTS chat_messages (
   id       TEXT PRIMARY KEY,
   run_id   TEXT NOT NULL,
+  seq      INTEGER,
   job_id   TEXT,
   agent_id TEXT NOT NULL,
   role     TEXT NOT NULL,
@@ -288,6 +289,11 @@ function migrateUserColumns(db: DatabaseSync): void {
   const cmMentions = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
   if (!cmMentions.some((c) => c.name === "mentions")) {
     db.exec("ALTER TABLE chat_messages ADD COLUMN mentions TEXT");
+  }
+  // chat_messages.seq（消息序号：按 run 分组自增，用于增量拉取）
+  const cmSeq = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmSeq.some((c) => c.name === "seq")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN seq INTEGER");
   }
   // conversations.muted / pinned（静音 / 置顶）
   const convCols2 = db.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>;
