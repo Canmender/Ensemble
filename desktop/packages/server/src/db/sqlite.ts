@@ -169,6 +169,46 @@ CREATE INDEX IF NOT EXISTS idx_chat_run ON chat_messages(run_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run_agent ON jobs(run_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run_job ON run_events(run_id, job_id);
+
+-- 消息表情回应
+CREATE TABLE IF NOT EXISTS reactions (
+  message_id TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  emoji      TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (message_id, user_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_reactions_msg ON reactions(message_id);
+
+-- E2EE 身份密钥目录（服务器仅存公钥材料）
+CREATE TABLE IF NOT EXISTS e2e_identities (
+  user_id                 TEXT PRIMARY KEY,
+  identity_key            TEXT NOT NULL,
+  signed_pre_key_id       INTEGER NOT NULL,
+  signed_pre_key_public   TEXT NOT NULL,
+  signed_pre_key_signature TEXT NOT NULL,
+  updated_at              TEXT NOT NULL
+);
+
+-- E2EE 一次性预密钥（OPK 取走即删）
+CREATE TABLE IF NOT EXISTS e2e_opks (
+  user_id    TEXT NOT NULL,
+  key_id     INTEGER NOT NULL,
+  key_data   TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, key_id)
+);
+CREATE INDEX IF NOT EXISTS idx_e2e_opks_user ON e2e_opks(user_id);
+
+-- 群成员角色（1=群主, 2=管理员, 3=普通成员）
+CREATE TABLE IF NOT EXISTS group_members (
+  conv_id   TEXT NOT NULL,
+  user_id   TEXT NOT NULL,
+  role      INTEGER NOT NULL DEFAULT 3,
+  joined_at TEXT NOT NULL,
+  PRIMARY KEY (conv_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_group_members_conv ON group_members(conv_id);
 `;
 
 export function openDb(dbPath: string): DatabaseSync {
@@ -275,6 +315,10 @@ function migrateUserColumns(db: DatabaseSync): void {
   }
   if (!convCols3.some((c) => c.name === "group_admins")) {
     db.exec("ALTER TABLE conversations ADD COLUMN group_admins TEXT");
+  }
+  // conversations.join_type（P1 群入群方式：0=自由/1=审批/2=不可加入）
+  if (!convCols3.some((c) => c.name === "join_type")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN join_type INTEGER NOT NULL DEFAULT 0");
   }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
