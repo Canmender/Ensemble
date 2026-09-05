@@ -213,19 +213,21 @@ CREATE INDEX IF NOT EXISTS idx_group_members_conv ON group_members(conv_id);
 
 -- 用户插件管理（per-user 插件启用/配置状态）
 CREATE TABLE IF NOT EXISTS user_plugins (
-  user_id   TEXT NOT NULL,
-  plugin_id TEXT NOT NULL,
-  enabled   INTEGER NOT NULL DEFAULT 0,
-  settings  TEXT NOT NULL DEFAULT '{}',
+  user_id    TEXT NOT NULL,
+  plugin_id  TEXT NOT NULL,
+  enabled    INTEGER NOT NULL DEFAULT 0,
+  config_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, plugin_id)
 );
 
 -- 插件用户级 KV 存储
 CREATE TABLE IF NOT EXISTS plugin_kv (
-  user_id   TEXT NOT NULL,
-  plugin_id TEXT NOT NULL,
-  key       TEXT NOT NULL,
-  value     TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  plugin_id  TEXT NOT NULL,
+  key        TEXT NOT NULL,
+  value_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, plugin_id, key)
 );
 
@@ -249,11 +251,11 @@ CREATE TABLE IF NOT EXISTS device_pairs (
 
 -- 设备互联事件日志（配对设备间同步重放）
 CREATE TABLE IF NOT EXISTS device_link_events (
-  msg_id   TEXT NOT NULL,
-  pair_id  TEXT NOT NULL,
-  kind     TEXT NOT NULL,
-  payload  TEXT,
-  ts       TEXT NOT NULL,
+  msg_id      TEXT NOT NULL,
+  pair_id     TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  payload_json TEXT,
+  ts          TEXT NOT NULL,
   PRIMARY KEY (pair_id, msg_id)
 );
 CREATE INDEX IF NOT EXISTS idx_device_link_pair ON device_link_events(pair_id, ts);
