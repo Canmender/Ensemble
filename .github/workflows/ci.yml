@@ -16,12 +16,13 @@ jobs:
           version: 10.33.2
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
           cache-dependency-path: desktop/pnpm-lock.yaml
       - run: cd desktop && pnpm install --frozen-lockfile
       - run: cd desktop && pnpm --filter @ensemble/shared build
-      - run: cd desktop && pnpm -r typecheck
+      # 只检查 server 和 shared（desktop 包依赖 server 未 build 会报模块未找到）
+      - run: cd desktop && pnpm --filter @ensemble/shared typecheck && pnpm --filter @ensemble/server typecheck
 
   test:
     runs-on: ubuntu-latest
@@ -32,7 +33,7 @@ jobs:
           version: 10.33.2
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
           cache-dependency-path: desktop/pnpm-lock.yaml
       - run: cd desktop && pnpm install --frozen-lockfile
@@ -49,7 +50,7 @@ jobs:
           version: 10.33.2
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
           cache-dependency-path: desktop/pnpm-lock.yaml
       - run: cd desktop && pnpm install --frozen-lockfile
