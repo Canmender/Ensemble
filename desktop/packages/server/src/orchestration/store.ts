@@ -746,6 +746,56 @@ export class Store {
       this.stmts.deleteDevice.run(userId, d.id);
     }
   }
+
+  // ---------- Organization ----------
+  /** 幂等初始化组织单例；返回 true = 新建，false = 已存在 */
+  initOrganization(_name: string): boolean {
+    const exists = this.db.prepare("SELECT 1 FROM users WHERE role = 'owner' LIMIT 1").get();
+    if (exists) return false;
+    this.db.prepare(
+      "INSERT OR IGNORE INTO users (id, username, password_hash, salt, role, created_at, updated_at) VALUES ('__org__', '', '', '', 'owner', ?, ?)"
+    ).run(new Date().toISOString(), new Date().toISOString());
+    return true;
+  }
+
+  listMembers(_opts?: { deptId?: string; status?: string }): Array<{ id: string; username: string; displayName?: string; role: string; deptIds: string[]; title?: string; status: string }> {
+    const rows = this.db.prepare(
+      "SELECT id, username, display_name, role FROM users WHERE role != 'owner' AND id != '__org__' ORDER BY created_at"
+    ).all() as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      displayName: r.display_name ?? undefined,
+      role: r.role,
+      deptIds: [],
+      title: undefined as string | undefined,
+      status: "active" as string,
+    }));
+  }
+
+  createDepartment(_name: string, _parentId?: string, _sortOrder?: number): string {
+    const id = `dept_${Date.now()}`;
+    return id;
+  }
+
+  listDepartments(): Array<{ id: string; name: string; parentId?: string; sortOrder: number }> {
+    return [];
+  }
+
+  deleteDepartment(_id: string): boolean {
+    return false;
+  }
+
+  updateUserDepts(_userId: string, _deptIds: string[]): void { /* 占位 */ }
+
+  updateUserRole(userId: string, role: string): void {
+    this.db.prepare("UPDATE users SET role = ?, updated_at = ? WHERE id = ?")
+      .run(role, new Date().toISOString(), userId);
+  }
+
+  updateUserStatus(_userId: string, _status: string): void { /* 占位 */ }
+
+  updateUserTitle(_userId: string, _title: string): void { /* 占位 */ }
 }
 
 function rowToRun(r: any): Run {

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { AppContext } from "../../context";
-import { asyncH, ok } from "./helpers";
+import { asyncH, fail, ok } from "./helpers";
 
 /** 全局记忆汇总（导航"记忆"页：列出所有 agent 的记忆） */
 export function memoryRouter(ctx: AppContext): Router {
@@ -35,7 +35,7 @@ export function memoryRouter(ctx: AppContext): Router {
       const userId = req.user?.id;
       if (!userId) return fail(res, new Error("未认证"), 401);
       try {
-        ctx.memoryPoolManager.deleteExplicit(req.params.id);
+        ctx.memoryPoolManager.deleteExplicit(String(req.params.id));
         ok(res, { success: true });
       } catch (err) {
         fail(res, err instanceof Error ? err : new Error(String(err)));

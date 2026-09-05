@@ -32,7 +32,7 @@ export function workflowsRouter(ctx: AppContext): Router {
   r.post(
     "/:id/run",
     asyncH(async (req, res) => {
-      const def = ctx.config.getWorkflow(req.params.id);
+      const def = ctx.config.getWorkflow(String(req.params.id));
       if (!def) return fail(res, new Error(`workflow not found: ${req.params.id}`), 404);
 
       const { prompt } = (req.body ?? {}) as { prompt?: string };

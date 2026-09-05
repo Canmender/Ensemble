@@ -3,6 +3,7 @@ export * from "./types/agent";
 export * from "./types/task";
 export * from "./types/provider";
 export * from "./types/device-link";
+export * from "./types/device-link-envelope";
 export * from "./types/device-messages";
 export * from "./types/org";
 export * from "./types/plugin-card";
