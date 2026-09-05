@@ -210,6 +210,53 @@ CREATE TABLE IF NOT EXISTS group_members (
   PRIMARY KEY (conv_id, user_id)
 );
 CREATE INDEX IF NOT EXISTS idx_group_members_conv ON group_members(conv_id);
+
+-- 用户插件管理（per-user 插件启用/配置状态）
+CREATE TABLE IF NOT EXISTS user_plugins (
+  user_id   TEXT NOT NULL,
+  plugin_id TEXT NOT NULL,
+  enabled   INTEGER NOT NULL DEFAULT 0,
+  settings  TEXT NOT NULL DEFAULT '{}',
+  PRIMARY KEY (user_id, plugin_id)
+);
+
+-- 插件用户级 KV 存储
+CREATE TABLE IF NOT EXISTS plugin_kv (
+  user_id   TEXT NOT NULL,
+  plugin_id TEXT NOT NULL,
+  key       TEXT NOT NULL,
+  value     TEXT NOT NULL,
+  PRIMARY KEY (user_id, plugin_id, key)
+);
+
+-- 设备配对码（L1 一次性 6 位码）
+CREATE TABLE IF NOT EXISTS pair_codes (
+  code              TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  desktop_device_id TEXT NOT NULL,
+  public_key_fingerprint TEXT,
+  expires_at        INTEGER NOT NULL
+);
+
+-- 已配对设备对
+CREATE TABLE IF NOT EXISTS device_pairs (
+  id                TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  desktop_device_id TEXT NOT NULL,
+  mobile_device_id  TEXT NOT NULL,
+  paired_at         INTEGER NOT NULL
+);
+
+-- 设备互联事件日志（配对设备间同步重放）
+CREATE TABLE IF NOT EXISTS device_link_events (
+  msg_id   TEXT NOT NULL,
+  pair_id  TEXT NOT NULL,
+  kind     TEXT NOT NULL,
+  payload  TEXT,
+  ts       TEXT NOT NULL,
+  PRIMARY KEY (pair_id, msg_id)
+);
+CREATE INDEX IF NOT EXISTS idx_device_link_pair ON device_link_events(pair_id, ts);
 `;
 
 export function openDb(dbPath: string): DatabaseSync {
