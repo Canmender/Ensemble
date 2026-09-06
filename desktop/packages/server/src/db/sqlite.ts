@@ -216,7 +216,7 @@ CREATE TABLE IF NOT EXISTS user_plugins (
   user_id    TEXT NOT NULL,
   plugin_id  TEXT NOT NULL,
   enabled    INTEGER NOT NULL DEFAULT 0,
-  config_json TEXT NOT NULL DEFAULT '{}',
+  config_json TEXT,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, plugin_id)
 );
