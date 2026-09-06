@@ -24,6 +24,16 @@ import { initRelayClient } from "./api/routes/relay";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
 
+/** CORS 源白名单：本机任意端口 + 云端自身地址；其余拒绝 */
+export function isAllowedOrigin(origin: string | undefined, cloudHost?: string): boolean {
+  if (!origin || !origin.startsWith("http://") && !origin.startsWith("https://")) return false;
+  // 本机任意端口放行
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)) return true;
+  // 云端自身地址
+  if (cloudHost && origin === `http://${cloudHost.trim()}`) return true;
+  return false;
+}
+
 export interface CreateAppOptions {
   /** 托管前端静态资源目录（桌面 prod 同源加载） */
   staticDir?: string;

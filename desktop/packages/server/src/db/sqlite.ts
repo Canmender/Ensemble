@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS run_events (
 CREATE TABLE IF NOT EXISTS chat_messages (
   id       TEXT PRIMARY KEY,
   run_id   TEXT NOT NULL,
+  seq      INTEGER,
   job_id   TEXT,
   agent_id TEXT NOT NULL,
   role     TEXT NOT NULL,
@@ -169,6 +170,95 @@ CREATE INDEX IF NOT EXISTS idx_chat_run ON chat_messages(run_id);
 CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run_agent ON jobs(run_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run_job ON run_events(run_id, job_id);
+
+-- 消息表情回应
+CREATE TABLE IF NOT EXISTS reactions (
+  message_id TEXT NOT NULL,
+  user_id    TEXT NOT NULL,
+  emoji      TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (message_id, user_id, emoji)
+);
+CREATE INDEX IF NOT EXISTS idx_reactions_msg ON reactions(message_id);
+
+-- E2EE 身份密钥目录（服务器仅存公钥材料）
+CREATE TABLE IF NOT EXISTS e2e_identities (
+  user_id                 TEXT PRIMARY KEY,
+  identity_key            TEXT NOT NULL,
+  signed_pre_key_id       INTEGER NOT NULL,
+  signed_pre_key_public   TEXT NOT NULL,
+  signed_pre_key_signature TEXT NOT NULL,
+  updated_at              TEXT NOT NULL
+);
+
+-- E2EE 一次性预密钥（OPK 取走即删）
+CREATE TABLE IF NOT EXISTS e2e_opks (
+  user_id    TEXT NOT NULL,
+  key_id     INTEGER NOT NULL,
+  key_data   TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, key_id)
+);
+CREATE INDEX IF NOT EXISTS idx_e2e_opks_user ON e2e_opks(user_id);
+
+-- 群成员角色（1=群主, 2=管理员, 3=普通成员）
+CREATE TABLE IF NOT EXISTS group_members (
+  conv_id   TEXT NOT NULL,
+  user_id   TEXT NOT NULL,
+  role      INTEGER NOT NULL DEFAULT 3,
+  joined_at TEXT NOT NULL,
+  PRIMARY KEY (conv_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_group_members_conv ON group_members(conv_id);
+
+-- 用户插件管理（per-user 插件启用/配置状态）
+CREATE TABLE IF NOT EXISTS user_plugins (
+  user_id    TEXT NOT NULL,
+  plugin_id  TEXT NOT NULL,
+  enabled    INTEGER NOT NULL DEFAULT 0,
+  config_json TEXT,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, plugin_id)
+);
+
+-- 插件用户级 KV 存储
+CREATE TABLE IF NOT EXISTS plugin_kv (
+  user_id    TEXT NOT NULL,
+  plugin_id  TEXT NOT NULL,
+  key        TEXT NOT NULL,
+  value_json TEXT NOT NULL DEFAULT '{}',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, plugin_id, key)
+);
+
+-- 设备配对码（L1 一次性 6 位码）
+CREATE TABLE IF NOT EXISTS pair_codes (
+  code              TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  desktop_device_id TEXT NOT NULL,
+  public_key_fingerprint TEXT,
+  expires_at        INTEGER NOT NULL
+);
+
+-- 已配对设备对
+CREATE TABLE IF NOT EXISTS device_pairs (
+  id                TEXT PRIMARY KEY,
+  user_id           TEXT NOT NULL,
+  desktop_device_id TEXT NOT NULL,
+  mobile_device_id  TEXT NOT NULL,
+  paired_at         INTEGER NOT NULL
+);
+
+-- 设备互联事件日志（配对设备间同步重放）
+CREATE TABLE IF NOT EXISTS device_link_events (
+  msg_id      TEXT NOT NULL,
+  pair_id     TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  payload_json TEXT,
+  ts          TEXT NOT NULL,
+  PRIMARY KEY (pair_id, msg_id)
+);
+CREATE INDEX IF NOT EXISTS idx_device_link_pair ON device_link_events(pair_id, ts);
 `;
 
 export function openDb(dbPath: string): DatabaseSync {
@@ -249,6 +339,11 @@ function migrateUserColumns(db: DatabaseSync): void {
   if (!cmMentions.some((c) => c.name === "mentions")) {
     db.exec("ALTER TABLE chat_messages ADD COLUMN mentions TEXT");
   }
+  // chat_messages.seq（消息序号：按 run 分组自增，用于增量拉取）
+  const cmSeq = db.prepare("PRAGMA table_info(chat_messages)").all() as Array<{ name: string }>;
+  if (!cmSeq.some((c) => c.name === "seq")) {
+    db.exec("ALTER TABLE chat_messages ADD COLUMN seq INTEGER");
+  }
   // conversations.muted / pinned（静音 / 置顶）
   const convCols2 = db.prepare("PRAGMA table_info(conversations)").all() as Array<{ name: string }>;
   if (!convCols2.some((c) => c.name === "muted")) {
@@ -275,6 +370,10 @@ function migrateUserColumns(db: DatabaseSync): void {
   }
   if (!convCols3.some((c) => c.name === "group_admins")) {
     db.exec("ALTER TABLE conversations ADD COLUMN group_admins TEXT");
+  }
+  // conversations.join_type（P1 群入群方式：0=自由/1=审批/2=不可加入）
+  if (!convCols3.some((c) => c.name === "join_type")) {
+    db.exec("ALTER TABLE conversations ADD COLUMN join_type INTEGER NOT NULL DEFAULT 0");
   }
   for (const table of tables) {
     const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;

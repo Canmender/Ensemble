@@ -76,9 +76,11 @@ export function uploadRouter(ctx: AppContext): Router {
       const dir = dateDir();
       const filename = `${newId("upl")}${ext ? `.${ext}` : ""}`;
       const key = `uploads/${dir}/${filename}`;
-      // 使用存储适配器（本地/S3/OSS 统一接口；零行为变化）
-      await ctx.storage.upload(key, buf);
-      const url = await ctx.storage.getSignedUrl(key);
+      // 本地文件存储（写入 uploads 目录，返回相对 URL 供客户端访问）
+      const filePath = join(ctx.uploadsDir, dir, filename);
+      mkdirSync(join(ctx.uploadsDir, dir), { recursive: true });
+      writeFileSync(filePath, buf);
+      const url = `/uploads/${dir}/${filename}`;
 
       const type = mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : mime.startsWith("audio/") ? "audio" : "file";
 

@@ -88,6 +88,22 @@ export interface AppContext {
   skillStore: SkillStore;
   mcpConfig: McpConfigStore;
   mcpManager: McpManager;
+  /** 设备互联事件日志（配对设备间同步重放） */
+  deviceLinkLog: { replay(pairId: string, sinceTs: number): unknown[] };
+  /** 用户已安装插件管理 */
+  userPlugins: {
+    listForUser(userId: string): Array<{ id: string; enabled: boolean; hasConfig: boolean; settings: unknown }>;
+    listCandidates(): Array<{ id: string; name: string; version: string; description: string; scheduled: boolean; settings: unknown }>;
+    enable(userId: string, pluginId: string): Promise<{ ok: boolean; error?: string }>;
+    disable(userId: string, pluginId: string): Promise<void>;
+    setConfig(userId: string, pluginId: string, config: unknown): Promise<boolean>;
+    getUserConfig(userId: string, pluginId: string): unknown;
+  };
+  /** 插件运行宿主 */
+  pluginHost: {
+    tryGet<T = unknown>(key: string): T | undefined;
+    invoke(pluginId: string, action: string, payload: unknown): unknown;
+  };
   reloadAgents: () => void;
   reloadProviders: () => void;
   dispose: () => Promise<void>;
@@ -136,7 +152,7 @@ export function createAppContext(
     importanceThreshold: 0.5,
   });
 
-  registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager, resolveEmbedFn(config, providerRegistry));
+  registerBuiltinTools(toolRegistry, () => config.getSettings(), memoryPoolManager);
 
   const dataDir = dirname(env.dbPath);
   // 聊天附件存储目录（图片/文件上传）
@@ -285,6 +301,16 @@ export function createAppContext(
     skillStore,
     mcpConfig,
     mcpManager,
+    deviceLinkLog: { replay: () => [] },
+    userPlugins: {
+      listForUser: () => [],
+      listCandidates: () => [],
+      enable: async () => ({ ok: false, error: "插件系统未初始化" }),
+      disable: async () => {},
+      setConfig: async () => false,
+      getUserConfig: () => ({}),
+    },
+    pluginHost: { tryGet: () => undefined, invoke: () => ({}) },
     reloadAgents,
     reloadProviders,
     dispose: async () => {

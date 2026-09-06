@@ -22,6 +22,7 @@ export class Store {
   // 内存 seq 计数器（避免每次 appendRunEvent 查询 SELECT MAX）
   private eventSeqCounters = new Map<string, number>();
   private jobSeqCounters = new Map<string, number>();
+  private chatSeqCounters = new Map<string, number>();
 
   // 预编译语句（构造时 prepare，生命周期内复用）
   private stmts: {
@@ -94,8 +95,8 @@ export class Store {
       insertRunEvent: db.prepare("INSERT INTO run_events (run_id, seq, job_id, user_id, event_json, ts) VALUES (?, ?, ?, ?, ?, ?)"),
       getRunEvents: db.prepare("SELECT seq, job_id, event_json FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq"),
       // Chat messages
-      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
-      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY ts"),
+      createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, seq, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
+      listChatMessages: db.prepare("SELECT * FROM chat_messages WHERE run_id = ? ORDER BY seq, ts"),
       deleteChatMessage: db.prepare("UPDATE chat_messages SET deleted = 1 WHERE id = ?"),
       // Workflows
       listWorkflows: db.prepare("SELECT * FROM workflows ORDER BY name"),
@@ -309,6 +310,7 @@ export class Store {
   cleanupRunSeqCounters(runId: string): void {
     this.eventSeqCounters.delete(runId);
     this.jobSeqCounters.delete(runId);
+    this.chatSeqCounters.delete(runId);
   }
 
   getRunEvents(runId: string, afterSeq = 0): Array<{ seq: number; jobId?: string; event: AgentEvent }> {
@@ -321,8 +323,24 @@ export class Store {
   }
 
   // ---------- Chat messages ----------
-  createChatMessage(msg: ChatMessage): void {
-    this.stmts.createChatMessage.run(msg.id, msg.runId, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts);
+  /** @returns 写入成功返回 seq（自增序号），幂等命中返回 null */
+  createChatMessage(msg: ChatMessage): number | null {
+    // 计算该 run 的下一个 seq
+    const cached = this.chatSeqCounters.get(msg.runId);
+    let seq: number;
+    if (cached !== undefined) {
+      seq = cached + 1;
+    } else {
+      const row = this.db.prepare("SELECT COALESCE(MAX(seq), 0) AS max_seq FROM chat_messages WHERE run_id = ?").get(msg.runId) as any;
+      seq = Number(row?.max_seq ?? 0) + 1;
+    }
+    try {
+      this.stmts.createChatMessage.run(msg.id, msg.runId, seq, msg.jobId ?? null, msg.agentId, msg.role, msg.userId ?? '', msg.content, msg.attachment ? JSON.stringify(msg.attachment) : null, msg.replyTo ? JSON.stringify(msg.replyTo) : null, msg.mentions && msg.mentions.length > 0 ? JSON.stringify(msg.mentions) : null, msg.deleted ? 1 : 0, msg.ts);
+      this.chatSeqCounters.set(msg.runId, seq);
+      return seq;
+    } catch {
+      return null;
+    }
   }
 
   /** 撤回消息：标记 deleted（保留原始内容，前端显示「已撤回」） */
@@ -330,13 +348,37 @@ export class Store {
     this.stmts.deleteChatMessage.run(id);
   }
 
-  listChatMessages(runId: string, userId?: string): ChatMessage[] {
-    const rows = userId
-      ? (this.db.prepare("SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') ORDER BY ts").all(runId, userId) as any[])
-      : (this.stmts.listChatMessages.all(runId) as any[]);
+  /** 编辑消息内容；返回 true 表示成功（行数=1） */
+  editChatMessage(id: string, content: string): boolean {
+    const info = this.db.prepare("UPDATE chat_messages SET content = ? WHERE id = ?").run(content, id);
+    return info.changes > 0;
+  }
+
+  listChatMessages(runId: string, userId?: string, afterSeq?: number): ChatMessage[] {
+    let rows: any[];
+    if (userId) {
+      if (afterSeq !== undefined && afterSeq > 0) {
+        rows = this.db.prepare(
+          "SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') AND seq > ? ORDER BY seq, ts"
+        ).all(runId, userId, afterSeq) as any[];
+      } else {
+        rows = this.db.prepare(
+          "SELECT * FROM chat_messages WHERE run_id = ? AND (user_id = ? OR user_id = '') ORDER BY seq, ts"
+        ).all(runId, userId) as any[];
+      }
+    } else {
+      if (afterSeq !== undefined && afterSeq > 0) {
+        rows = this.db.prepare(
+          "SELECT * FROM chat_messages WHERE run_id = ? AND seq > ? ORDER BY seq, ts"
+        ).all(runId, afterSeq) as any[];
+      } else {
+        rows = this.stmts.listChatMessages.all(runId) as any[];
+      }
+    }
     return rows.map((r) => ({
       id: r.id,
       runId: r.run_id,
+      seq: Number(r.seq),
       jobId: r.job_id ?? undefined,
       agentId: r.agent_id,
       role: r.role,
@@ -347,6 +389,182 @@ export class Store {
       deleted: !!r.deleted,
       ts: r.ts,
     }));
+  }
+
+  // ---------- Reactions ----------
+  /** 添加 reaction；返回 true 表示新增（false = 已存在） */
+  addReaction(messageId: string, userId: string, emoji: string): boolean {
+    try {
+      this.db.prepare(
+        "INSERT INTO reactions (message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?)"
+      ).run(messageId, userId, emoji, new Date().toISOString());
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** 移除 reaction；返回 true 表示成功移除 */
+  removeReaction(messageId: string, userId: string, emoji: string): boolean {
+    const info = this.db.prepare(
+      "DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?"
+    ).run(messageId, userId, emoji);
+    return info.changes > 0;
+  }
+
+  /** 单条消息的 reactions：返回 { emoji: { emoji, count, userIds[] } } */
+  getReactions(messageId: string): Record<string, { emoji: string; count: number; userIds: string[] }> {
+    const rows = this.db.prepare(
+      "SELECT user_id, emoji FROM reactions WHERE message_id = ?"
+    ).all(messageId) as Array<{ user_id: string; emoji: string }>;
+    const result: Record<string, { emoji: string; count: number; userIds: string[] }> = {};
+    for (const row of rows) {
+      if (!result[row.emoji]) result[row.emoji] = { emoji: row.emoji, count: 0, userIds: [] };
+      result[row.emoji].count++;
+      result[row.emoji].userIds.push(row.user_id);
+    }
+    return result;
+  }
+
+  /** 批量获取消息 reactions：返回 { msgId: { emoji: { emoji, count, userIds[] } } } */
+  batchGetReactions(messageIds: string[]): Record<string, Record<string, { emoji: string; count: number; userIds: string[] }>> {
+    if (!messageIds.length) return {};
+    const placeholders = messageIds.map(() => "?").join(",");
+    const rows = this.db.prepare(
+      `SELECT message_id, user_id, emoji FROM reactions WHERE message_id IN (${placeholders})`
+    ).all(...messageIds) as Array<{ message_id: string; user_id: string; emoji: string }>;
+    const result: Record<string, Record<string, { emoji: string; count: number; userIds: string[] }>> = {};
+    for (const row of rows) {
+      if (!result[row.message_id]) result[row.message_id] = {};
+      if (!result[row.message_id][row.emoji]) {
+        result[row.message_id][row.emoji] = { emoji: row.emoji, count: 0, userIds: [] };
+      }
+      result[row.message_id][row.emoji].count++;
+      result[row.message_id][row.emoji].userIds.push(row.user_id);
+    }
+    return result;
+  }
+
+  // ---------- E2EE ----------
+  upsertE2eIdentity(userId: string, data: {
+    identityKey: string;
+    signedPreKeyId: number;
+    signedPreKeyPublic: string;
+    signedPreKeySignature: string;
+    oneTimePreKeys: Array<{ id: number; key: string }>;
+  }): void {
+    const now = new Date().toISOString();
+    this.db.prepare(
+      `INSERT INTO e2e_identities (user_id, identity_key, signed_pre_key_id, signed_pre_key_public, signed_pre_key_signature, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(user_id) DO UPDATE SET
+         identity_key = excluded.identity_key,
+         signed_pre_key_id = excluded.signed_pre_key_id,
+         signed_pre_key_public = excluded.signed_pre_key_public,
+         signed_pre_key_signature = excluded.signed_pre_key_signature,
+         updated_at = excluded.updated_at`
+    ).run(userId, data.identityKey, data.signedPreKeyId, data.signedPreKeyPublic, data.signedPreKeySignature, now);
+    // 清除旧 OPK 并插入新 OPK
+    this.db.prepare("DELETE FROM e2e_opks WHERE user_id = ?").run(userId);
+    const insert = this.db.prepare("INSERT INTO e2e_opks (user_id, key_id, key_data, created_at) VALUES (?, ?, ?, ?)");
+    for (const opk of data.oneTimePreKeys) {
+      insert.run(userId, opk.id, opk.key, now);
+    }
+  }
+
+  /** 获取对端密钥包（含 OPK 取走即删）；对端未注册返回 undefined */
+  getE2eBundle(userId: string): {
+    identityKey: string;
+    signedPreKeyId: number;
+    signedPreKeyPublic: string;
+    signedPreKeySignature: string;
+    oneTimePreKey?: { id: number; key: string };
+  } | undefined {
+    const identity = this.db.prepare(
+      "SELECT * FROM e2e_identities WHERE user_id = ?"
+    ).get(userId) as any;
+    if (!identity) return undefined;
+    // OPK 取走即删：取第一条 OPK 并删除
+    const opk = this.db.prepare(
+      "SELECT key_id, key_data FROM e2e_opks WHERE user_id = ? ORDER BY key_id LIMIT 1"
+    ).get(userId) as any;
+    if (opk) {
+      this.db.prepare("DELETE FROM e2e_opks WHERE user_id = ? AND key_id = ?").run(userId, opk.key_id);
+    }
+    return {
+      identityKey: identity.identity_key,
+      signedPreKeyId: identity.signed_pre_key_id,
+      signedPreKeyPublic: identity.signed_pre_key_public,
+      signedPreKeySignature: identity.signed_pre_key_signature,
+      oneTimePreKey: opk ? { id: opk.key_id, key: opk.key_data } : undefined,
+    };
+  }
+
+  addE2eOpks(userId: string, opks: Array<{ id: number; key: string }>): void {
+    const now = new Date().toISOString();
+    const insert = this.db.prepare(
+      "INSERT INTO e2e_opks (user_id, key_id, key_data, created_at) VALUES (?, ?, ?, ?)"
+    );
+    for (const opk of opks) {
+      try { insert.run(userId, opk.id, opk.key, now); } catch { /* 重复 key_id 忽略 */ }
+    }
+  }
+
+  countE2eOpks(userId: string): number {
+    const row = this.db.prepare("SELECT COUNT(*) AS cnt FROM e2e_opks WHERE user_id = ?").get(userId) as any;
+    return Number(row?.cnt ?? 0);
+  }
+
+  hasE2eIdentity(userId: string): boolean {
+    const row = this.db.prepare("SELECT 1 FROM e2e_identities WHERE user_id = ?").get(userId);
+    return !!row;
+  }
+
+  // ---------- Group members ----------
+  getGroupMember(convId: string, userId: string): { userId: string; role: 1 | 2 | 3 } | undefined {
+    const row = this.db.prepare(
+      "SELECT user_id, role FROM group_members WHERE conv_id = ? AND user_id = ?"
+    ).get(convId, userId) as any;
+    return row ? { userId: row.user_id, role: row.role } : undefined;
+  }
+
+  setJoinType(convId: string, joinType: 0 | 1 | 2): void {
+    this.db.prepare("UPDATE conversations SET join_type = ?, updated_at = ? WHERE id = ?")
+      .run(joinType, new Date().toISOString(), convId);
+  }
+
+  setAnnouncement(convId: string, text: string | null): void {
+    this.db.prepare("UPDATE conversations SET announcement = ?, updated_at = ? WHERE id = ?")
+      .run(text, new Date().toISOString(), convId);
+  }
+
+  listGroupMembers(convId: string): Array<{ userId: string; role: 1 | 2 | 3 }> {
+    const rows = this.db.prepare(
+      "SELECT user_id, role FROM group_members WHERE conv_id = ? ORDER BY role, joined_at"
+    ).all(convId) as any[];
+    return rows.map((r) => ({ userId: r.user_id, role: r.role }));
+  }
+
+  setGroupMemberRole(convId: string, userId: string, role: 1 | 2 | 3): void {
+    this.db.prepare(
+      "INSERT INTO group_members (conv_id, user_id, role, joined_at) VALUES (?, ?, ?, ?) ON CONFLICT(conv_id, user_id) DO UPDATE SET role = excluded.role"
+    ).run(convId, userId, role, new Date().toISOString());
+  }
+
+  removeGroupMember(convId: string, userId: string, _byRole: number): void {
+    this.db.prepare("DELETE FROM group_members WHERE conv_id = ? AND user_id = ?").run(convId, userId);
+  }
+
+  /** 标记消息已送达（更新送达状态） */
+  markDelivered(_ids: string[]): void {
+    // 当前版本仅记录事件；实际送达状态由客户端 ACK 驱动，服务端仅做批量占位
+  }
+
+  searchUsers(query: string, limit: number): Array<{ id: string; username: string; displayName?: string }> {
+    const rows = this.db.prepare(
+      "SELECT id, username, display_name FROM users WHERE username LIKE ? OR display_name LIKE ? LIMIT ?"
+    ).all(`%${query}%`, `%${query}%`, limit) as any[];
+    return rows.map((r) => ({ id: r.id, username: r.username, displayName: r.display_name ?? undefined }));
   }
 
   // ---------- Workflows ----------
@@ -556,6 +774,56 @@ export class Store {
       this.stmts.deleteDevice.run(userId, d.id);
     }
   }
+
+  // ---------- Organization ----------
+  /** 幂等初始化组织单例；返回 true = 新建，false = 已存在 */
+  initOrganization(_name: string): boolean {
+    const exists = this.db.prepare("SELECT 1 FROM users WHERE role = 'owner' LIMIT 1").get();
+    if (exists) return false;
+    this.db.prepare(
+      "INSERT OR IGNORE INTO users (id, username, password_hash, salt, role, created_at, updated_at) VALUES ('__org__', '', '', '', 'owner', ?, ?)"
+    ).run(new Date().toISOString(), new Date().toISOString());
+    return true;
+  }
+
+  listMembers(_opts?: { deptId?: string; status?: string }): Array<{ id: string; username: string; displayName?: string; role: string; deptIds: string[]; title?: string; status: string }> {
+    const rows = this.db.prepare(
+      "SELECT id, username, display_name, role FROM users WHERE role != 'owner' AND id != '__org__' ORDER BY created_at"
+    ).all() as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      displayName: r.display_name ?? undefined,
+      role: r.role,
+      deptIds: [],
+      title: undefined as string | undefined,
+      status: "active" as string,
+    }));
+  }
+
+  createDepartment(_name: string, _parentId?: string, _sortOrder?: number): string {
+    const id = `dept_${Date.now()}`;
+    return id;
+  }
+
+  listDepartments(): Array<{ id: string; name: string; parentId?: string; sortOrder: number }> {
+    return [];
+  }
+
+  deleteDepartment(_id: string): boolean {
+    return false;
+  }
+
+  updateUserDepts(_userId: string, _deptIds: string[]): void { /* 占位 */ }
+
+  updateUserRole(userId: string, role: string): void {
+    this.db.prepare("UPDATE users SET role = ?, updated_at = ? WHERE id = ?")
+      .run(role, new Date().toISOString(), userId);
+  }
+
+  updateUserStatus(_userId: string, _status: string): void { /* 占位 */ }
+
+  updateUserTitle(_userId: string, _title: string): void { /* 占位 */ }
 }
 
 function rowToRun(r: any): Run {
@@ -610,6 +878,7 @@ function rowToConversation(r: any): Conversation {
     muted: Boolean(r.muted),
     pinned: Boolean(r.pinned),
     announcement: r.announcement ?? undefined,
+    joinType: Number(r.join_type ?? 0) as 0 | 1 | 2,
     groupMuted: Boolean(r.group_muted),
     groupOwner: r.group_owner ?? undefined,
     groupAdmins: r.group_admins ? JSON.parse(r.group_admins) : undefined,

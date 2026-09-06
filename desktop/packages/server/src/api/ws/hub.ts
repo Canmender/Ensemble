@@ -94,7 +94,7 @@ export class WsHub {
   /** WebRTC 通话信令回调（从某用户发往目标用户；由 app 层路由） */
   onCallSignal?: (fromUserId: string, fromName: string | undefined, targetUserId: string, call: CallSignal) => void;
   /** 读取 IM 配置（由 context 注入，延迟到运行时读取） */
-  getSettings?: () => import("../../../../shared/src/types/provider").AppSettings;
+  getSettings?: () => import("@ensemble/shared").AppSettings;
 
   attach(server: Server, path = "/ws", resolveUser?: (token: string) => AuthUser | undefined): void {
     this.serverPath = path;
