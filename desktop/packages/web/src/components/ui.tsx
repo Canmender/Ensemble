@@ -259,11 +259,12 @@ export function ConfirmDialog({
     <Modal open={open} onClose={onClose} title={title}>
       <p className="mb-6 text-sm text-muted">{message}</p>
       <div className="flex justify-end gap-3">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={onClose} className="press">
           取消
         </Button>
         <Button
           variant={danger ? "danger" : "primary"}
+          className="press"
           onClick={() => {
             onConfirm();
             onClose();
