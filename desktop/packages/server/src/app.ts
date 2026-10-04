@@ -26,6 +26,7 @@ import { tokensRouter } from "./api/routes/tokens";
 import { e2eRouter } from "./api/routes/e2e";
 import { groupsRouter } from "./api/routes/groups";
 import { reactionsRouter } from "./api/routes/reactions";
+import { assistantRouter } from "./api/routes/assistant";
 import { initRelayClient } from "./api/routes/relay";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
@@ -176,6 +177,7 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/e2e", e2eRouter(ctx));
   app.use("/api/groups", groupsRouter(ctx));
   app.use("/api/reactions", reactionsRouter(ctx));
+  app.use("/api/assistant", assistantRouter(ctx));
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）
   initRelayClient(ctx);
