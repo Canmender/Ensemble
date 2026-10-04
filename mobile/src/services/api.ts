@@ -123,32 +123,46 @@ export interface UserInfo {
   occupation?: string;
 }
 
+/**
+ * 已配对设备（手机 ↔ 桌面）
+ *
+ * 字段为服务端 device_pairs 表的原始 snake_case，服务端未做驼峰转换，
+ * 见 desktop/packages/server/src/api/routes/pairs.ts 的 GET /api/pairs。
+ */
+export interface PairedDevice {
+  id: string;
+  user_id: string;
+  desktop_device_id: string;
+  mobile_device_id: string;
+  paired_at: number;
+}
+
 /** 用户插件 manifest 中声明的一项配置字段 */
 export interface PluginSettingField {
   key: string;
   label: string;
-  type?: string;
+  placeholder?: string;
+  type?: "text" | "password";
   default?: unknown;
   options?: unknown[];
-  placeholder?: string;
 }
 
 /**
  * 候选插件（manifest 渲染用）
  *
- * 字段与桌面端服务端契约一一对应，权威来源：
- * desktop/packages/server/src/api/routes/user-plugins.ts:19-26（listCandidates 投影）
+ * 字段与桌面端服务端契约一一对应。权威来源：
+ * desktop/packages/server/src/api/routes/user-plugins.ts:19-26（listCandidates 投影），
+ * 字段名与可空性对齐 desktop/packages/web/src/pages/PluginsPage.tsx:14-24 的接口。
  */
 export interface PluginInfo {
   id: string;
   name: string;
+  version: string;
   description?: string;
+  scheduled: number;
   enabled: boolean;
-  version?: string;
-  /** 定时任务数量；>0 时列表显示「定时 ×N」徽标 */
-  scheduled?: number;
-  /** 该用户是否已配置过此插件（服务端按用户投影） */
-  hasConfig?: boolean;
+  hasConfig: boolean;
+  /** manifest 内嵌的配置表单字段声明（manifest 即 UI——插件新增配置项无需改前端） */
   settings?: PluginSettingField[];
 }
 
@@ -448,6 +462,66 @@ class ApiService {
   /** 删除 Agent */
   async deleteAgent(id: string): Promise<ApiResponse<void>> {
     return this.request<void>("DELETE", "/api/agents/" + id);
+  }
+
+  // ========== 设备配对 API ==========
+  // 端点契约来源：desktop/packages/server/src/api/routes/pairs.ts
+  // （服务端路由已挂载并实测；返回结构按 ok()/fail() 包装解析）
+
+  /** 已配对设备列表 */
+  async getPairs(): Promise<ApiResponse<PairedDevice[]>> {
+    return this.request<PairedDevice[]>("GET", "/api/pairs");
+  }
+
+  /** 用 6 位配对码确认配对（code 与本机设备 id） */
+  async confirmPair(code: string, mobileDeviceId: string): Promise<ApiResponse<{ pairId: string }>> {
+    return this.request<{ pairId: string }>("POST", "/api/pairs/confirm", { code, mobileDeviceId });
+  }
+
+  /** 解除配对 */
+  async removePair(pairId: string): Promise<ApiResponse<{ removed: boolean }>> {
+    return this.request<{ removed: boolean }>("DELETE", `/api/pairs/${encodeURIComponent(pairId)}`);
+  }
+
+  // ========== 用户插件 API ==========
+  // 端点契约来源：desktop/packages/server/src/api/routes/user-plugins.ts
+
+  /** 候选插件列表（含我的启用/配置状态投影） */
+  async getPlugins(): Promise<ApiResponse<PluginInfo[]>> {
+    return this.request<PluginInfo[]>("GET", "/api/user-plugins");
+  }
+
+  /** 启用插件 */
+  async enablePlugin(id: string): Promise<ApiResponse<{ enabled: boolean }>> {
+    return this.request<{ enabled: boolean }>("POST", `/api/user-plugins/${encodeURIComponent(id)}/enable`);
+  }
+
+  /** 禁用插件 */
+  async disablePlugin(id: string): Promise<ApiResponse<{ enabled: boolean }>> {
+    return this.request<{ enabled: boolean }>("POST", `/api/user-plugins/${encodeURIComponent(id)}/disable`);
+  }
+
+  /** 读取插件的用户配置 */
+  async getPluginConfig(id: string): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request<Record<string, unknown>>("GET", `/api/user-plugins/${encodeURIComponent(id)}/config`);
+  }
+
+  /** 保存插件的用户配置 */
+  async setPluginConfig(id: string, config: Record<string, unknown>): Promise<ApiResponse<{ applied: boolean }>> {
+    return this.request<{ applied: boolean }>("PUT", `/api/user-plugins/${encodeURIComponent(id)}/config`, { config });
+  }
+
+  /** 触发插件卡片动作（投票/提醒等） */
+  async pluginCardAction(
+    id: string,
+    action: string,
+    payload?: Record<string, unknown>,
+  ): Promise<ApiResponse<Record<string, unknown>>> {
+    return this.request<Record<string, unknown>>(
+      "POST",
+      `/api/user-plugins/${encodeURIComponent(id)}/actions/${encodeURIComponent(action)}`,
+      payload ?? {},
+    );
   }
 
   // ========== Provider API ==========
