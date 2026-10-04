@@ -37,17 +37,23 @@ export default function MessageList(props: Props) {
 
   // 入场动画只给「本次渲染新增的那一条」，避免整列表（可能几百条）同时播放。
   // 判断放在本组件内（ref + 一次比较），不依赖 ChatPage 的数据流。
-  const prevRef = useRef<{ contactId: string; lastId?: string }>({ contactId: "" });
+  const prevRef = useRef<{ contactId: string; firstId?: string; lastId?: string }>({ contactId: "" });
   const prev = prevRef.current;
+  const firstId = messages.length > 0 ? messages[0].id : undefined;
   const lastId = messages.length > 0 ? messages[messages.length - 1].id : undefined;
-  // 切换会话时消息 id 完全不同，此时不播动画；仅同一会话内末尾新增才播。
+  // 切换会话时不播；同会话内要求「末条变了（新增在尾部）且首条没变（不是在头部补拉）」。
+  // 补拉历史是 prepend，首条会变而末条不变；新增是 append，末条变而首条不变。
   const animateId =
-    prev.contactId === activeContact.id && prev.lastId && lastId && lastId !== prev.lastId
+    prev.contactId === activeContact.id &&
+    prev.firstId &&
+    prev.lastId &&
+    firstId === prev.firstId &&
+    lastId !== prev.lastId
       ? lastId
       : undefined;
   useEffect(() => {
-    prevRef.current = { contactId: activeContact.id, lastId };
-  }, [activeContact.id, lastId]);
+    prevRef.current = { contactId: activeContact.id, firstId, lastId };
+  }, [activeContact.id, firstId, lastId]);
 
   return (
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
