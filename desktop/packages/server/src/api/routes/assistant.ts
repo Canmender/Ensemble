@@ -42,10 +42,13 @@ export function assistantRouter(ctx: AppContext): Router {
       const agent = resolveAssistantAgent(ctx);
       if (!agent) return fail(res, new Error("暂无可用 Agent，请先在设置中启用"), 503);
 
+      // userId 用于多用户数据隔离（见 engine.createAndExecuteTask 签名）。
+      // 改前传字面量 "assistant"，而 store.listTasks 过滤条件是
+      // `user_id = ? OR user_id = ''`，故助手产生的 run/task 对所有用户不可见。
       const run = await ctx.engine.createAndExecuteTask(
         "产品助手",
         { mode: "chat", prompt: message, participantIds: [agent.id], maxRounds: 1 },
-        "assistant",
+        req.user?.id,
       );
 
       const reply = await ctx.hub.waitForRun(
