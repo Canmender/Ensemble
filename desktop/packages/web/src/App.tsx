@@ -39,6 +39,7 @@ const GroupAnnouncementPage = lazy(() => import("./pages/GroupAnnouncementPage")
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
+  { to: "/agents", label: "智能体", icon: Bot },
   { to: "/workflows", label: "工作流", icon: Workflow },
   { to: "/tasks", label: "归档处", icon: Archive },
   { to: "/chat", label: "联系人", icon: Users },

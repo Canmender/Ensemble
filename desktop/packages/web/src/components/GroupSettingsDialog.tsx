@@ -149,6 +149,23 @@ export function GroupSettingsDialog({
         {/* 群信息 */}
         <div className="space-y-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-fg"><Info className="h-4 w-4 text-muted" /> 群信息</div>
+          {/* 群成员管理与群公告是独立页面（读 ?convId= 查询参数），此弹窗内不含这两项功能 */}
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => window.open(`/group-members?convId=${encodeURIComponent(convId)}`, "_blank")}
+            >
+              成员管理
+            </Button>
+            <Button
+              variant="secondary"
+              className="flex-1"
+              onClick={() => window.open(`/group-announcement?convId=${encodeURIComponent(convId)}`, "_blank")}
+            >
+              群公告页
+            </Button>
+          </div>
           <div>
             <Label>群名称</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} disabled={!canModerate} placeholder="群名称" />

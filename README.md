@@ -92,8 +92,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 | 版本 | 目录 | 用途 | 启动方式 |
 |------|------|------|----------|
-| **本地版** | `ensemble-local/` | 完全离线运行 | `合鸣.bat` → 本地版 |
-| **云端版** | `ensemble-cloud/` | 连接云端服务器 | `合鸣.bat` → 云端版 |
+| **本地版** | `ensemble-local/start.bat` | 完全离线运行 | `合鸣.bat` → 本地版 |
+| **云端版** | `ensemble-cloud/start.bat` | 连接云端服务器 | `合鸣.bat` → 云端版 |
 
 详细说明见 [VERSION-MANAGEMENT.md](VERSION-MANAGEMENT.md)
 
