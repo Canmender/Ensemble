@@ -8,7 +8,7 @@ import { MessageSquare } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { ReactionBar } from "./ReactionBar";
 import { Spinner, cls } from "./ui";
-import { Bubble, agentTint, bubbleVariantOf, renderContent, AttachmentView } from "../pages/chat/messageViews";
+import { Bubble, agentTint, bubbleVariantOf, renderContent, AttachmentView, groupMessagesByDay } from "../pages/chat/messageViews";
 import type { ChatMessage, Contact, UserInfo } from "../pages/chat/types";
 
 interface Props {
@@ -44,7 +44,14 @@ export default function MessageList(props: Props) {
                   </div>
                 </div>
               ) : (
-                messages.map((msg) => {
+                groupMessagesByDay(messages).map((group) => (
+                <div key={group.day} className="space-y-4">
+                  <div className="flex items-center gap-3 py-1">
+                    <span className="h-px flex-1 bg-border" />
+                    <span className="text-[10px] font-medium text-muted">{group.label}</span>
+                    <span className="h-px flex-1 bg-border" />
+                  </div>
+                  {group.items.map((msg) => {
                   const variant = bubbleVariantOf(msg, activeContact, meId);
                   const tint = variant === "agent" && msg.agentId ? agentTint(msg.agentId) : undefined;
                   const isMine = msg.sender === "user";
@@ -153,7 +160,9 @@ export default function MessageList(props: Props) {
                     </div>
                   </div>
                   );
-                })
+                  })}
+                </div>
+                ))
               )}
               {/* 群聊运行中提示 */}
               {activeContact.type === "group" && groupRunning && (

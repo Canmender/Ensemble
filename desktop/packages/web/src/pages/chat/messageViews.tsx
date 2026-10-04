@@ -164,3 +164,30 @@ function VoiceBubble({ url, durationText, isUser }: { url?: string; durationText
   );
 }
 
+
+/** 把消息按自然日分组，供消息列表插入日期分割线 */
+export function groupMessagesByDay(messages: ChatMessage[]): Array<{ day: string; label: string; items: ChatMessage[] }> {
+  const out: Array<{ day: string; label: string; items: ChatMessage[] }> = [];
+  for (const m of messages) {
+    const d = new Date(m.timestamp);
+    const day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    const last = out[out.length - 1];
+    if (last && last.day === day) {
+      last.items.push(m);
+      continue;
+    }
+    out.push({ day, label: dayLabel(d), items: [m] });
+  }
+  return out;
+}
+
+/** 日期分割线文案：今天 / 昨天 / M月D日 */
+function dayLabel(d: Date): string {
+  const today = new Date();
+  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((startOf(today) - startOf(d)) / 86400000);
+  if (diffDays === 0) return "今天";
+  if (diffDays === 1) return "昨天";
+  if (d.getFullYear() === today.getFullYear()) return `${d.getMonth() + 1}月${d.getDate()}日`;
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+}
