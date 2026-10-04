@@ -20,6 +20,8 @@ import { privacyRouter } from "./api/routes/privacy";
 import { devicesRouter } from "./api/routes/devices";
 import { uploadRouter } from "./api/routes/upload";
 import { appVersionRouter } from "./api/routes/app-version";
+import { pairsRouter } from "./api/routes/pairs";
+import { userPluginsRouter } from "./api/routes/user-plugins";
 import { initRelayClient } from "./api/routes/relay";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
@@ -164,6 +166,8 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/devices", devicesRouter(ctx));
   app.use("/api/upload", uploadRouter(ctx));
   app.use("/api/app-version", appVersionRouter(ctx));
+  app.use("/api/pairs", pairsRouter(ctx));
+  app.use("/api/user-plugins", userPluginsRouter(ctx));
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）
   initRelayClient(ctx);
