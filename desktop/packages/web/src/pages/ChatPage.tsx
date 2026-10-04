@@ -39,6 +39,7 @@ import {
 } from "./chat/messageViews";
 import { ContactAvatar, ContactItem, CreateGroupDialog } from "./chat/ContactViews";
 import MessageList from "../components/MessageList";
+import ChatInputBar from "../components/ChatInputBar";
 
 export default function ChatPage() {
   const { state: authState } = useAuth();
@@ -925,159 +926,35 @@ export default function ChatPage() {
             />
 
             {/* 输入框 */}
-            <div className="border-t border-border px-6 py-4">
-              {/* 待发送附件预览 */}
-              {draftAttachment && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted/20 px-3 py-2">
-                  {draftAttachment.type === "image" ? <ImageIcon className="h-4 w-4 text-muted" /> : <Paperclip className="h-4 w-4 text-muted" />}
-                  <span className="flex-1 truncate text-xs text-muted">{draftAttachment.name}</span>
-                  <button
-                    onClick={() => setDraftAttachment(null)}
-                    className="rounded p-1 text-muted transition-colors hover:text-fg"
-                    aria-label="取消附件"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              {/* 引用回复条 */}
-              {replyTo && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2">
-                  <span className="text-xs text-muted">回复 {replyTo.senderName}</span>
-                  <span className="flex-1 truncate text-xs text-fg">{replyTo.content}</span>
-                  <button onClick={() => setReplyTo(null)} className="rounded p-1 text-muted hover:text-fg" aria-label="取消引用"><X className="h-3 w-3" /></button>
-                </div>
-              )}
-              {/* @提及选择 */}
-              {mentionOpen && activeContact && (activeContact.type === "user" || activeContact.type === "group") && (
-                <div className="mb-2 flex flex-wrap items-center gap-1 rounded-lg bg-surface p-2 shadow-sm border border-border max-h-28 overflow-y-auto">
-                  {(activeContact.participantIds ?? []).map((pid) => {
-                    const u = usersById.get(pid);
-                    const name = u ? (u.displayName || u.username) : (pid.startsWith("user_") ? pid : pid);
-                    if (mentionFilter && !name.includes(mentionFilter)) return null;
-                    return (
-                      <button
-                        key={pid}
-                        onClick={() => {
-                          setInputText((prev) => {
-                            const lastAt = prev.lastIndexOf("@");
-                            const pre = lastAt >= 0 ? prev.slice(0, lastAt) : prev;
-                            return pre + "@" + name + " ";
-                          });
-                          setMentionOpen(false);
-                          inputRef.current?.focus();
-                        }}
-                        className="rounded-full border border-border px-2 py-0.5 text-xs text-primary hover:bg-primary/10"
-                      >
-                        @{name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {/* 表情面板 */}
-              {showEmoji && (
-                <div ref={emojiRef} className="mb-2 flex flex-wrap items-center gap-1 rounded-lg bg-surface p-2 shadow-sm border border-border max-h-32 overflow-y-auto">
-                  {["😀","😂","🤣","😊","😍","😘","😎","🤔","😅","😭","😡","👍","👎","👏","🙏","💪","🔥","❤️","🎉","✅","❌","👻","🤝","☕"].map((e) => (
-                    <button key={e} onClick={() => insertEmoji(e)} className="p-1 text-lg hover:bg-muted/10 rounded">{e}</button>
-                  ))}
-                </div>
-              )}
-              {/* 多选转发工具栏 */}
-              {multiSelect && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2">
-                  <span className="text-xs text-muted">已选 {selectedMsgs.size} 条</span>
-                  <button onClick={() => void forwardSelected()} disabled={selectedMsgs.size === 0} className="ml-auto rounded-lg bg-primary px-3 py-1 text-xs text-primary-fg disabled:opacity-40">转发</button>
-                  <button onClick={toggleMultiSelect} className="rounded-lg px-2 py-1 text-xs text-muted hover:text-fg">取消</button>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    void handlePickFile(e.target.files?.[0], true);
-                    e.target.value = "";
-                  }}
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => {
-                    void handlePickFile(e.target.files?.[0], false);
-                    e.target.value = "";
-                  }}
-                />
-                <button
-                  onClick={() => imageInputRef.current?.click()}
-                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-                  title="发送图片（支持用户/群聊）"
-                  aria-label="发送图片"
-                  disabled={uploading || sending || activeContact.type === "agent"}
-                >
-                  <ImageIcon className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-                  title="发送文件（支持用户/群聊）"
-                  aria-label="发送文件"
-                  disabled={uploading || sending || activeContact.type === "agent"}
-                >
-                  <Paperclip className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => setShowEmoji((v) => !v)}
-                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg"
-                  title="表情"
-                  aria-label="表情"
-                >
-                  <span className="text-base leading-none">😀</span>
-                </button>
-                <button
-                  onClick={toggleMultiSelect}
-                  className={cls("rounded-lg p-2 transition-colors", multiSelect ? "bg-primary/10 text-primary" : "text-muted hover:bg-muted/10 hover:text-fg")}
-                  title="多选转发"
-                  aria-label="多选转发"
-                >
-                  <span className="text-sm leading-none">☑</span>
-                </button>
-                <Input
-                  value={inputText}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setInputText(v);
-                    // @提及：输入 @ 打开参与者选择
-                    const lastAt = v.lastIndexOf("@");
-                    if (lastAt >= 0 && v.slice(lastAt + 1).length <= 20) {
-                      const isAfterSpace = v.slice(lastAt + 1).includes(" ") === false;
-                      if (isAfterSpace) { setMentionOpen(true); setMentionFilter(v.slice(lastAt + 1)); }
-                      else setMentionOpen(false);
-                    } else {
-                      setMentionOpen(false);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !mentionOpen) sendMessage();
-                    if (e.key === "Escape") { setMentionOpen(false); setShowEmoji(false); }
-                  }}
-                  placeholder={`发送给 ${activeContact.name}...`}
-                  className="flex-1"
-                  disabled={sending || uploading}
-                />
-                <Button
-                  onClick={sendMessage}
-                  disabled={(!inputText.trim() && !draftAttachment) || sending || uploading}
-                  className="px-4"
-                  aria-label="发送消息"
-                >
-                  {sending || uploading ? <Spinner /> : <Send className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
+            <ChatInputBar
+              activeContact={activeContact}
+              inputText={inputText}
+              draftAttachment={draftAttachment}
+              replyTo={replyTo}
+              showEmoji={showEmoji}
+              multiSelect={multiSelect}
+              selectedCount={selectedMsgs.size}
+              uploading={uploading}
+              sending={sending}
+              usersById={usersById}
+              onChangeText={setInputText}
+              onSend={() => void sendMessage()}
+              onPickFile={(f, img) => void handlePickFile(f, img)}
+              onCancelAttachment={() => setDraftAttachment(null)}
+              onCancelReply={() => setReplyTo(null)}
+              onPickMention={(name) => {
+                setInputText((prev) => {
+                  const lastAt = prev.lastIndexOf("@");
+                  const pre = lastAt >= 0 ? prev.slice(0, lastAt) : prev;
+                  return pre + "@" + name + " ";
+                });
+              }}
+              onInsertEmoji={(e) => setInputText((prev) => prev + e)}
+              onToggleEmoji={() => setShowEmoji((v) => !v)}
+              onCloseEmoji={() => setShowEmoji(false)}
+              onToggleMultiSelect={toggleMultiSelect}
+              onForwardSelected={() => void forwardSelected()}
+            />
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
