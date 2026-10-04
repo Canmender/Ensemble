@@ -59,7 +59,19 @@ const runs = db
   )
   .all();
 
-console.log(`\n受影响 ${runs.length} 个 run：`);
+// 区分两类受影响情况，影响面差别很大：
+//   mixed = 该 run 既有 NULL 历史又有已带 seq 的新消息 → 顺序真的错乱
+//   pure  = 该 run 全是 NULL（之后再无新消息）→ 现状显示正常，回填只是让 seq 完整
+const mixedCount = db
+  .prepare(
+    `SELECT COUNT(*) AS c FROM (
+       SELECT run_id FROM chat_messages GROUP BY run_id
+       HAVING SUM(CASE WHEN seq IS NULL THEN 1 ELSE 0 END) > 0
+          AND SUM(CASE WHEN seq IS NOT NULL THEN 1 ELSE 0 END) > 0)`,
+  )
+  .get().c;
+
+console.log(`\n受影响 ${runs.length} 个 run（其中 ${mixedCount} 个混有新消息，顺序真的错乱）：`);
 for (const r of runs) {
   console.log(`  ${r.run_id}  ${r.n} 条  ${r.first_ts} → ${r.last_ts}`);
 }
