@@ -46,6 +46,7 @@
       ],
       "./plugins/withNetworkSecurityConfig",
       "./plugins/withGetuiPush",
+      "./plugins/withNewArchDisabled",
       "expo-sharing"
     ],
     "web": {
