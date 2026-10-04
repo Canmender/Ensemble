@@ -1,5 +1,11 @@
 # Cordis 应用方案：合鸣服务端插件化改造
 
+> **路径说明（2026-10-04 更新）**：本文调研时引用的 `ensemble-cloud/packages/server/...`
+> 与 `ensemble-local/packages/...` 路径已于 2026-10-04 移除（审测清理死代码）。
+> 实际代码位置为 **`desktop/packages/server/...`**，行号可能已变动，请以现仓库为准。
+> 本文正文保留原样以记录当时调研状态。
+
+
 > 编制日期：2026-08-22 | 依据：《Cordis插件系统调研》《Cordis源码深度解析》《Cordis生态全景与精通验证》三轮调研 + 服务端代码审计
 > 范围：`ensemble-cloud/packages/server`（主战场）；relay-server 与客户端不在本期范围
 

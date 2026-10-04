@@ -1,6 +1,6 @@
 # 合鸣功能缺口清单
 
-> 2026-10-04 电脑端会话产出。只读核实，未改任何代码。
+> 2026-10-04 电脑端会话产出。G1/G2/G3 已于同日修复（见文末「修复记录」）。
 > 排序依据是**用户能不能用**（能否触达、点了会怎样），不是代码量。
 
 ## 一、今天新挂载的六个路由：端到端通了吗
@@ -110,3 +110,13 @@ ensemble-local/start.bat → call "%~dp0..\desktop\launch-desktop.bat" local
 G1/G2 的共性值得记：**两处都不是「没做」，而是「做完了没接上」**——
 路由、页面、API 都在，只差一个入口。这类缺口测试与 typecheck 都发现不了
 （今天 223 个测试全绿、四个包的 typecheck 全过，这两处依然存在）。
+## 修复记录（2026-10-04）
+
+| 缺口 | 修复 | 验证 |
+|---|---|---|
+| G1 群成员/群公告页无入口 | `GroupSettingsDialog.tsx` 群信息区加两个按钮，用 `?convId=` 直达（与两页的读取方式一致） | 实测 `/group-members?convId=x` 渲染出「群成员（0）」，页面可达 |
+| G2 AgentsPage 无导航入口 | `App.tsx` 的 `NAV_ITEMS` 加 `{ to: "/agents", label: "智能体", icon: Bot }`，置于看板之后 | 实测侧栏出现「智能体」，点击后到达 `/agents`，页面渲染出「+ 新建 Agent」 |
+| G3 assistant 路由未挂载 | `app.ts` 加 import 与 `app.use("/api/assistant", ...)`，位于 apiAuth 与写限流之后 | typecheck 四包全绿；UI 入口本已存在（侧栏「产品助手」按钮 + AssistantPanel） |
+
+G1/G2 属**可达性问题**，typecheck 与 223 个测试都发现不了——修完后靠起 dev server
+实际点击验证，这是统筹强调的验收方式。

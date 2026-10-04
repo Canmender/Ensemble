@@ -1,5 +1,11 @@
 # IM 端到端加密协议调研
 
+> **路径说明（2026-10-04 更新）**：本文调研时引用的 `ensemble-cloud/packages/server/...`
+> 与 `ensemble-local/packages/...` 路径已于 2026-10-04 移除（审测清理死代码）。
+> 实际代码位置为 **`desktop/packages/server/...`**，行号可能已变动，请以现仓库为准。
+> 本文正文保留原样以记录当时调研状态。
+
+
 > 调研日期：2026-08-22 | 主题：加密安全
 > 关联项目现状：合鸣为云架构 IM（服务器 + relay 全程可见明文）；待办中有三类凭据轮换（见 [[privacy-protection-convention]]、[[session-2026-08-22]]）
 > 方法：检索 Signal 官方规范、IETF RFC 9420 及 2024–2025 密码学分析文献
