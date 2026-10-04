@@ -62,6 +62,25 @@ jobs:
       - run: cd desktop && pnpm --filter @ensemble/web build
       - run: cd desktop && pnpm --filter @ensemble/desktop build
 
+  mobile-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # mobile 是独立的 npm 工程（package-lock.json，无 pnpm-lock.yaml），
+      # 且不在 desktop 的 pnpm workspace 内，故用 npm 而非 pnpm。
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      # npm ci 会触发 postinstall 的 patch-package，装 libsignal 补丁。
+      # 这一步不能省——缺了会重现「libsignal patch 未应用」。
+      - run: cd mobile && npm ci
+      # 不需要先 build：mobile/tsconfig 的 paths 把 @ensemble/shared 指向
+      # ../desktop/packages/shared/src，直接编译源码而非 dist。
+      # 故本 job 必须 checkout 完整仓库（不能 sparse-checkout）。
+      - run: cd mobile && npm run typecheck
+
   docker:
     runs-on: ubuntu-latest
     needs: [typecheck, test]
