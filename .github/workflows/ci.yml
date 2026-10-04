@@ -40,6 +40,8 @@ jobs:
       - run: cd desktop && pnpm install --frozen-lockfile
       - run: cd desktop && pnpm --filter @ensemble/shared build
       - run: cd desktop && pnpm --filter @ensemble/server test
+      # web 的纯函数测试（vitest 配置为 environment: node，不需 DOM）
+      - run: cd desktop && pnpm --filter @ensemble/web test
 
   build:
     runs-on: ubuntu-latest
