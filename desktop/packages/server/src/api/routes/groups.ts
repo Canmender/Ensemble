@@ -56,7 +56,18 @@ export function groupsRouter(ctx: AppContext): Router {
       const conv = ctx.store.getConversation(String(req.params.convId));
       if (!conv) return fail(res, new Error("会话不存在"), 404);
       const members = ctx.store.listGroupMembers(conv.id);
-      ok(res, members);
+      // 补用户名/昵称：前端 MemberInfo 声明了这些字段，仅回 {userId, role}
+      // 会让用户只看到一串 id。getUser 在用户不存在时返回 undefined，
+      // 此时回退到 userId 以保证前端拿到的是字符串而非空。
+      ok(res, members.map((m) => {
+        const u = ctx.store.getUser(m.userId);
+        return {
+          userId: m.userId,
+          username: u?.username ?? m.userId,
+          displayName: u?.displayName,
+          role: m.role,
+        };
+      }));
     }),
   );
 

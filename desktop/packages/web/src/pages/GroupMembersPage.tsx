@@ -11,21 +11,29 @@ import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Avatar } from "../components/Avatar";
 import { Button, Card, Modal, Input, Spinner, cls, showToast } from "../components/ui";
-import { normalizeRole, ROLE_LEVEL, type OrgRole } from "@ensemble/shared";
-
-const ROLE_LABELS: Record<OrgRole, string> = { owner: "群主", admin: "管理员", moderator: "协管", member: "成员", guest: "访客" };
-const ROLE_COLORS: Record<OrgRole, string> = {
-  owner: "bg-amber-500/15 text-amber-600", admin: "bg-blue-500/15 text-blue-600",
-  moderator: "bg-emerald-500/15 text-emerald-600", member: "bg-muted/15 text-muted", guest: "bg-muted/15 text-muted",
+// normalizeRole / ROLE_LEVEL 用于「当前登录用户的组织角色」（users 表的字符串 role），
+// 与下面的群成员数字角色是两套语义，不可混用。
+import { normalizeRole, ROLE_LEVEL } from "@ensemble/shared";
+/**
+ * 群成员角色是**数字** 1=群主 2=管理员 3=普通成员（见服务端
+ * groups.ts 与 store.listGroupMembers），与 @ensemble/shared 的 OrgRole
+ * 字符串体系（owner/admin/moderator/member/guest）是两套不同语义。
+ * 此处原先误用 normalizeRole 解析数字，导致数字全部退化为 "member"：
+ * 所有人显示「成员」、且 `role !== "owner"` 恒真（人人可踢人）。
+ */
+type GroupRole = 1 | 2 | 3;
+const ROLE_LABELS: Record<GroupRole, string> = { 1: "群主", 2: "管理员", 3: "成员" };
+const ROLE_COLORS: Record<GroupRole, string> = {
+  1: "bg-amber-500/15 text-amber-600", 2: "bg-blue-500/15 text-blue-600", 3: "bg-muted/15 text-muted",
 };
-const ROLE_ICONS: Record<OrgRole, typeof Crown> = { owner: Crown, admin: Shield, moderator: Shield, member: UserIcon, guest: UserIcon };
+const ROLE_ICONS: Record<GroupRole, typeof Crown> = { 1: Crown, 2: Shield, 3: UserIcon };
 
 interface MemberInfo {
   userId: string;
   username: string;
   displayName?: string;
   avatarUrl?: string;
-  role: string;
+  role: 1 | 2 | 3;
   joinedAt: string;
 }
 
@@ -57,7 +65,11 @@ export default function GroupMembersPage() {
     setInviteResults(await api.get(`/users/search?q=${encodeURIComponent(q)}&limit=20`));
   }
 
-  async function setRole(userId: string, role: string) {
+  /**
+   * 改角色。role 必须是数字 1|2|3 —— 服务端 groups.ts:72 强校验
+   * `typeof role !== "number"`，传字符串必定 400。
+   */
+  async function setRole(userId: string, role: 1 | 2 | 3) {
     try {
       await api.patch(`/groups/${convId}/members/${userId}/role`, { role });
       setMembers((ms) => ms.map((m) => m.userId === userId ? { ...m, role } : m));
@@ -74,7 +86,7 @@ export default function GroupMembersPage() {
     } catch (e) { showToast((e as Error).message, "error"); }
   }
 
-  const sorted = [...members].sort((a, b) => ROLE_LEVEL[normalizeRole(b.role)] - ROLE_LEVEL[normalizeRole(a.role)]);
+  const sorted = [...members].sort((a, b) => a.role - b.role);
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-6">
@@ -84,7 +96,7 @@ export default function GroupMembersPage() {
       <h1 className="mb-4 text-lg font-bold text-fg">群成员（{members.length}）</h1>
 
       {loading ? <Spinner /> : sorted.map((m) => {
-        const role = normalizeRole(m.role);
+        const role = m.role as GroupRole;
         const RoleIcon = ROLE_ICONS[role];
         return (
           <Card key={m.userId} className="mb-2 flex items-center gap-3 px-4 py-3">
@@ -96,9 +108,9 @@ export default function GroupMembersPage() {
             <span className={cls("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium", ROLE_COLORS[role])}>
               <RoleIcon className="h-3 w-3" /> {ROLE_LABELS[role]}
             </span>
-            {isOwnerOrAdmin && role !== "owner" && (
+            {isOwnerOrAdmin && role !== 1 && (
               <div className="flex gap-1">
-                <button onClick={() => void setRole(m.userId, "admin")} className="rounded p-1 text-muted hover:text-fg" title="设为管理员"><Shield className="h-3.5 w-3.5" /></button>
+                <button onClick={() => void setRole(m.userId, 2)} className="rounded p-1 text-muted hover:text-fg" title="设为管理员"><Shield className="h-3.5 w-3.5" /></button>
                 <button onClick={() => void kick(m.userId)} className="rounded p-1 text-muted hover:text-destructive" title="踢出"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
             )}
@@ -118,7 +130,7 @@ export default function GroupMembersPage() {
           <div key={u.id} className="flex items-center justify-between px-3 py-2 rounded hover:bg-muted/10">
             <span className="text-sm text-fg">{u.displayName || u.username}</span>
             <Button variant="secondary" className="text-xs px-2 py-0.5" onClick={() => {
-              void api.post(`/groups/${convId}/members/${u.id}/role`, { role: "3" }).then(() => { showToast("已邀请"); setShowInvite(false); });
+              void setRole(u.id, 3).then(() => { showToast("已邀请"); setShowInvite(false); });
             }}>邀请</Button>
           </div>
         ))}

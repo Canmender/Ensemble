@@ -24,7 +24,7 @@ import { pairsRouter } from "./api/routes/pairs";
 import { userPluginsRouter } from "./api/routes/user-plugins";
 import { tokensRouter } from "./api/routes/tokens";
 import { e2eRouter } from "./api/routes/e2e";
-import { groupsRouter } from "./api/routes/groups";
+import { groupsRouter, userSearchRouter } from "./api/routes/groups";
 import { reactionsRouter } from "./api/routes/reactions";
 import { assistantRouter } from "./api/routes/assistant";
 import { initRelayClient } from "./api/routes/relay";
@@ -176,6 +176,9 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/tokens", tokensRouter(ctx));
   app.use("/api/e2e", e2eRouter(ctx));
   app.use("/api/groups", groupsRouter(ctx));
+  // 用户搜索：GroupMembersPage 的邀请成员功能依赖它，此前实现完毕但未挂载，
+  // 导致该功能必然 404。路径与前端调用一致（/api/users/search）。
+  app.use("/api/users", userSearchRouter(ctx));
   app.use("/api/reactions", reactionsRouter(ctx));
   app.use("/api/assistant", assistantRouter(ctx));
 
