@@ -49,6 +49,9 @@ import WorkflowsPage from "./pages/WorkflowsPage";
 import TokenUsagePage from "./pages/TokenUsagePage";
 import GroupMembersPage from "./pages/GroupMembersPage";
 import GroupAnnouncementPage from "./pages/GroupAnnouncementPage";
+import AgentsPage from "./pages/AgentsPage";
+import PluginsPage from "./pages/PluginsPage";
+import DeviceLinkPage from "./pages/DeviceLinkPage";
 import { AppHeader } from "./components/AppHeader";
 import { LiquidGlass } from "./components/Glass";
 
@@ -81,6 +84,9 @@ export type RootStackParamList = {
   SettingsSkills: undefined;
   Workflows: undefined;
   TokenUsage: undefined;
+  Agents: undefined;
+  Plugins: undefined;
+  DeviceLink: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -426,6 +432,30 @@ function MainApp() {
           options={{
             headerShown: true,
             header: () => <AppHeader title="记忆管理" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="Agents"
+          component={AgentsPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="智能体管理" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="Plugins"
+          component={PluginsPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="插件管理" showBack showAvatar={false} />,
+          }}
+        />
+        <Stack.Screen
+          name="DeviceLink"
+          component={DeviceLinkPage}
+          options={{
+            headerShown: true,
+            header: () => <AppHeader title="设备互联" showBack showAvatar={false} />,
           }}
         />
         <Stack.Screen

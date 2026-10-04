@@ -56,9 +56,11 @@ import { VoiceMessage } from "../components/VoiceMessage";
 import { timeAgo } from "../utils/timeAgo";
 import { convTitle } from "../utils/convTitle";
 import { saveDraft, loadDraft, clearDraft } from "../utils/draft";
-import { colors, spacing, radius, fontSize } from "../theme";
+import { ms, colors, spacing, radius, fontSize } from "../theme";
 import { LiquidGlass } from "../components/Glass";
 import type { AgentConfig, MessageAttachment, MessageReply } from "@ensemble/shared";
+import { isPluginCard } from "@ensemble/shared";
+import { PluginCardView } from "../components/PluginCardView";
 import type { RootStackParamList } from "../App";
 
 type Props = NativeStackScreenProps<RootStackParamList, "ChatRoom">;
@@ -949,7 +951,15 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     [downloading],
   );
 
-  const renderAttachment = (att: MessageAttachment, isUser: boolean, content?: string) => {
+  const renderAttachment = (att: MessageAttachment, isUser: boolean, content?: string, pluginId?: string) => {
+    // 插件卡片（U1）：按 cardType 分派内置模板；未识别类型折叠框降级（永不白屏）
+    // 判断条件与桌面端 messageViews.tsx:38-42 对齐
+    if (att.type === "plugin-card") {
+      if (att.card && isPluginCard(att)) {
+        return <PluginCardView card={att.card} pluginId={pluginId || att.card.cardType} />;
+      }
+      return <Text style={styles.bubbleText}>卡片数据异常</Text>;
+    }
     if (att.type === "image") {
       // 图片完整显示，点击全屏查看（全屏界面可下载）
       return (
@@ -1059,7 +1069,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
               {!isUser && variant !== "ai-ghost" && item.agentName && (
                 <Text style={[styles.bubbleAgentName, bs.nameText]}>{resolveSenderName(item.agentName)}</Text>
               )}
-              {item.attachment && renderAttachment(item.attachment, isUser, item.content)}
+              {item.attachment && renderAttachment(item.attachment, isUser, item.content, item.agentName)}
               {!!item.content && (
                 <Text style={[styles.bubbleText, bs.text]}>
                   {item.content.split(/(@[\p{L}\p{N}_]{1,20})/gu).map((part, i) =>
@@ -1579,7 +1589,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   messageList: { padding: spacing.lg },
   loadingMore: { paddingVertical: spacing.md, alignItems: "center" },

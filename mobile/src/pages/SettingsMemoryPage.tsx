@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "../services/api";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { ms, colors, spacing, radius, fontSize, elevation } from "../theme";
 import { LiquidGlass } from "../components/Glass";
 
 interface Memory {
@@ -185,7 +185,7 @@ function getCategoryColor(category: string): string {
   return colors[category] || colors.user;
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   contentContainer: { padding: spacing.lg, paddingBottom: 100 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },

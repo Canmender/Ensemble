@@ -94,7 +94,7 @@ export default function AssistantPage({ navigation }: { navigation: any }) {
       return "合鸣（Ensemble）是一个本地优先的多Agent协作平台。它连接Claude Code、Hermes、OpenCode等AI Agent，通过可视化编排让它们协同工作。\n\n核心功能包括：\n• 多Agent编排（单发/工作流/群聊/规划/对抗）\n• 多模型支持（Anthropic/OpenAI/DeepSeek/Ollama）\n• RAG知识库\n• 工具系统（文件/命令/网络/MCP）\n• 双记忆池\n• 实时监控";
     }
     if (lower.includes("智能体") || lower.includes("agent") || lower.includes("创建")) {
-      return "创建智能体步骤：\n1. 打开桌面端 → Agents页面\n2. 点击「新建Agent」\n3. 选择类型：内置Agent（LLM+工具）或本地Agent（接入CLI）\n4. 配置模型、工具、技能\n5. 保存即可使用\n\n移动端暂不支持创建智能体，请在桌面端操作。";
+      return "创建智能体步骤：\n1. 打开 设置 → AI 助手 & 高级设置 → 智能体管理\n2. 点击「新建智能体」\n3. 选择类型：内置Agent（LLM+工具）或本地Agent（接入CLI）\n4. 配置模型、工具、技能\n5. 保存即可使用\n\n也可以在桌面端操作。";
     }
     if (lower.includes("工作流") || lower.includes("workflow")) {
       return "工作流是多Agent协作的编排方式：\n\n• 单发：一个Agent独立完成任务\n• 工作流：多个Agent按依赖关系执行\n• 群聊：多Agent轮转对话\n• 规划-执行-反思：自动拆解任务\n• 对抗迭代：Coder vs Tester\n\n在桌面端的任务页面创建。";
