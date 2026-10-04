@@ -3,7 +3,7 @@
  * 从 ChatPage.tsx 抽出。本组件不持有业务 state，状态与回调全部由 ChatPage 传入。
  */
 
-import type { RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { MessageSquare } from "lucide-react";
 import { Avatar } from "./Avatar";
 import { ReactionBar } from "./ReactionBar";
@@ -34,6 +34,21 @@ export default function MessageList(props: Props) {
     messages, activeContact, meId, usersById, multiSelect, selectedMsgs, peerReadTs,
     groupRunning, bottomRef, onToggleSelect, onQuote, onForward, onEdit, onRecall, onToggleReaction,
   } = props;
+
+  // 入场动画只给「本次渲染新增的那一条」，避免整列表（可能几百条）同时播放。
+  // 判断放在本组件内（ref + 一次比较），不依赖 ChatPage 的数据流。
+  const prevRef = useRef<{ contactId: string; lastId?: string }>({ contactId: "" });
+  const prev = prevRef.current;
+  const lastId = messages.length > 0 ? messages[messages.length - 1].id : undefined;
+  // 切换会话时消息 id 完全不同，此时不播动画；仅同一会话内末尾新增才播。
+  const animateId =
+    prev.contactId === activeContact.id && prev.lastId && lastId && lastId !== prev.lastId
+      ? lastId
+      : undefined;
+  useEffect(() => {
+    prevRef.current = { contactId: activeContact.id, lastId };
+  }, [activeContact.id, lastId]);
+
   return (
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               {messages.length === 0 ? (
@@ -61,6 +76,7 @@ export default function MessageList(props: Props) {
                     className={cls(
                       "group relative flex",
                       isMine ? "justify-end" : "justify-start",
+                      msg.id === animateId && "bubble-in",
                     )}
                   >
                     <div className="flex items-start gap-2 min-w-0">
