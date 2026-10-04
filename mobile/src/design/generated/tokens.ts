@@ -14,6 +14,14 @@ export interface EnsembleTheme {
   ring: string;
   success: string;
   warning: string;
+  agentViolet: string;
+  agentSky: string;
+  agentEmerald: string;
+  agentAmber: string;
+  agentRose: string;
+  toastSuccess: string;
+  toastError: string;
+  toastFg: string;
 }
 
 export const LightTheme: EnsembleTheme = {
@@ -24,13 +32,21 @@ export const LightTheme: EnsembleTheme = {
   border: "#E2E8F0",
   fg: "#171B23",
   muted: "#64748B",
-  primary: "#0C8CEB",
+  primary: "#3B3F4A",
   primaryFg: "#FFFFFF",
-  accent: "#16A34A",
+  accent: "#8C7AE6",
   destructive: "#DC2626",
-  ring: "#0C8CEB",
+  ring: "#3B3F4A",
   success: "#34D399",
   warning: "#F59E0B",
+  agentViolet: "#7C3AED",
+  agentSky: "#0284C7",
+  agentEmerald: "#059669",
+  agentAmber: "#D97706",
+  agentRose: "#E11D48",
+  toastSuccess: "#047857",
+  toastError: "#B91C1C",
+  toastFg: "#FFFFFF",
 };
 
 export const DarkTheme: EnsembleTheme = {
@@ -41,13 +57,21 @@ export const DarkTheme: EnsembleTheme = {
   border: "#334155",
   fg: "#FAFBFC",
   muted: "#94A3B8",
-  primary: "#38BDF8",
+  primary: "#8B8F98",
   primaryFg: "#0F172A",
-  accent: "#22C55E",
+  accent: "#B4ACF8",
   destructive: "#F87171",
-  ring: "#38BDF8",
+  ring: "#8B8F98",
   success: "#34D399",
   warning: "#FBBF24",
+  agentViolet: "#A78BFA",
+  agentSky: "#7DD3FC",
+  agentEmerald: "#6EE7B7",
+  agentAmber: "#FCD34D",
+  agentRose: "#FDA4AF",
+  toastSuccess: "#34D399",
+  toastError: "#F87171",
+  toastFg: "#0F172A",
 };
 
 /** 弹簧动画参数（damping/stiffness），与 web 端 CSS 曲线近似对应 */
