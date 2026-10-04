@@ -149,11 +149,39 @@ cd mobile && npm install && npx tsc --noEmit
 | **显式报错**（非法引用抛异常、非零退出） | 低。非法输入无法通过生成 | 跑生成器即可，失败会响 |
 | **静默通过**（非法输入照常产出错误产物） | 高。产物看着正常，实则错误 | 必须人工核对真值与产物 |
 
-**正面对照（本项目实例）**：`desktop/scripts/build-tokens.mjs` 对非法输入全部显式抛错——第 19 行循环引用 `throw new Error("token 循环引用")`、第 21 行引用不存在 `throw new Error("引用不存在")`、第 40 行缺 `$value` 同样抛出。**所以设计 token 这条链是安全的**：改了真值跑一次生成器，错了它会告诉你。`build-release.cjs` 同理。
+**正面对照（本项目实例）**：`desktop/scripts/build-tokens.mjs` 对非法输入全部显式抛错——第 19 行循环引用 `throw new Error("token 循环引用")`、第 21 行引用不存在 `throw new Error("引用不存在")`、第 40 行缺 `$value` 同样抛出。**所以它对「非法输入」是安全的**：单源写错了跑一次生成器，错了它会告诉你。
 
-**静默通过的反例**：`mobile/src/design/generated/tokens.ts`（如 5.2 的 `primaryFg` 案例）——生成器工作完全正常、真值确实生成了，缺陷在消费方手写 interface 没接住，**生成器永远不会报这个错**。
+⚠️ 但注意它**不覆盖另一种情况**——「压根没跑生成器」。脚本不执行时不会报任何错，产物静静停留在旧值。所以「生成器会报错」不等于「产物一定是新的」，仍须确认它真的被运行过（见下）。
 
-**规则**：每条生成链入库前，先确认它属于上表哪一行。只对「静默通过」那一行的链做人工核对；对「显式报错」的行，跑生成器就够，不必浪费人工比对。
+**静默通过的反例（本项目已确认两例）：**
+
+**① 产物未重建：`mobile/src/design/generated/tokens.ts` 停留在旧色系。**
+入库的产物里 `LightTheme.primary` 仍是 `"#0C8CEB"`、`accent` 是 `"#16A34A"`（旧亮蓝/旧绿），而单源 `desktop/packages/shared/design/tokens.json` 的 primary 引用已是 `{primitive.color.xuan.500}`（玄色系）。
+**为什么静态检查发现不了**：`EnsembleTheme` 接口声明 `primary: string`，产物里给了个字符串，类型完全匹配；`theme.ts` 的 `Palette` 同样是 `primary: string`，映射过去同样合法。**两边都是完全合法的 TypeScript，tsc 结构上没有任何理由报错。**
+经过：v0.8.38「双端主色统一」改了 tokens.json 的 primary/accent/ring 引用，但当时没重跑生成器。期间 tsc 正常、构建正常、真机不崩，只是移动端主色与桌面端不一致——**跨约 2 个月才被发现，且是被别人碰单源时顺带修复的**。
+
+**② 真值映射遗漏：`primaryFg`**（见 5.2）。
+生成器工作正常、真值确实生成（`design/generated/tokens.ts` 内有 `primaryFg`，浅色 `#FFFFFF` / 深色 `#0F172A`），缺陷在消费方 `theme.ts` 的手写 `Palette` interface 没接住。
+
+**两者的区别**：`primaryFg` 至少还能从 `theme.ts` 的接口声明查出来（少了一个键）；tokens.ts 过期则是**产物与单源在类型层面完全等价，没有任何静态信号**——产物看起来完全正常，只有把单源和产物并排比对才能发现。
+
+**判定标准（务必按此判断，不要按「当前有没有报错」判断）**：
+
+| 情形 | tsc 能否发现 | 归属 |
+|---|---|---|
+| 引用了不存在的导出（如 `ms()` 丢失） | **能**，报 TS2305/TS2339 | 交给 tsc，跑生成器/编译即可 |
+| 真值存在但产物未重建（tokens.ts 过期） | **不能**，两边类型都合法 | 静默通过，须人工核对或强制重建 |
+| 真值存在但消费方没接住（`primaryFg`） | **不能**，真值在、映射缺 | 静默通过，须人工核对 |
+
+**判据是「tsc 结构上能否发现」，不是「当前是否报错」。** 能被 tsc 捕获的（引用不存在）交给 tsc；**结构上无法被 tsc 发现的（类型仍合法、只是值陈旧或映射缺失）才是静默通过，才需要人工核对。** 注意「tsc 能捕获」不等于「tsc 已经报过」——后者还取决于有没有真去跑。
+
+**发现方式**：只能靠人眼比对单源与产物，或每次改单源后强制重建并 `diff` 产物。
+
+**强制重建（本项目 token 链）**：`build-tokens.mjs` 同时产出两端——读 `packages/shared/design/tokens.json`，写 `packages/shared/design/generated/tokens.css` 与 `mobile/src/design/generated/tokens.ts`（第 96 行）。改单源后跑它，再 `git diff` 产物，**diff 非空即说明此前有产物未重建**。
+
+```bash
+node desktop/scripts/build-tokens.mjs && git diff --stat -- '*tokens*'
+```
 
 **推广适用**：不限于代码生成器。任何「改单源 → 出产物」的机制都适用，包括文档从 schema 生成、类型从定义生成、配置从模板生成。
 
