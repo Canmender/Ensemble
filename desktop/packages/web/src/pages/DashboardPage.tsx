@@ -374,11 +374,15 @@ function RunCard({ run, expanded, onToggle }: { run: Run; expanded: boolean; onT
         )}
       </button>
 
-      {expanded && (
-        <div className="border-t border-border px-3.5 py-3">
-          <RunDetail runId={run.id} />
+      <div className={cls("grid-rows-expander", expanded && "is-open")}>
+        <div className="overflow-hidden">
+          {expanded && (
+            <div className="border-t border-border px-3.5 py-3">
+              <RunDetail runId={run.id} />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </Card>
   );
 }
