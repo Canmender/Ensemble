@@ -116,6 +116,7 @@ const PURE = {
 export interface Palette {
   // 语义键 → token（与桌面端同值；旧视觉键映射到最近的语义 token）
   primary: string;
+  primaryFg: string;
   primaryDeep: string;
   primarySoft: string;
   primaryBubble: string;
@@ -164,6 +165,7 @@ let palette: Palette = buildPalette();
 function buildPalette(): Palette {
   return {
     primary: activeTokens.primary,
+    primaryFg: activeTokens.primaryFg,
     primaryDeep: activeTokens.fg,
     primarySoft: activeTokens.surface1,
     primaryBubble: activeTokens.primary,

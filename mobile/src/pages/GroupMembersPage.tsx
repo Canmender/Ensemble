@@ -93,7 +93,9 @@ export default function GroupMembersPage() {
       return;
     }
     try {
-      const data = await api.get(`/api/users/search?q=${encodeURIComponent(q)}&limit=20`);
+      const data = await api.get<Array<{ id: string; username: string; displayName?: string }>>(
+        `/api/users/search?q=${encodeURIComponent(q)}&limit=20`,
+      );
       setInviteResults(data);
     } catch (e) {
       console.error("搜索用户失败:", e);
@@ -238,7 +240,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },
   header: { fontSize: fontSize.xl, fontWeight: "700", color: colors.text, marginBottom: spacing.lg },
   memberCard: { marginBottom: spacing.md, borderRadius: radius.lg, overflow: "hidden", ...elevation.md },
-  memberGlass: { ...StyleSheet.absoluteFillObject },
+  memberGlass: { ...StyleSheet.absoluteFill },
   memberContent: { flexDirection: "row", alignItems: "center", padding: spacing.md, position: "relative" },
   memberInfo: { flex: 1, marginLeft: spacing.md },
   memberName: { fontSize: fontSize.md, fontWeight: "600", color: colors.text },
@@ -249,7 +251,7 @@ const styles = StyleSheet.create({
   actionBtn: { padding: spacing.sm },
   inviteBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.primary, padding: spacing.md, borderRadius: radius.md, marginTop: spacing.lg },
   inviteBtnText: { fontSize: fontSize.md, fontWeight: "600", color: "#fff" },
-  modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 1000 },
+  modalOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 1000 },
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, width: "90%", maxWidth: 400, maxHeight: "80%" },
   modalTitle: { fontSize: fontSize.lg, fontWeight: "700", color: colors.text, marginBottom: spacing.lg },
   input: { backgroundColor: colors.bg, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, fontSize: fontSize.md, color: colors.text, borderWidth: 1, borderColor: colors.border },

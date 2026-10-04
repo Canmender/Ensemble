@@ -12,7 +12,7 @@
  *   "fallback" 消息卡片/通用（LiquidGlass 降级即可）
  */
 import React, { useMemo } from "react";
-import { Platform, StyleSheet, type StyleProp, type ViewStyle } from "react-native";
+import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import { LiquidGlass } from "./LiquidGlass";
 import { getColors } from "../theme";
 
@@ -138,6 +138,6 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   absoluteFill: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
 });

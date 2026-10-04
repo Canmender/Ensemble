@@ -23,7 +23,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
-import { api, type PluginInfo } from "../services/api";
+import { api, type PluginInfo, type PluginSettingField } from "../services/api";
 import { colors, spacing, radius, fontSize, elevation , ms } from "../theme";
 
 export default function PluginsPage() {
@@ -158,7 +158,7 @@ export default function PluginsPage() {
                   <View style={styles.titleRow}>
                     <Text style={styles.name}>{p.name}</Text>
                     <Text style={styles.version}>v{p.version}</Text>
-                    {p.scheduled > 0 && (
+                    {(p.scheduled ?? 0) > 0 && (
                       <View style={styles.badge}>
                         <Ionicons name="time-outline" size={9} color={colors.textMuted} />
                         <Text style={styles.badgeText}>定时 ×{p.scheduled}</Text>
@@ -191,7 +191,7 @@ export default function PluginsPage() {
                   </TouchableOpacity>
                   {expanded && (
                     <View style={styles.configForm}>
-                      {(p.settings ?? []).map((f) => (
+                      {(p.settings ?? []).map((f: PluginSettingField) => (
                         <View key={f.key} style={styles.field}>
                           <Text style={styles.fieldLabel}>{f.label}</Text>
                           <TextInput

@@ -29,5 +29,10 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 - 自定义 config plugin（个推/网络）放 `mobile/plugins/`，用 `withAndroidManifest`/`withDangerousMod`/`withAppBuildGradle`；改完必须 `expo prebuild --clean` 生效，安卓产物不进 git。
 - 个推 `GETUI_APPID` 等凭据在 gitignore 的 `mobile/getui.config.js`；仓库只有 `getui.config.example.js`。
 
+### SDK 57 配置陷阱（静默失效，最易踩）
+- **app.json 里写 `newArchEnabled` 无效且不报错**——Expo SDK 57 的配置类型里没这个键（`@expo/config-types` 全包 grep 零命中），写在 `android` 段被静默忽略。关闭新架构（Android 16 白屏根因）必须走 config plugin `mobile/plugins/withNewArchDisabled.js`，改完 `grep newArchEnabled android/gradle.properties` 确认输出 `false`。
+- `withGradleProperties` 改属性时 `type` 必须是 **`"property"`**；误用 `"comment"` 会写成注释行，同样不报错不生效。详见 `docs/mobile-ui-pitfalls.md` 第 13.2 节。
+- 通则：**app.json 不认识的字段会被静默忽略**。改配置后从产物侧验证，不要以「配置文件写对了」为准。
+
 ### 凭据与安全（绝对红线）
 - 仓库**禁止**出现真实服务器 IP、密钥、SSH 密码。部署用临时 paramiko 脚本，用完删除；真实配置放 gitignore 文件。

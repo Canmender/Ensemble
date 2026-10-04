@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },
   header: { fontSize: fontSize.xl, fontWeight: "700", color: colors.text, marginBottom: spacing.lg },
   card: { borderRadius: radius.lg, overflow: "hidden", ...elevation.md },
-  cardGlass: { ...StyleSheet.absoluteFillObject },
+  cardGlass: { ...StyleSheet.absoluteFill },
   cardContent: { padding: spacing.lg, position: "relative", minHeight: 200 },
   textArea: {
     backgroundColor: colors.bg,

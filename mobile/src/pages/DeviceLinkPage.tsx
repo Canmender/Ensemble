@@ -20,6 +20,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Application from "expo-application";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
@@ -40,7 +41,19 @@ function getDeviceId(): string {
   if (stored) return stored;
   // 生成并持久化一个随机 ID
   const id = `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  useDeviceStore.setState({ currentDevice: { id, name: "手机端", type: "mobile" } });
+  useDeviceStore.setState({
+    currentDevice: {
+      id,
+      name: "手机端",
+      type: "mobile",
+      os: "React Native",
+      appVersion: Application.nativeApplicationVersion ?? "0.9.33",
+      wsPort: 0,
+      httpPort: 0,
+      ip: "0.0.0.0",
+      lastSeen: Date.now(),
+    },
+  });
   return id;
 }
 
@@ -219,7 +232,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.border,
-    elevation: elevation.sm,
+    ...elevation.sm,
   },
   iconWrap: {
     width: 56, height: 56, borderRadius: radius.md,

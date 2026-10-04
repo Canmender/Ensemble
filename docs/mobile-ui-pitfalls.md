@@ -232,6 +232,49 @@ hermesEnabled=true
 - prebuild 产物是 ephemeral 的，任何自定义 gradle 配置都需在 prebuild 后重新应用
 - 白屏时优先检查 Logcat 中的原生模块注册错误
 
+### 13.2 app.json 写 newArchEnabled 无效（2026-10 补充，上节方案的修正）
+
+**问题**：按 13.1 的方案在 app.json 的 `android` 段加 `"newArchEnabled": false`，跑 `expo prebuild --clean`，生成的 `android/gradle.properties` 里 `newArchEnabled` **仍然是 `true`**，设置完全不生效，且 Expo 不报任何错。
+
+**根因**：Expo SDK 57（实测 57.0.11）的 app.json 配置类型里**没有** `newArchEnabled` 这个键。`@expo/config-types` 与 `@expo/config-plugins` 全包 grep 该字符串零命中。写在 `android` 段属于未知字段，被**静默忽略**——不报错、不生效，最坏的一种失败模式：看起来配置过了，实际没生效。
+
+**修复**：用 config plugin 在 prebuild 阶段改写 `gradle_properties`。见 `mobile/plugins/withNewArchDisabled.js`，并在 app.json 的 `plugins` 段注册。修改的是持久位置（app.json 里注册的 plugin），每次 prebuild 都会重新生效，无需事后手工改 gradle.properties。
+
+```js
+const { withGradleProperties } = require("@expo/config-plugins");
+
+module.exports = function withNewArchDisabled(config) {
+  return withGradleProperties(config, (config) => {
+    const items = config.modResults;
+    const existing = items.find((item) => item.key === "newArchEnabled");
+    if (existing) existing.value = "false";
+    else items.push({ type: "property", key: "newArchEnabled", value: "false" });
+    return config;
+  });
+};
+```
+
+**连带坑：`PropertiesItem` 的 `type` 必须是 `"property"`**。类型定义（`@expo/config-plugins/build/android/Properties.d.ts`）有三种取值：
+
+```ts
+type PropertiesItem =
+  | { type: 'comment'; value: string }   // ← 写成注释行，不生效
+  | { type: 'empty' }
+  | { type: 'property'; key: string; value: string };
+```
+
+误用 `type: "comment"` 会把配置写成 `# newArchEnabled=false` 这样的注释行，构建同样不报错、同样不生效。这个坑与上面「app.json 静默忽略」叠加后极难察觉——两处都表现为"配了但没生效"，没有任何错误信息。
+
+**验证方法**（不要凭配置推断，直接看产物）：
+```bash
+grep newArchEnabled android/gradle.properties   # 应输出 newArchEnabled=false
+```
+
+**教训**：
+- **app.json 里不认识的字段会被静默忽略**，不报错。改配置后必须从产物侧验证，不能以「配置文件写对了」为准
+- 13.1 节的方案（在 gradle.properties 手改）不可持续：prebuild 产物是 ephemeral，下次 prebuild 就丢
+- 配置类改动优先找 config plugin 机制（`mobile/plugins/` 下已有两个同类插件可参考），而不是改 prebuild 产物
+
 ## 14. push token 注册时序问题
 
 ### 14.1 必须在登录后调用 registerForPushNotificationsAsync
