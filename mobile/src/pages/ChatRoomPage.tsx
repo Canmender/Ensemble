@@ -30,9 +30,8 @@ import { useDeviceStore } from "../store/deviceStore";
 import { useUnreadStore } from "../store/unreadStore";
 import { useMeStore } from "../store/meStore";
 import { wsLink } from "../services/wslink";
-import Animated from "react-native-reanimated";
-import { useLayoutSpringGentle } from "../utils/motion";
 import { bubbleVariantOf, bubbleStyles } from "../components/bubble";
+import { FadeInSlideUp } from "../components/FadeInSlideUp";
 import { GlassSurface } from "../components/GlassSurface";
 import { startCall } from "../services/callService";
 // E2E 服务懒加载：e2eService 及其密码学依赖不进 App 启动的 import 树——
@@ -1010,8 +1009,6 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     );
   };
 
-  // 消息气泡布局转场弹簧（顶层调用 hooks；系统减弱动态时为 undefined）
-  const bubbleLayoutSpring = useLayoutSpringGentle();
 
   const renderMessage = ({ item }: { item: MessageItem }) => {
     const isUser = isMyMessage(item);
@@ -1034,7 +1031,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
     const { variant, tint } = bubbleVariantOf(isUser, item.agentName ?? "", isDirectAgent, item.role);
     const bs = bubbleStyles(variant, tint);
     return (
-      <Animated.View layout={bubbleLayoutSpring} style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
+      <FadeInSlideUp style={[styles.msgRow, isUser ? styles.msgRowUser : styles.msgRowAgent]}>
         {/* 多选模式：点击选中/取消 */}
         {selectMode && (
           <TouchableOpacity onPress={() => toggleSelect(item.id)} style={styles.selectCheck} hitSlop={8}>
@@ -1094,7 +1091,7 @@ export default function ChatRoomPage({ route, navigation }: Props) {
             ) : null}
           </View>
         </TouchableOpacity>
-      </Animated.View>
+      </FadeInSlideUp>
     );
   };
 
