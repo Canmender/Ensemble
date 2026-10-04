@@ -52,7 +52,8 @@ body {
   .grid-rows-expander,
   .anim-spring,
   .spring-in,
-  .bubble-in {
+  .bubble-in,
+  .press {
     animation: none !important;
     transition: none !important;
   }
@@ -153,6 +154,32 @@ body {
 }
 .bubble-in {
   animation: bubbleIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* 按压微反馈：下压 5% 后弹性回弹。
+   曲线用 1.56 过冲版（同 Modal 的 scale）：按压是「主动下压再回弹」的物理语义，
+   过冲回弹正是弹性表达；且 scale 不改变布局尺寸，过冲幅度约 0.25% 不可见——
+   这与 RunCard 用 1.06 的理由不同（高度过冲会撑大布局变成抖动）。
+   注意：本类用 transition-property 而非 transition 简写，避免覆盖元素上已有的
+   transition-opacity（Tailwind utilities 层级更高，但简写会整条改写 transition-property）。 */
+.press {
+  transition-property: transform;
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+/* 与 opacity 过渡共存版：给同时需要淡入的元素用（如消息操作按钮的 group-hover 淡入）。
+   Tailwind 的 transition-opacity 只设 transition-property: opacity，会覆盖 .press 的
+   transform 过渡；本类把两者合并为一条，两种属性各自用自己的时长与曲线。 */
+.press-fade {
+  transition-property: opacity, transform;
+  transition-duration: 150ms, 120ms;
+  transition-timing-function: ease, cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.press-fade:active {
+  transform: scale(0.95);
+}
+.press:active {
+  transform: scale(0.95);
 }
 
 /* 折叠区展开：grid-template-rows 0fr→1fr，让内容自适应高度过渡。
