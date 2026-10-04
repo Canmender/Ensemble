@@ -38,6 +38,7 @@ import {
   Bubble, agentTint, bubbleVariantOf, renderContent, AttachmentView,
 } from "./chat/messageViews";
 import { ContactAvatar, ContactItem, CreateGroupDialog } from "./chat/ContactViews";
+import MessageList from "../components/MessageList";
 
 export default function ChatPage() {
   const { state: authState } = useAuth();
@@ -894,146 +895,34 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* 消息列表 */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-              {messages.length === 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  <div className="text-center">
-                    <MessageSquare className="mx-auto h-12 w-12 text-muted/30" />
-                    <p className="mt-2 text-sm text-muted">开始与 {activeContact.name} 对话</p>
-                  </div>
-                </div>
-              ) : (
-                messages.map((msg) => {
-                  const variant = bubbleVariantOf(msg, activeContact, me?.id);
-                  const tint = variant === "agent" && msg.agentId ? agentTint(msg.agentId) : undefined;
-                  const isMine = msg.sender === "user";
-                  return (
-                  <div
-                    key={msg.id}
-                    className={cls(
-                      "group relative flex",
-                      isMine ? "justify-end" : "justify-start",
-                    )}
-                  >
-                    <div className="flex items-start gap-2 min-w-0">
-                      {multiSelect && (
-                        <button
-                          onClick={() => toggleSelectMsg(msg.id)}
-                          className={cls("self-center flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
-                            selectedMsgs.has(msg.id) ? "border-primary bg-primary text-primary-fg" : "border-muted bg-surface")}
-                        >
-                          {selectedMsgs.has(msg.id) && "✓"}
-                        </button>
-                      )}
-                      {(() => {
-                        if (isMine) return null;
-                        if (activeContact.type === "user" && msg.agentId) {
-                          const u = usersById.get(msg.agentId);
-                          return <Avatar name={msg.senderName ?? u?.displayName ?? u?.username ?? msg.agentId} avatarUrl={u?.avatarUrl} size={28} className="mt-1 shrink-0" />;
-                        }
-                        if (activeContact.type === "group") {
-                          return <Avatar name={msg.senderName ?? msg.agentId ?? "?"} size={28} className="mt-1 shrink-0" />;
-                        }
-                        if (activeContact.type === "agent") {
-                          return <Avatar name={activeContact.name} avatarUrl={(activeContact as any).avatarUrl} size={28} className="mt-1 shrink-0" />;
-                        }
-                        return null;
-                      })()}
-                      {/* Bubble 表面 */}
-                      <Bubble variant={variant} tint={tint}>
-                        {msg.deleted ? (
-                          <div className="text-sm italic opacity-60">消息已撤回</div>
-                        ) : (
-                          <>
-                            {msg.replyTo && (
-                              <div className={cls("mb-1 rounded-md px-2 py-1 text-xs opacity-80 border-l-2", isMine ? "border-primary-fg/60 bg-primary-fg/10" : "border-current/30 bg-black/5")}>
-                                <div className="font-medium">{msg.replyTo.senderName || "引用"}：</div>
-                                <div className="truncate max-w-full">{msg.replyTo.content}</div>
-                              </div>
-                            )}
-                            {(activeContact.type === "group" || activeContact.type === "user") && msg.agentId && msg.agentId !== "user" && msg.agentId !== me?.id && (
-                              <div className={cls("mb-1 text-[11px] font-semibold", variant === "ai-ghost" ? "text-muted" : "opacity-90")}>
-                                {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
-                              </div>
-                            )}
-                            {msg.attachment && <AttachmentView att={msg.attachment} content={msg.content} pluginId={msg.agentId} />}
-                            {msg.content && <div className={cls("whitespace-pre-wrap leading-relaxed", variant === "ai-ghost" ? "text-sm text-fg" : "text-sm")}>{renderContent(msg.content)}</div>}
-                            {msg.status === 3 && !msg.content.startsWith("{") && <div className="text-[10px] text-muted italic mt-0.5">已编辑</div>}
-                          </>
-                        )}
-                        <div className={cls(
-                          "mt-1 flex items-center gap-2",
-                          isMine ? "justify-end" : "justify-start",
-                        )}>
-                          <span className={cls(
-                            "text-[10px]",
-                            isMine ? "text-primary-fg/70" : "text-muted",
-                          )}>
-                            {new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          {!msg.deleted && (
-                            <>
-                              <button onClick={() => startQuote(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="引用回复">引用</button>
-                              <button onClick={() => openForward(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="转发">转发</button>
-                              {isMine && activeContact?.convId && (
-                                <button
-                                  onClick={() => setEditTarget({ msgId: msg.id, content: msg.content, convId: activeContact.convId! })}
-                                  className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
-                                  title="编辑"
-                                >
-                                  编辑
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {isMine && !msg.deleted && activeContact?.convId && (
-                            <button
-                              onClick={() => void recallMessage(msg)}
-                              className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
-                              title="撤回消息"
-                            >
-                              撤回
-                            </button>
-                          )}
-                          {isMine && peerReadTs !== undefined && msg.timestamp <= peerReadTs && (
-                            <span className="text-[10px] font-semibold text-primary">已读</span>
-                          )}
-                        </div>
-                        {/* P1-2: Reaction 摘要栏（每条消息下方） */}
-                        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                          <ReactionBar
-                            messageId={msg.id}
-                            reactions={msg.reactions}
-                            currentUserId={me?.id}
-                            onToggle={(emoji, added) => {
-                              setLocalReactions((prev) => {
-                                const msgR = { ...(prev[msg.id] ?? {}) };
-                                if (added) {
-                                  msgR[emoji] = [...(msgR[emoji] ?? []), me?.id ?? "self"];
-                                } else {
-                                  msgR[emoji] = (msgR[emoji] ?? []).filter((u) => u !== me?.id);
-                                  if (msgR[emoji].length === 0) delete msgR[emoji];
-                                }
-                                return { ...prev, [msg.id]: msgR };
-                              });
-                            }}
-                          />
-                        )}
-                      </Bubble>
-                    </div>
-                  </div>
-                  );
-                })
-              )}
-              {/* 群聊运行中提示 */}
-              {activeContact.type === "group" && groupLive?.status === "running" && (
-                <div className="flex items-center gap-2 text-muted">
-                  <Spinner label="Agent 们正在对话…" />
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+            <MessageList
+              messages={messages}
+              activeContact={activeContact}
+              meId={me?.id}
+              usersById={usersById}
+              multiSelect={multiSelect}
+              selectedMsgs={selectedMsgs}
+              peerReadTs={peerReadTs}
+              groupRunning={groupLive?.status === "running"}
+              bottomRef={messagesEndRef}
+              onToggleSelect={toggleSelectMsg}
+              onQuote={startQuote}
+              onForward={openForward}
+              onEdit={(msg) => setEditTarget({ msgId: msg.id, content: msg.content, convId: activeContact.convId! })}
+              onRecall={(msg) => void recallMessage(msg)}
+              onToggleReaction={(messageId, emoji, added) => {
+                setLocalReactions((prev) => {
+                  const msgR = { ...(prev[messageId] ?? {}) };
+                  if (added) {
+                    msgR[emoji] = [...(msgR[emoji] ?? []), me?.id ?? "self"];
+                  } else {
+                    msgR[emoji] = (msgR[emoji] ?? []).filter((u) => u !== me?.id);
+                    if (msgR[emoji].length === 0) delete msgR[emoji];
+                  }
+                  return { ...prev, [messageId]: msgR };
+                });
+              }}
+            />
 
             {/* 输入框 */}
             <div className="border-t border-border px-6 py-4">
