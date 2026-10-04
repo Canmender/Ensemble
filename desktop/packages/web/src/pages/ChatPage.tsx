@@ -301,7 +301,9 @@ export default function ChatPage() {
 
   // 滚动到底部
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // smooth 是 JS 驱动动画，CSS 层的 prefers-reduced-motion 兜底覆盖不到，只能显式守卫
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    messagesEndRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
   }, [messages.length]);
 
   // 加载企业级会话历史 + 清零未读（打开会话 / 断线重连补拉共用）

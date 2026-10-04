@@ -44,6 +44,17 @@ body {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+
+  /* 位移类动画降级：只关已知动画类，不做全局 transform 清零。
+     全局清零会连带干掉状态表达型 transform（App.tsx 主题开关的 translate-x-5
+     滑块位置、ReactionBar 的 hover:scale-110），导致「开关不滑、图标不放大」
+     ——那是功能视觉错误，不是降级。这三个类是纯装饰动画，关掉无副作用。 */
+  .grid-rows-expander,
+  .anim-spring,
+  .spring-in {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 /* Modal 动画 */
