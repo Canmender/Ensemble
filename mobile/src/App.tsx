@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from "react-native-reanimated";
+import { Animated, View, Text, ActivityIndicator, Image, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -141,35 +140,56 @@ function GlassTabBar({ state, descriptors, navigation }: any) {
   const tabCount = state.routes.length;
   const tabW = dockW / tabCount;
 
-  // 动画共享值
-  const pillX = useSharedValue(state.index * tabW);
-  const gestureOffset = useSharedValue(0);
+  // 动画值（RN 原生 Animated；原为 reanimated useSharedValue）
+  const pillX = React.useRef(new Animated.Value(state.index * tabW)).current;
 
   // 同步外部切换
   React.useEffect(() => {
-    pillX.value = withSpring(state.index * tabW, { damping: 18, stiffness: 180 });
-  }, [state.index]);
+    Animated.spring(pillX, {
+      toValue: state.index * tabW,
+      damping: 18,
+      stiffness: 180,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
+  }, [pillX, state.index, tabW]);
 
-  // 拖动切换
+  // 拖动切换：手势位移以 0.3 系数叠加在 pill 位置上（跟手效果）
+  const pan = React.useRef(
+    new Animated.ValueXY({ x: 0, y: 0 }),
+  ).current;
+
   const swipe = Gesture.Pan()
     .activeOffsetX([-15, 15])
-    .onUpdate((e) => { gestureOffset.value = e.translationX; })
+    .onUpdate((e) => {
+      pan.setValue({ x: e.translationX * 0.3, y: 0 });
+    })
     .onEnd((e) => {
-      gestureOffset.value = 0;
+      pan.setValue({ x: 0, y: 0 });
+      const spring = (to: number) =>
+        Animated.spring(pillX, {
+          toValue: to,
+          damping: 18,
+          stiffness: 180,
+          mass: 1,
+          useNativeDriver: true,
+        }).start();
       if (e.translationX < -40 && state.index < tabCount - 1) {
-        pillX.value = withSpring((state.index + 1) * tabW, { damping: 18, stiffness: 180 });
-        runOnJS(navigation.navigate)(state.routes[state.index + 1].name);
+        spring((state.index + 1) * tabW);
+        navigation.navigate(state.routes[state.index + 1].name);
       } else if (e.translationX > 40 && state.index > 0) {
-        pillX.value = withSpring((state.index - 1) * tabW, { damping: 18, stiffness: 180 });
-        runOnJS(navigation.navigate)(state.routes[state.index - 1].name);
+        spring((state.index - 1) * tabW);
+        navigation.navigate(state.routes[state.index - 1].name);
       } else {
-        pillX.value = withSpring(state.index * tabW, { damping: 18, stiffness: 180 });
+        spring(state.index * tabW);
       }
     });
 
-  const pillStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: pillX.value + gestureOffset.value * 0.3 }],
-  }));
+  const pillStyle = {
+    transform: [
+      { translateX: Animated.add(pillX, pan.x) },
+    ],
+  };
 
   return (
     <GestureDetector gesture={swipe}>
@@ -206,7 +226,13 @@ function GlassTabBar({ state, descriptors, navigation }: any) {
                 activeOpacity={0.7}
                 onPress={() => {
                   navigation.navigate(route.name);
-                  pillX.value = withSpring(index * tabW, { damping: 18, stiffness: 180 });
+                  Animated.spring(pillX, {
+                    toValue: index * tabW,
+                    damping: 18,
+                    stiffness: 180,
+                    mass: 1,
+                    useNativeDriver: true,
+                  }).start();
                 }}
                 style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
               >
