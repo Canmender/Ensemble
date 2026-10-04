@@ -21,8 +21,6 @@ import {
   type EnsembleTheme,
 } from "./design/generated/tokens";
 
-/** 语义 token（构建期 hex，与桌面端 CSS vars 同值） */
-export const themeTokens: EnsembleTheme = LightTheme;
 export { LightTheme, DarkTheme };
 export type ThemeMode = "system" | "light" | "dark";
 
@@ -75,11 +73,6 @@ export function setThemeMode(mode: ThemeMode) {
   currentMode = mode;
   void AsyncStorage.setItem(MODE_KEY, mode);
   applyScheme();
-}
-
-/** 读取用户偏好（启动时由 initTheme 填充） */
-export function getThemeMode(): ThemeMode {
-  return currentMode;
 }
 
 /** 启动时恢复持久化的偏好；注册系统外观监听 */
@@ -236,11 +229,6 @@ export function getColors(): Palette {
   return palette;
 }
 
-/** 当前换肤纪元快照 */
-export function getThemeEpoch(): number {
-  return themeEpoch;
-}
-
 /** 响应式订阅当前 palette；主题切换时组件自动重渲染 */
 export function useTheme(): { colors: Palette; mode: ThemeMode; scheme: "light" | "dark"; epoch: number } {
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -266,13 +254,10 @@ interface MsBox {
   readonly __raw: Record<string, unknown>;
 }
 
-const msCache = new WeakMap<object, { epoch: number; built: Record<string, unknown>; proxy: object }>();
-
 /** eslint-disable @typescript-eslint/no-explicit-any -- 样式容器本质动态，强类型化反而失真 */
 export function ms<T extends StyleDef>(def: T): { [K in keyof T]: any } {
   const box: MsBox = { __raw: def as unknown as Record<string, unknown> };
   const state = { epoch: -1, built: {} as Record<string, unknown>, proxy: {} as object };
-  msCache.set(def, state);
   const proxy = new Proxy(box, {
     get(_t, prop: string | symbol) {
       if (prop === "__raw") return box.__raw;
@@ -314,4 +299,3 @@ export const glass = {
   pane: { backgroundColor: PURE.white, borderColor: "#E5E5E5" },
   paneInk: { backgroundColor: PURE.xuan, borderColor: PURE.ink },
 } as const;
-export const glassWarm = PURE.white;
