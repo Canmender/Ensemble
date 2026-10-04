@@ -138,9 +138,11 @@ npx expo prebuild --platform android
 
 ### 10. 阿里云备案与 HTTPS
 
-- 域名 `<备案域名>` 的 80/443 端口被阿里云备案拦截
-- nginx 证书已就绪，待备案合规后切换 `https://`
-- 证书有效期至 **2026-08-15**，届时需续期
+- **当前部署使用 HTTP，HTTPS 未启用**（2026-10-04 用户决定）
+- nginx.conf 只配了 `listen 80`，无 SSL server 块；docker-compose 也不再挂载
+  `./nginx/ssl` 与映射 443 端口——三处（nginx.conf / 端口映射 / ssl 挂载）必须
+  一起改，只改一处会导致容器启动失败
+- 域名 `<备案域名>` 的 80 端口同样受阿里云备案拦截，走公网需注意
 
 ### 11. 推送通知部署
 
