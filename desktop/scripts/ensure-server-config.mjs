@@ -48,6 +48,11 @@ if (existsSync(target)) {
   writeFileSync(
     target,
     `// 由 scripts/ensure-server-config.mjs 在打包时生成（gitignored，不入库）\n` +
+      `// 注意：本文件只承载 cloud.host（主进程 server.ts 仅读该字段作为 CLOUD_HOST 默认值）。\n` +
+      `// 中继地址 relayUrl 不在此配置——它的真实来源是应用内「设置」或环境变量\n` +
+      `// RELAY_URL（见 packages/server/src/api/routes/relay.ts 的取值优先级：\n` +
+      `// settings.relay.url → RELAY_URL）。server.config.example.js 里的 relayUrl\n` +
+      `// 字段当前无任何代码读取，保留它只为与该模板保持一致。\n` +
       `module.exports = {\n  cloud: { host: "${host}", port: 8787 },\n};\n`,
   );
   console.log(`✓ server.config.js 已生成（cloud.host=${host}）`);

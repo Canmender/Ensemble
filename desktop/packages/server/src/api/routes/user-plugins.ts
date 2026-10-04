@@ -63,7 +63,7 @@ export function userPluginsRouter(ctx: AppContext): Router {
   });
 
   /**
-   * 插件卡片动作端点（U1）：POST /api/users/me/plugins/:id/actions/:action
+   * 插件卡片动作端点（U1）：POST /api/user-plugins/:id/actions/:action
    * 宿主级 plugin-actions 表由插件实例经 ctx.provide 注册；此处按 (用户, 插件) 分发。
    * 响应约定：插件返回 { card } 时附带广播责任已在插件内完成（经 events 总线），
    * 本端点只透传结果给点击方做原位刷新。

@@ -34,7 +34,7 @@ export default function PluginsPage() {
 
   const refresh = useCallback(async () => {
     try {
-      setPlugins(await api.get<PluginInfo[]>("/users/me/plugins"));
+      setPlugins(await api.get<PluginInfo[]>("/user-plugins"));
     } catch (e) {
       console.warn("加载插件失败:", e);
       setPlugins([]);
@@ -50,7 +50,7 @@ export default function PluginsPage() {
   async function toggle(p: PluginInfo) {
     setBusyId(p.id);
     try {
-      await api.post(`/users/me/plugins/${p.id}/${p.enabled ? "disable" : "enable"}`);
+      await api.post(`/user-plugins/${p.id}/${p.enabled ? "disable" : "enable"}`);
       showToast(p.enabled ? `已禁用 ${p.name}` : `已启用 ${p.name}`);
       await refresh();
     } catch (e) {
@@ -62,7 +62,7 @@ export default function PluginsPage() {
 
   async function openConfig(p: PluginInfo) {
     try {
-      const cfg = await api.get<Record<string, unknown>>(`/users/me/plugins/${p.id}/config`);
+      const cfg = await api.get<Record<string, unknown>>(`/user-plugins/${p.id}/config`);
       const draft: Record<string, string> = {};
       for (const f of p.settings ?? []) draft[f.key] = String(cfg?.[f.key] ?? "");
       setConfigDraft(draft);
@@ -77,7 +77,7 @@ export default function PluginsPage() {
     if (!configFor) return;
     setSavingConfig(true);
     try {
-      await api.put(`/users/me/plugins/${configFor.id}/config`, { config: configDraft });
+      await api.put(`/user-plugins/${configFor.id}/config`, { config: configDraft });
       showToast("配置已保存并生效");
       setConfigFor(null);
       await refresh();
