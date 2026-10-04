@@ -41,6 +41,23 @@ pnpm --filter @ensemble/desktop dev
 | `pnpm cli -- status` | CLI 健康检查 |
 | `pnpm --filter @ensemble/desktop package` | 打包 Windows 安装包 |
 
+> **类型检查的前置依赖**：`pnpm -r typecheck` 依赖 `@ensemble/shared` 的构建产物
+> （`dist/index.d.ts`）。`shared/package.json` 的 types 入口指向 `./dist/`，
+> 而 `dist/` 已被 `.gitignore` 排除、不随仓库分发——**新克隆或刚 `pnpm install`
+> 之后必须先构建**，否则 server/web 的 typecheck 会报
+> `TS2307: Cannot find module '@ensemble/shared'`：
+>
+> ```bash
+> pnpm --filter @ensemble/shared build   # 必先执行
+> pnpm -r typecheck
+> ```
+>
+> 该顺序在 CI（`.github/workflows/ci.yml`）中已建立，但**本地与 IDE 的类型检查
+> 不跑 build**，容易踩坑。历史上 `shared/src/types/` 下曾有 8 个 tsc 编译产物
+> （`agent`/`events` 的 `.js`/`.d.ts`/`.map`）与源码同目录混放且被误提交，它们
+> 恰好充当了 dist 缺失时的类型入口、掩盖了这个问题；这些产物已于 2026-10-04
+> 清理（见 `1c9e4b2` 批次），所以现在**必须显式 build**。
+
 ## 开发模式详解
 
 桌面开发模式（`pnpm --filter @ensemble/desktop dev`）：
