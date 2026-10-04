@@ -246,7 +246,11 @@ export default function App() {
   // 强制模式：云端版直接登录，本地版跳过登录
   const forcedMode = getForcedMode();
   const mode = forcedMode ?? useMode();
-  
+
+  // 必须在下方早退分支之前求值：早退时下面的 useEffect 仍会执行，
+  // 若此时 effectiveMode 尚未初始化，回调内读它会命中 TDZ。
+  const effectiveMode = mode ?? "local";
+
   // 如果没有强制模式且没有选择模式，显示模式选择页
   if (!mode && !forcedMode) {
     return (
@@ -257,8 +261,6 @@ export default function App() {
       </ErrorBoundary>
     );
   }
-  
-  const effectiveMode = mode ?? "local";
 
   // 登录态判定中
   if (state.status === "loading") return <PageLoading />;
