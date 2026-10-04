@@ -27,6 +27,33 @@ D:\MultiAgent/
 > 现已改为统一从 `desktop/` 启动原生 Electron；`ensemble-local/`、`ensemble-cloud/`
 > 仅保留入口脚本，不再承载源码与运行时数据。
 
+## 核心设计模式
+
+以下四条为服务端 Agent 运行时的核心约定（2026-10-04 逐条核实仍成立）：
+
+1. **AgentAdapter 统一接口** — 所有 Agent 通过 `startTask` → `AsyncGenerator<AgentEvent>` 接入
+2. **Hook 驱动循环** — `preReasoning` → LLM → `postReasoning` → 工具执行 → `postToolResult` → `postCall`
+3. **原子组压缩** — 上下文压缩以 `assistant`+`tool_calls`+`tool_results` 为单位，不切断配对
+4. **事件先落库再广播** — 保证断线重连不丢帧
+
+### 关键文件位置
+
+| 模块 | 路径 |
+|------|------|
+| Agent 适配器 | `desktop/packages/server/src/adapters/` |
+| 编排引擎 | `desktop/packages/server/src/orchestration/` |
+| 工具系统 | `desktop/packages/server/src/tools/` |
+| 记忆系统 | `desktop/packages/server/src/memory/` |
+| 前端页面 | `desktop/packages/web/src/pages/` |
+| 移动端页面 | `mobile/src/pages/` |
+
+> 原 `MOBILE_DEV_MEMORY.md` 已并入本节后删除——该文声称仓库内存在
+> `ensemble-local/config/`、`ensemble-local/data/`、`ensemble-cloud/config/`、
+> `ensemble-cloud/data/` 四个目录，实测**均不存在**；且断言两个目录是
+> 「本地版/云端版」两套独立运行形态，实际是不被任何构建消费的源码拷贝。
+> 需注意区分：下文「工作区隔离」所述的 `config\`、`data\` 是 **%APPDATA%
+> 下的运行时目录**（启动时创建），与该文所称的仓库内目录无关。
+
 ## 工作区隔离（v0.8.2 起）
 
 两版的工作区按版本分区，位于各自的 userData 子目录：
