@@ -7,7 +7,12 @@ export default {
       colors: {
         // 语义化设计 token（浅色/深色两套，见 index.css 的 CSS 变量）
         bg: "rgb(var(--c-bg) / <alpha-value>)",
+        // 海拔体系：surface 为卡片面（保留原名，27+ 处 bg-surface 不变）
+        // surface1 = 页面底/浮层，surface2 = 嵌套/次级，surface3 = 凹陷槽（输入框底、代码块）
         surface: "rgb(var(--c-surface) / <alpha-value>)",
+        surface1: "rgb(var(--c-surface1) / <alpha-value>)",
+        surface2: "rgb(var(--c-surface2) / <alpha-value>)",
+        surface3: "rgb(var(--c-surface3) / <alpha-value>)",
         border: "rgb(var(--c-border) / <alpha-value>)",
         fg: "rgb(var(--c-fg) / <alpha-value>)",
         muted: "rgb(var(--c-muted) / <alpha-value>)",
