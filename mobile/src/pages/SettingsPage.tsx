@@ -24,7 +24,7 @@ import { Avatar } from "../components/Avatar";
 import { useMeStore } from "../store/meStore";
 import { useAuthGate } from "../store/authGateStore";
 import { nativeApplicationVersion } from "expo-application";
-import { colors, spacing, radius, fontSize, elevation, useTheme, setThemeMode } from "../theme";
+import { ms, colors, spacing, radius, fontSize, elevation, useTheme, setThemeMode } from "../theme";
 import type { ThemeMode } from "../theme";
 
 const APP_VERSION = nativeApplicationVersion ?? "0.9.10";
@@ -149,6 +149,24 @@ export default function SettingsPage() {
       desc: "查看和配置智能体技能",
       onPress: () => navigation.navigate("SettingsSkills"),
     },
+    {
+      icon: "construct-outline" as const,
+      title: "智能体管理",
+      desc: "创建、编辑与删除智能体",
+      onPress: () => navigation.navigate("Agents"),
+    },
+    {
+      icon: "extension-puzzle-outline" as const,
+      title: "插件管理",
+      desc: "启用插件并配置插件参数",
+      onPress: () => navigation.navigate("Plugins"),
+    },
+    {
+      icon: "phone-portrait-outline" as const,
+      title: "设备互联",
+      desc: "与电脑端配对，同步数据与能力",
+      onPress: () => navigation.navigate("DeviceLink"),
+    },
   ];
 
   return (
@@ -257,7 +275,7 @@ export default function SettingsPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   profileCard: {
     flexDirection: "row",

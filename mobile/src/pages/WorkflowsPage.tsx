@@ -21,7 +21,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { api } from "../services/api";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { ms, colors, spacing, radius, fontSize, elevation } from "../theme";
 import { LiquidGlass } from "../components/Glass";
 
 interface Workflow {
@@ -240,7 +240,7 @@ function formatDate(dateStr: string): string {
   return date.toLocaleDateString("zh-CN");
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   contentContainer: { padding: spacing.lg, paddingBottom: 100 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },
