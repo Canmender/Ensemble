@@ -25,9 +25,18 @@ Notifications.setNotificationHandler({
 let initialized = false;
 let ntfySubscriptionActive = false;
 
-// ntfy 服务器配置
-const NTFY_SERVER = "47.98.126.83";
-const NTFY_PORT = 80;
+// ntfy 服务器配置（真实地址来自 gitignore 的 server.config.js，
+// 见 server.config.example.js 模板；干净检出时无配置则跳过 ntfy 订阅）
+const NTFY = (() => {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const cfg = require("../../server.config") as { ntfy?: { server?: string; port?: number } };
+    return cfg?.ntfy ?? {};
+  } catch {
+    /* 无 server.config.js 时禁用 ntfy 订阅 */
+    return {};
+  }
+})();
 
 /** 消息预览（附件显示占位） */
 function previewOf(msg: ChatWsMessage): string {
@@ -99,6 +108,11 @@ export function initNotifications(): void {
 async function initNtfySubscription(): Promise<void> {
   if (ntfySubscriptionActive) return;
 
+  if (!NTFY.server) {
+    console.log("[ntfy] 未配置 ntfy server（server.config.js），跳过订阅");
+    return;
+  }
+
   try {
     const userId = await AsyncStorage.getItem("@ensemble/user_id");
     if (!userId) {
@@ -118,8 +132,11 @@ async function initNtfySubscription(): Promise<void> {
 
 /** 订阅 ntfy topic（长轮询） */
 async function subscribeNtfy(topic: string): Promise<void> {
+  const server = NTFY.server;
+  if (!server) return;
+  const port = NTFY.port ?? 80;
   try {
-    const url = `http://${NTFY_SERVER}:${NTFY_PORT}/${topic}/json?poll=1`;
+    const url = `http://${server}:${port}/${topic}/json?poll=1`;
     console.log("[ntfy] 连接到:", url);
 
     const response = await fetch(url, {
