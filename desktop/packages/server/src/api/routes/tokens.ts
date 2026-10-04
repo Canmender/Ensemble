@@ -9,8 +9,10 @@ import { ok } from "./helpers";
 export function tokensRouter(ctx: AppContext): Router {
   const router = Router();
 
-  router.get("/stats", (_req, res) => {
-    const runs = ctx.store.listRuns();
+  // 按 userId 隔离：listRuns 第二参数即属主过滤，漏传会让任何登录用户
+  // 看到全服务器所有 run 的 token 消耗聚合（按 agent、按天）。
+  router.get("/stats", (req, res) => {
+    const runs = ctx.store.listRuns(undefined, req.user?.id);
     const total = { input: 0, output: 0 };
     const byDay = new Map<string, { input: number; output: number }>();
     const byAgent = new Map<

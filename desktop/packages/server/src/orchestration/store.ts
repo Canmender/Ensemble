@@ -57,6 +57,7 @@ export class Store {
     createConversation: ReturnType<DatabaseSync["prepare"]>;
     getConversation: ReturnType<DatabaseSync["prepare"]>;
     listConversations: ReturnType<DatabaseSync["prepare"]>;
+    findSharedConversation: ReturnType<DatabaseSync["prepare"]>;
     deleteConversation: ReturnType<DatabaseSync["prepare"]>;
     updateConvMeta: ReturnType<DatabaseSync["prepare"]>;
     incrementUnread: ReturnType<DatabaseSync["prepare"]>;
@@ -109,6 +110,14 @@ export class Store {
       setConversationPinned: db.prepare("UPDATE conversations SET pinned = ?, updated_at = ? WHERE id = ?"),
       getConversation: db.prepare("SELECT * FROM conversations WHERE id = ?"),
       listConversations: db.prepare("SELECT * FROM conversations ORDER BY pinned DESC, updated_at DESC"),
+      // 共同会话查询：用 json_each 精确判断两人是否同时出现在 participant_ids 中。
+      // 不能用 LIKE '%id%' —— 子串匹配会把 u1 误判为命中 u12。
+      findSharedConversation: db.prepare(
+        `SELECT c.id FROM conversations c
+         WHERE EXISTS (SELECT 1 FROM json_each(c.participant_ids) WHERE json_each.value = ?)
+           AND EXISTS (SELECT 1 FROM json_each(c.participant_ids) WHERE json_each.value = ?)
+         LIMIT 1`,
+      ),
       deleteConversation: db.prepare("DELETE FROM conversations WHERE id = ?"),
       updateConvMeta: db.prepare("UPDATE conversations SET last_message = ?, last_message_ts = ?, updated_at = ? WHERE id = ?"),
       incrementUnread: db.prepare("UPDATE conversations SET unread = unread + 1, updated_at = ? WHERE id = ?"),
@@ -207,6 +216,18 @@ export class Store {
     const sql = `SELECT * FROM runs ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY started_at DESC`;
     const rows = this.db.prepare(sql).all(...vals) as any[];
     return rows.map(rowToRun);
+  }
+
+  /**
+   * 两人是否存在共同会话（任一方为 participant 即算）。
+   * 用于 E2E 密钥包等端点的属主校验：允许会话内互取对端密钥包，
+   * 挡住「遍历任意 userId 拉取他人密钥包」。
+   * 数据依据：conversations.participant_ids（JSON 数组字符串）。
+   */
+  hasSharedConversation(userA: string, userB: string): boolean {
+    if (!userA || !userB) return false;
+    const row = this.stmts.findSharedConversation.get(userA, userB);
+    return row !== undefined;
   }
 
   // ---------- Jobs ----------

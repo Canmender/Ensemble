@@ -46,8 +46,18 @@ export function e2eRouter(ctx: AppContext): Router {
   });
 
   // 取对端密钥包（OPK 取走即删；发起会话用）
+  // 属主校验：bundle 端点按 X3DH 协议设计即「取对端」密钥包（对端不是自己），
+  // 故不能用 targetId === req.user.id —— 那会让任何真实会话都取不到对端密钥包。
+  // 正确约束是「必须登录，且双方存在共同会话」，挡住遍历任意 userId 拉密钥包。
   router.get("/bundle/:userId", (req, res) => {
-    const bundle = ctx.store.getE2eBundle(String(req.params.userId));
+    const targetId = String(req.params.userId);
+    const selfId = req.user?.id;
+    if (!selfId) return fail(res, new Error("需要用户身份"), 401);
+    if (targetId === selfId) return fail(res, new Error("不能读取自己的密钥包"), 400);
+    if (!ctx.store.hasSharedConversation(selfId, targetId)) {
+      return fail(res, new Error("无权读取该用户的密钥包"), 403);
+    }
+    const bundle = ctx.store.getE2eBundle(targetId);
     if (!bundle) return fail(res, new Error("对端未注册端到端加密"), 404);
     ok(res, bundle);
   });
@@ -70,8 +80,16 @@ export function e2eRouter(ctx: AppContext): Router {
   });
 
   // 对端是否已启用端到端加密（双方都注册才加密——灰度共存）
+  // 与 bundle 同样加登录 + 共同会话校验：保持两处一致，避免将来有人
+  // 因 capability 只回布尔值就放宽 bundle 的校验。
   router.get("/capability/:userId", (req, res) => {
-    ok(res, { enrolled: ctx.store.hasE2eIdentity(String(req.params.userId)) });
+    const targetId = String(req.params.userId);
+    const selfId = req.user?.id;
+    if (!selfId) return fail(res, new Error("需要用户身份"), 401);
+    if (!ctx.store.hasSharedConversation(selfId, targetId)) {
+      return fail(res, new Error("无权查询该用户"), 403);
+    }
+    ok(res, { enrolled: ctx.store.hasE2eIdentity(targetId) });
   });
 
   return router;
