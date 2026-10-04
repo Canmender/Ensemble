@@ -23,7 +23,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
-import { colors, spacing, radius, fontSize, elevation, ms } from "../theme";
+import { colors, spacing, radius, fontSize, elevation } from "../theme";
 import { useMeStore } from "../store/meStore";
 
 interface PairedDevice {
