@@ -143,12 +143,12 @@ export default function MessageList(props: Props) {
                           </span>
                           {!msg.deleted && (
                             <>
-                              <button onClick={() => onQuote(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="引用回复">引用</button>
-                              <button onClick={() => onForward(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="转发">转发</button>
+                              <button onClick={() => onQuote(msg)} className="press-fade text-[10px] opacity-0 group-hover:opacity-100 hover:underline" title="引用回复">引用</button>
+                              <button onClick={() => onForward(msg)} className="press-fade text-[10px] opacity-0 group-hover:opacity-100 hover:underline" title="转发">转发</button>
                               {isMine && activeContact?.convId && (
                                 <button
                                   onClick={() => onEdit(msg)}
-                                  className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
+                                  className="press-fade text-[10px] opacity-0 group-hover:opacity-100 hover:underline"
                                   title="编辑"
                                 >
                                   编辑
@@ -159,7 +159,7 @@ export default function MessageList(props: Props) {
                           {isMine && !msg.deleted && activeContact?.convId && (
                             <button
                               onClick={() => onRecall(msg)}
-                              className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
+                              className="press-fade text-[10px] opacity-0 group-hover:opacity-100 hover:underline"
                               title="撤回消息"
                             >
                               撤回
