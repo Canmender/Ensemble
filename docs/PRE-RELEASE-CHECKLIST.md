@@ -68,6 +68,21 @@ tsc 与现有 223 个测试都覆盖不到，只能真机确认。
 此时安装后 App 能启动、界面正常，但多端协作与 TURN 静默失效——
 **用户不会看到任何报错，只会以为功能坏了**。
 
+**⚠ 失效形态比「内容为空」更隐蔽 —— 排查时务必先确认文件是否存在**：
+  electron-builder.yml（默认）的 extraResources **只有 `../web/dist` 与
+  `build/icon.png`，完全没有 server.config.js**；
+  electron-builder.cloud.yml 才有 `- from: server.config.js`。
+  所以误用默认脚本时，产物里**不是这个文件内容为空，而是整个文件不存在**。
+
+  两种失效的排查难度差别很大：
+    · 内容为空 → 人会想到「是不是配置写错了」，去查配置
+    · 文件不存在 → 人根本想不到是打包配置漏了，会一路查到别处
+  验证方法（出包后先做这一步）：
+    在安装目录里搜 resources/server.config.js 是否存在。
+    不存在 → 立刻确认用的是哪个打包脚本，而不是去排查云端地址。
+  主进程 `server.ts:97` 找 `process.resourcesPath/server.config.js`
+  落空后会走 `:113` 的 catch 分支静默继续，不报任何错。
+
 建议：出包前确认用的是哪个脚本；若出 `package:local` 产物则本就不含云端配置，属预期。
 
 ### 2. .env（CLOUD_HOST 等）—— 隐私两份式的另一半
@@ -99,7 +114,7 @@ tsc 与现有 223 个测试都覆盖不到，只能真机确认。
 
 | 配置文件 | 何时需要 | 缺失时是否会报错 | 谁负责 |
 |---|---|---|---|
-| `desktop/server.config.js` | 出 `package:cloud` 前 | 走 ensure 脚本会报错；若绕过则**静默失效** | 电脑端（我） |
+| `desktop/server.config.js` | 出 `package:cloud` 前 | 走 ensure 脚本会报错；若绕过则**整个文件不在包里**（非内容为空），静默失效 | 电脑端（我） |
 | 构建机 `.env`（含 CLOUD_HOST） | 出 `package:cloud` 前 | ✅ 报错退出 | 电脑端 + 用户 |
 | `<userData>/secrets.json` | 首次运行 | ✅ 自动创建 | — |
 | `mobile` 侧 server.config | 出移动端包前 | 待移动端核实 | 移动端 |
