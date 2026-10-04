@@ -123,6 +123,35 @@ export interface UserInfo {
   occupation?: string;
 }
 
+/** 用户插件 manifest 中声明的一项配置字段 */
+export interface PluginSettingField {
+  key: string;
+  label: string;
+  type?: string;
+  default?: unknown;
+  options?: unknown[];
+  placeholder?: string;
+}
+
+/**
+ * 候选插件（manifest 渲染用）
+ *
+ * 字段与桌面端服务端契约一一对应，权威来源：
+ * desktop/packages/server/src/api/routes/user-plugins.ts:19-26（listCandidates 投影）
+ */
+export interface PluginInfo {
+  id: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  version?: string;
+  /** 定时任务数量；>0 时列表显示「定时 ×N」徽标 */
+  scheduled?: number;
+  /** 该用户是否已配置过此插件（服务端按用户投影） */
+  hasConfig?: boolean;
+  settings?: PluginSettingField[];
+}
+
 /** 会话（企业级 IM） */
 export interface Conversation {
   id: string;

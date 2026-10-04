@@ -140,7 +140,7 @@ export default function SettingsMemoryPage() {
 
       {filteredMemories.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="brain-outline" size={48} color={colors.textFaint} />
+          <Ionicons name="library-outline" size={48} color={colors.textFaint} />
           <Text style={styles.emptyText}>暂无记忆</Text>
           <Text style={styles.emptySubtext}>点击下方按钮添加记忆</Text>
         </View>
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   searchIcon: { marginRight: spacing.sm },
   searchInput: { flex: 1, fontSize: fontSize.md, color: colors.text },
   card: { marginBottom: spacing.md, borderRadius: radius.lg, overflow: "hidden", ...elevation.md },
-  cardGlass: { ...StyleSheet.absoluteFillObject },
+  cardGlass: { ...StyleSheet.absoluteFill },
   cardContent: { padding: spacing.lg, position: "relative" },
   cardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 },
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   emptySubtext: { fontSize: fontSize.sm, color: colors.textFaint, marginTop: spacing.xs },
   addBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, backgroundColor: colors.primary, padding: spacing.md, borderRadius: radius.md, marginTop: spacing.lg },
   addBtnText: { fontSize: fontSize.md, fontWeight: "600", color: "#fff" },
-  modalOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 1000 },
+  modalOverlay: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", zIndex: 1000 },
   modal: { backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.xl, width: "90%", maxWidth: 400 },
   modalTitle: { fontSize: fontSize.lg, fontWeight: "700", color: colors.text, marginBottom: spacing.lg },
   input: { backgroundColor: colors.bg, borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md, fontSize: fontSize.md, color: colors.text, borderWidth: 1, borderColor: colors.border },
