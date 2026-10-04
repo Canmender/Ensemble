@@ -196,7 +196,7 @@ export function Modal({
       <div
         className={cls(
           "relative z-10 flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl",
-          "animate-in fade-in zoom-in-95 anim-dur-200",
+          "animate-in fade-in zoom-in-95 anim-dur-200 anim-spring",
           wide ? "max-w-2xl" : "max-w-lg",
         )}
       >
