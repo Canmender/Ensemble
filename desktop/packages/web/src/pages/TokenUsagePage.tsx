@@ -23,9 +23,16 @@ interface TokenStats {
   runCount: number;
 }
 
+/**
+ * 图表色板：全部走语义 token，明暗档由 tokens.css 自动切换。
+ * recharts 把 fill/stroke 直接写进 SVG 属性，不走 Tailwind，故须用
+ * rgb(var(--c-x)) 包裹 —— token 值是 RGB 裸三元组，裸 var() 会被浏览器丢弃。
+ */
 const PIE_COLORS = [
-  "#6366f1", "#22c55e", "#f59e0b", "#ef4444",
-  "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16",
+  "rgb(var(--c-primary))",      "rgb(var(--c-agent-violet))",
+  "rgb(var(--c-agent-emerald))", "rgb(var(--c-warning))",
+  "rgb(var(--c-destructive))",  "rgb(var(--c-agent-sky))",
+  "rgb(var(--c-accent))",        "rgb(var(--c-agent-rose))",
 ];
 
 function fmt(n: number): string {
@@ -146,8 +153,8 @@ export default function TokenUsagePage() {
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: any) => fmt(Number(v))} />
                   <Tooltip formatter={(v: any) => Number(v).toLocaleString()} />
                   <Legend />
-                  <Line type="monotone" dataKey="input" name="输入" stroke="#6366f1" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="output" name="输出" stroke="#22c55e" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="input" name="输入" stroke="rgb(var(--c-primary))" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="output" name="输出" stroke="rgb(var(--c-agent-violet))" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </Card>
