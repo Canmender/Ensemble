@@ -134,10 +134,14 @@ body {
 
 /* 折叠区展开：grid-template-rows 0fr→1fr，让内容自适应高度过渡。
    展开区外层常驻 DOM 才有插值对象，故外层常驻、内层仍按 expanded 条件渲染内容。
-   本轮仅结构改造，不含过渡曲线——曲线待 P1-1 派单后接入。 */
+   曲线用 y1=1.06 降过冲版（而非 .anim-spring 的 1.56）：高度过冲会让行盒与内层盒子
+   一同超出内容真实高度，overflow-hidden 裁不掉（盒子本身变大），结果是把下方内容
+   整体下推再拉回——是布局抖动。实测 1.56 过冲 9.5%（200px 展开溢出 19px），
+   1.06 过冲 0.05%，肉眼不可见且保住了与 Modal 同源的弹簧语汇。 */
 .grid-rows-expander {
   display: grid;
   grid-template-rows: 0fr;
+  transition: grid-template-rows 220ms cubic-bezier(0.34, 1.06, 0.64, 1);
 }
 .grid-rows-expander.is-open {
   grid-template-rows: 1fr;
