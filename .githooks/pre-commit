@@ -1,0 +1,39 @@
+#!/bin/sh
+# 设计 token 单源 → 衍生产物：提交前拦截「改了单源没带产物」。
+#
+# 为什么在提交前拦：CI 原理上看不到未提交的改动（它 checkout 的是 commit 内容），
+# 所以「改了 tokens.json 但产物没重建、两者都没提交」这一类失效只能靠本地钩子覆盖。
+# 历史上已发生三次：tokens.ts 过期两个月、b7eeaa2 与 e3b707e 两次只改单源。
+#
+# 只校验「产物是否与单源同批提交」，不校验产物内容是否正确
+# （后者需要单源指纹，超出本钩子的合理边界）。
+#
+# 暂存区语义：若改了单源、跑了生成器、但忘了 git add 产物，本钩子会报错——
+# 这正是要拦的失误。
+
+SOURCE='desktop/packages/shared/design/tokens.json'
+ARTIFACTS='desktop/packages/shared/design/generated/tokens.css mobile/src/design/generated/tokens.ts'
+
+staged=$(git diff --cached --name-only)
+
+# 单源未入暂存区 → 本次提交不涉及单源，放行
+echo "$staged" | grep -qx "$SOURCE" || exit 0
+
+missing=''
+for f in $ARTIFACTS; do
+  echo "$staged" | grep -qx "$f" || missing="$missing $f"
+done
+
+if [ -n "$missing" ]; then
+  echo "✗ 设计 token 单源已修改，但以下产物未一并暂存："
+  for f in $missing; do echo "    $f"; done
+  echo ""
+  echo "  请先重建并暂存产物："
+  echo "    node desktop/scripts/build-tokens.mjs"
+  echo "    git add desktop/packages/shared/design/generated/tokens.css mobile/src/design/generated/tokens.ts"
+  echo ""
+  echo "  若本次确实无需重建产物（如改动不影响产物），请用 git commit --no-verify 并说明原因。"
+  exit 1
+fi
+
+exit 0
