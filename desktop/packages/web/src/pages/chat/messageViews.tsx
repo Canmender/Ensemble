@@ -182,7 +182,7 @@ export function groupMessagesByDay(messages: ChatMessage[]): Array<{ day: string
 }
 
 /** 日期分割线文案：今天 / 昨天 / M月D日 */
-function dayLabel(d: Date): string {
+export function dayLabel(d: Date): string {
   const today = new Date();
   const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.round((startOf(today) - startOf(d)) / 86400000);

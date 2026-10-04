@@ -1,5 +1,14 @@
 # 合鸣网络与协议域深度审计 — 2026-09-05
 
+> ## ⚠️ 状态更新（2026-10-04）：「聊天 seq 不存在」的核心断言已过时，勿照原文执行
+>
+> 本报告 TL;DR 与 §0 断言「`f4e02cd` 坏合并把 seq 整体回退、**当前树上聊天 seq 不存在**、补拉端点静默失效」，以及 §0 表格中「`chat_messages` 无 `seq` 列」「WS `chat.message.seq` 恒为 undefined、`sendToUser` 硬编码 `seq:0`」等条目，**已不再成立**。截至 2026-10-04 基线 `7ab9fa6` 实测：
+>
+> - **`chat_messages.seq` 已恢复写入**：`sqlite.ts:345` 以 `ALTER TABLE ... ADD COLUMN seq INTEGER` 加列，`store.ts:98` 的 INSERT 已写入 seq，`store.ts:327` `createChatMessage` 返回 `number | null`（真实 seq，非 void）。
+> - **但修复不完整**：该列**无 NOT NULL 约束**，且 **ALTER 未回填历史行的 seq 值**。故「seq 完全不存在」不成立，「seq 完全修复」亦不成立。
+>
+> 本报告其余结论（relay socket.io 零 seq、内存离线队列、五份协议实现分叉等）**未随本次修复而改变，仍以代码现状复核为准**。原始审计内容完整保留于下方，作为历史记录。
+
 范围：`relay-server/src/`、`desktop/packages/server/src/api/ws/`（hub/protocol）+ `api/routes/devices.ts` + `api/relay-client.ts` + `api/routes/relay.ts`、`desktop/packages/shared/src/`（WS 消息面）、顶层 `shared/`（@ensemble/shared-protocol）、`mobile/src/services/`（wslink / connection / notifications / discovery / resync）。
 基线：分支 `claude/clever-bose-949a87`（HEAD 400b6ed）。所有 file:line 均为本人逐行读取后标注；行号以本分支为准（2026-09-04 后端审计基于 main，个别行号有 ±2 行漂移，已在文中标注）。
 隐私红线：文中真实主机一律 `<SERVER_IP>` / `<NTFY_SERVER_IP>`，凭据一律 `<SECRET>`，只给 file:line，不抄值。

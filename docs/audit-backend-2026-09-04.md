@@ -1,5 +1,18 @@
 # 合鸣 Backend Audit — 2026-09-04
 
+> ## ⚠️ 状态更新（2026-10-04）：本报告结论已过时或不完整，勿照原文执行修复动作
+>
+> 本报告针对基线 `claude/clever-bose-949a87`，其核心断言「`f4e02cd` 坏合并把整个消息可靠性层回退、当前树上 seq 不存在、tsc 52 错、25/193 测试红」**已不再成立**。截至 2026-10-04 基线 `7ab9fa6` 实测：
+>
+> - **`chat_messages.seq` 已恢复写入**：`sqlite.ts:345` 以 `ALTER TABLE ... ADD COLUMN seq INTEGER` 加列，`store.ts:98` 的 INSERT 已写入 seq，`store.ts:327` `createChatMessage` 返回 `number | null`（真实 seq）。
+> - **但修复不完整**：该列**无 NOT NULL 约束**，且 **ALTER 未回填历史行的 seq 值**。故「完全回退」不成立，「完全修复」亦不成立。
+> - `store.ts` 现有 909 行（报告称 619 行）；`batchGetReactions` / `getE2eBundle` / `upsertE2eIdentity` / `getGroupMember` / `searchUsers` / `initOrganization` 等方法已存在。
+> - **例外——`markDelivered` 仍是空占位**（`store.ts:580`，函数体仅注释「实际送达状态由客户端 ACK 驱动」），非真实实现。报告中「delivered receipts do not work」对该方法**依然成立**。
+>
+> **关键警告：不要执行本报告 §「修复顺序」第 1 条（`:199`）建议的 `git checkout fba820c c021aaa 1971e11 5a4130f -- ...` 恢复命令**——那会用旧版本覆盖已修复的代码。其余结论以代码现状为准。
+>
+> 原始审计内容完整保留于下方，作为历史记录。
+
 Scope: `desktop/packages/server` (138 TS files) + `desktop/packages/shared` + `shared/` + `relay-server`. Focus: message reliability, route correctness, API contract drift, DB layer, WS hub, concurrency.
 
 All findings verified against current code on branch `claude/clever-bose-949a87` (also reproduced on `main`). Hard evidence:

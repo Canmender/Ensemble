@@ -1,5 +1,18 @@
 # 合鸣（Ensemble）工程架构与框架选型深度分析 — 2026-09-05
 
+> ## ⚠️ 状态更新（2026-10-04）：技术债矩阵与恢复路径已过时，勿照原文执行
+>
+> 本报告针对基线 `claude/clever-bose-949a87`，其技术债矩阵（§4.1，`:281`）称「`store.ts` 619 行、回退产物、tsc 52 错」，以及 §P0 建议（`:310`、`:354`）中「`git checkout fba820c c021aaa 1971e11 5a4130f` 对应文件」等恢复动作，**已不再成立**。截至 2026-10-04 基线 `7ab9fa6` 实测：
+>
+> - **`chat_messages.seq` 已恢复写入**：`sqlite.ts:345` 以 `ALTER TABLE ... ADD COLUMN seq INTEGER` 加列，`store.ts:98` 的 INSERT 已写入 seq，`store.ts:327` `createChatMessage` 返回 `number | null`（真实 seq，非 void）。
+> - **但修复不完整**：该列**无 NOT NULL 约束**，且 **ALTER 未回填历史行的 seq 值**。故「完全回退」不成立，「完全修复」亦不成立。
+> - `store.ts` 现有 **909 行**（本报告称 619 行）；`batchGetReactions` / `getE2eBundle` / `upsertE2eIdentity` / `getGroupMember` / `searchUsers` / `initOrganization` 等 Store 方法已存在。
+> - **例外——`markDelivered` 仍是空占位**（`store.ts:580`，函数体仅注释「实际送达状态由客户端 ACK 驱动」），非真实实现。
+>
+> **关键警告：不要执行本报告 `:281` / `:310` / `:354` 三处建议的 `git checkout ...` 恢复命令**——那会用旧版本覆盖已修复的代码。其余结论以代码现状为准。
+>
+> 原始分析内容完整保留于下方，作为历史记录。
+
 范围：全仓库（desktop/ monorepo、mobile/、relay-server/、shared/、ensemble-*、docker/nginx/CI）。
 基线：分支 `claude/clever-bose-949a87`（HEAD 400b6ed）。
 已知事实直接引用两份审计底稿：`docs/audit-backend-2026-09-04.md`（后端）、`docs/audit-cross-cutting-2026-09-05.md`（跨切面）。
