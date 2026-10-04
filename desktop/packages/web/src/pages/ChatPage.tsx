@@ -351,13 +351,16 @@ function AttachmentView({ att, content, pluginId }: { att: MessageAttachment; co
  */
 type BubbleVariant = "mine" | "theirs" | "agent" | "ai-ghost";
 
-/** agentId → 身份 tint 色（稳定散列到固定色板；与调研建议的多 agent 身份色一致） */
+/**
+ * agentId → 身份 tint 色（稳定散列到固定色板；与调研建议的多 agent 身份色一致）。
+ * 底色用 agent 色 10% 透明度，文字用身份色本体——明暗档由 token 自动切换，无需 dark: 变体。
+ */
 const AGENT_TINTS = [
-  "bg-violet-500/10 text-violet-600 dark:text-violet-300",
-  "bg-sky-500/10 text-sky-600 dark:text-sky-300",
-  "bg-emerald-500/10 text-emerald-600 dark:text-emerald-300",
-  "bg-amber-500/10 text-amber-600 dark:text-amber-300",
-  "bg-rose-500/10 text-rose-600 dark:text-rose-300",
+  "bg-agent-violet/10 text-agent-violet",
+  "bg-agent-sky/10 text-agent-sky",
+  "bg-agent-emerald/10 text-agent-emerald",
+  "bg-agent-amber/10 text-agent-amber",
+  "bg-agent-rose/10 text-agent-rose",
 ];
 export function agentTint(agentId: string): string {
   let h = 0;

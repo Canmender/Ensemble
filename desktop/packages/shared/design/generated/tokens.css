@@ -14,6 +14,14 @@
   --c-ring: 59 63 74;
   --c-success: 52 211 153;
   --c-warning: 245 158 11;
+  --c-agent-violet: 124 58 237;
+  --c-agent-sky: 2 132 199;
+  --c-agent-emerald: 5 150 105;
+  --c-agent-amber: 217 119 6;
+  --c-agent-rose: 225 29 72;
+  --c-toast-success: 4 120 87;
+  --c-toast-error: 185 28 28;
+  --c-toast-fg: 255 255 255;
   color-scheme: light;
 }
 
@@ -32,5 +40,13 @@
   --c-ring: 139 143 152;
   --c-success: 52 211 153;
   --c-warning: 251 191 36;
+  --c-agent-violet: 167 139 250;
+  --c-agent-sky: 125 211 252;
+  --c-agent-emerald: 110 231 183;
+  --c-agent-amber: 252 211 77;
+  --c-agent-rose: 253 164 175;
+  --c-toast-success: 52 211 153;
+  --c-toast-error: 248 113 113;
+  --c-toast-fg: 15 23 42;
   color-scheme: dark;
 }

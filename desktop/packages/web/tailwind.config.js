@@ -20,6 +20,12 @@ export default {
         ring: "rgb(var(--c-ring) / <alpha-value>)",
         success: "rgb(var(--c-success) / <alpha-value>)",
         warning: "rgb(var(--c-warning) / <alpha-value>)",
+        // agent 身份色：light 档 600（浅色模式文字）/ dark 档 300（深色模式文字）由 token 自动切换
+        "agent-violet": "rgb(var(--c-agent-violet) / <alpha-value>)",
+        "agent-sky": "rgb(var(--c-agent-sky) / <alpha-value>)",
+        "agent-emerald": "rgb(var(--c-agent-emerald) / <alpha-value>)",
+        "agent-amber": "rgb(var(--c-agent-amber) / <alpha-value>)",
+        "agent-rose": "rgb(var(--c-agent-rose) / <alpha-value>)",
       },
       fontFamily: {
         sans: [

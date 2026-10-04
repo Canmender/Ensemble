@@ -51,32 +51,36 @@ const CanvasView = lazy(() =>
   })),
 );
 
-/** 状态颜色映射 */
-const STATUS_COLORS: Record<string, string> = {
-  queued: "#94a3b8",
-  running: "#3b82f6",
-  thinking: "#8b5cf6",
-  success: "#22c55e",
-  error: "#ef4444",
-  cancelled: "#f59e0b",
+/**
+ * 节点表面/描边：走语义 token，与 ui.tsx 的 STATUS_PILL 同一套来源。
+ * 连线 stroke 传给 ReactFlow canvas（非 DOM），无法用 CSS 类，只能取字面色值。
+ */
+const STATUS_BG: Record<string, string> = {
+  queued: "bg-muted/10",
+  running: "bg-primary/10",
+  thinking: "bg-primary/10",
+  success: "bg-success/10",
+  error: "bg-destructive/10",
+  cancelled: "bg-muted/10",
 };
 
-const STATUS_BG: Record<string, string> = {
-  queued: "bg-slate-500/10",
-  running: "bg-blue-500/10",
-  thinking: "bg-violet-500/10",
-  success: "bg-green-500/10",
-  error: "bg-red-500/10",
-  cancelled: "bg-amber-500/10",
+/** canvas 连线色：与上面同一状态语义，取 --c-* 的实际 rgb 值 */
+const STATUS_COLORS: Record<string, string> = {
+  queued: "rgb(var(--c-muted))",
+  running: "rgb(var(--c-primary))",
+  thinking: "rgb(var(--c-primary))",
+  success: "rgb(var(--c-success))",
+  error: "rgb(var(--c-destructive))",
+  cancelled: "rgb(var(--c-muted))",
 };
 
 const STATUS_BORDER: Record<string, string> = {
-  queued: "border-slate-400/50",
-  running: "border-blue-500",
-  thinking: "border-violet-500",
-  success: "border-green-500",
-  error: "border-red-500",
-  cancelled: "border-amber-500",
+  queued: "border-border",
+  running: "border-primary",
+  thinking: "border-primary",
+  success: "border-success",
+  error: "border-destructive",
+  cancelled: "border-border",
 };
 
 /** 状态图标 */

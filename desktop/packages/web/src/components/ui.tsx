@@ -66,6 +66,17 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: "bg-muted/70",
 };
 
+/** 徽标表面/描边：与 STATUS_COLOR 同源，状态色一律走语义 token */
+const STATUS_PILL: Record<string, string> = {
+  queued: "border-border bg-muted/10 text-muted",
+  starting: "border-warning/30 bg-warning/10 text-warning",
+  running: "border-primary/30 bg-primary/10 text-primary",
+  thinking: "border-primary/30 bg-primary/10 text-primary",
+  success: "border-success/30 bg-success/10 text-success",
+  error: "border-destructive/30 bg-destructive/10 text-destructive",
+  cancelled: "border-border bg-muted/10 text-muted",
+};
+
 export function StatusDot({ status }: { status: string }) {
   return (
     <span
@@ -73,6 +84,24 @@ export function StatusDot({ status }: { status: string }) {
       aria-label={statusLabel(status)}
       role="img"
     />
+  );
+}
+
+/** 状态徽标：文字 + 圆点，供列表/卡片复用。与 StatusDot 共用同一份 token 映射。 */
+export function StatusPill({ status }: { status: string }) {
+  return (
+    <span
+      className={cls(
+        "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
+        STATUS_PILL[status] ?? "border-border bg-muted/10 text-muted",
+      )}
+    >
+      <span
+        className={cls("inline-block h-1.5 w-1.5 rounded-full", STATUS_COLOR[status] ?? "bg-muted/50")}
+        aria-hidden
+      />
+      {statusLabel(status)}
+    </span>
   );
 }
 
@@ -262,9 +291,10 @@ export function showToast(message: string, type: "success" | "error" = "success"
     animation: fadeIn 0.2s ease;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     ${type === "success"
-      ? "background: #10b981; color: white;"
-      : "background: #ef4444; color: white;"
+      ? "background: rgb(var(--c-toast-success));"
+      : "background: rgb(var(--c-toast-error));"
     }
+    color: rgb(var(--c-toast-fg));
   `;
   toast.textContent = message;
   document.body.appendChild(toast);
