@@ -8,7 +8,9 @@ Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before 
 ### 版本号与构建（最高优先级，极易出错）
 - `mobile/android/` 是 **git-ignored** 的 expo prebuild 产物，`android/app/build.gradle` 会**硬编码过期版本号**（曾导致安装界面显示旧版、versionCode 不递增）。
 - **发布 APK 一律用** `cd mobile && node scripts/build-release.cjs`（从 app.json 读版本注入 build.gradle 再 assembleRelease）；**不要**裸 `./gradlew assembleRelease`。
-- **worktree/深路径下构建必挂**（ninja 报 build.ninja still dirty，CMake 目标路径>250 字符）：用 `git archive HEAD mobile shared | tar -x -C /d/ens-mb` 导出到短路径目录构建，并把 gitignore 的 server.config.js/getui.config.js 一并拷入；详见 `docs/mobile-ui-pitfalls.md` 第 10 节。
+- **worktree/深路径下构建必挂**（ninja 报 build.ninja still dirty，CMake 目标路径>250 字符）：用 `git archive HEAD mobile desktop/packages/shared | tar -x -C /d/ens-mb` 导出到短路径目录构建，并把 gitignore 的 server.config.js/getui.config.js 一并拷入。
+  注意必须导出 `desktop/packages/shared`——`mobile/package.json` 里 `@ensemble/shared` 指向 `file:../desktop/packages/shared`，mobile/src 有 11 个文件 import 它；根目录的 `shared/` 是另一个独立包，mobile 完全不依赖，导出它没用。
+  构建配置的静默失效见 `docs/mobile-ui-pitfalls.md` 第 13.2 节。
 - 出包后先验证：`aapt dump badging .../app-release.apk | grep package`，确认 versionCode/versionName 与 app.json 一致再部署。
 - 完整发布流程见 `docs/DEPLOY.md`。
 

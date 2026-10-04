@@ -26,14 +26,7 @@ import { api } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
 import { colors, spacing, radius, fontSize, elevation } from "../theme";
 import { useMeStore } from "../store/meStore";
-
-interface PairedDevice {
-  id: string;
-  userId: string;
-  desktopDeviceId: string;
-  mobileDeviceId: string;
-  pairedAt: number;
-}
+import type { PairedDevice } from "../services/api";
 
 /** 生成简单的设备 ID（用于配对请求） */
 function getDeviceId(): string {
@@ -114,7 +107,7 @@ export default function DeviceLinkPage() {
   const handleRemove = useCallback((pair: PairedDevice) => {
     Alert.alert(
       "解除配对",
-      `确定要解除与桌面设备 (${pair.desktopDeviceId}) 的配对吗？`,
+      `确定要解除与桌面设备 (${pair.desktop_device_id}) 的配对吗？`,
       [
         { text: "取消", style: "cancel" },
         {
@@ -193,9 +186,9 @@ export default function DeviceLinkPage() {
                 <Ionicons name="laptop-outline" size={24} color={colors.primary} />
                 <View style={styles.pairText}>
                   <Text style={styles.pairDeviceId} numberOfLines={1}>
-                    {p.desktopDeviceId}
+                    {p.desktop_device_id}
                   </Text>
-                  <Text style={styles.pairTime}>配对于 {formatTime(p.pairedAt)}</Text>
+                  <Text style={styles.pairTime}>配对于 {formatTime(p.paired_at)}</Text>
                 </View>
               </View>
               <TouchableOpacity
