@@ -32,411 +32,14 @@ import { useAuth } from "../lib/auth";
 import { startCall } from "../lib/callService";
 import type { Agent } from "../types";
 import { Button, Card, Input, Label, Modal, Spinner, cls, showToast } from "../components/ui";
-
-/** 联系人类型 */
-type ContactType = "agent" | "device" | "group" | "user";
-
-/** 聊天消息 */
-interface ChatMessage {
-  id: string;
-  contactId: string;
-  content: string;
-  sender: "user" | "assistant";
-  agentId?: string; // 群聊/用户会话中标识发送者
-  senderName?: string; // 用户会话显示发送者昵称
-  attachment?: MessageAttachment;
-  deleted?: boolean; // 已撤回
-  status?: 1 | 2 | 3; // 1=正常 2=已撤回 3=已编辑
-  reactions?: Record<string, string[]>; // 表情回应 {emoji: userIds}
-  replyTo?: { id: string; content: string; senderName?: string };
-  timestamp: number;
-}
-
-/** 消息附件（图片/文件/音频/插件卡片） */
-interface MessageAttachment {
-  type: "image" | "file" | "audio" | "plugin-card";
-  name: string;
-  size: number;
-  mime?: string;
-  url: string;
-  /** 插件卡片载荷（type="plugin-card"；协议见 types.ts，与 shared 对齐） */
-  card?: PluginCardPayload;
-}
-
-/** 注册用户（/api/auth/users） */
-interface UserInfo {
-  id: string;
-  username: string;
-  displayName?: string;
-  role?: string;
-  /** 用户自定义头像 URL（服务端返回；未设置则前端色块兜底） */
-  avatarUrl?: string;
-}
-
-/** 解析用户昵称（渲染发送者名） */
-function userName(usersById: Map<string, UserInfo>, id?: string): string | undefined {
-  if (!id) return undefined;
-  const u = usersById.get(id);
-  return u ? (u.displayName || u.username) : undefined;
-}
-
-/** 为联系人信息弹窗构建展示数据（按联系人类型） */
-function contactInfoFor(contact: Contact, usersById: Map<string, UserInfo>) {
-  if (contact.type === "user") {
-    const u = usersById.get((contact.participantIds ?? [])[0] ?? "");
-    return {
-      id: contact.id,
-      type: "user" as const,
-      name: contact.name || u?.displayName || u?.username || "用户",
-      status: contact.status,
-      username: u?.username,
-      displayName: u?.displayName,
-      role: u?.role,
-    };
-  }
-  if (contact.type === "agent") {
-    return {
-      id: contact.id,
-      type: "agent" as const,
-      name: contact.name,
-      status: contact.status,
-    };
-  }
-  if (contact.type === "group") {
-    return {
-      id: contact.id,
-      type: "group" as const,
-      name: contact.name,
-      participantCount: contact.participantIds?.length ?? 0,
-    };
-  }
-  return { id: contact.id, type: "device" as const, name: contact.name, status: contact.status };
-}
-
-/** 联系人 */
-interface Contact {
-  id: string;
-  type: ContactType;
-  name: string;
-  /** 自定义头像 URL（用户联系人来自 /auth/users；agent/device 无自定义头像走类型图标） */
-  avatarUrl?: string;
-  status?: "online" | "offline" | "busy";
-  lastMessage?: string;
-  lastTime?: string;
-  unread?: number;
-  /** 群聊关联的 Run ID（用于消息持久化和 WebSocket 订阅） */
-  runId?: string;
-  /** 群聊参与者 agent ID 列表 */
-  participantIds?: string[];
-  /** 会话 ID（conversations API，企业级会话持久化） */
-  convId?: string;
-}
-
-/**
- * 联系人头像：统一渲染入口，不硬编码具体用户/群聊。
- * - user：真实头像优先（Avatar 组件），无则首字符色块兜底
- * - group：群名色块；成员头像在群设置弹窗里看
- * - agent / device：类型图标（无自定义头像概念），底色按类型区分
- */
-function ContactAvatar({ contact, size = 40 }: { contact: Contact; size?: number }) {
-  const is = contact.type;
-  const wrapCls = cls(
-    "flex shrink-0 items-center justify-center rounded-full",
-    is === "agent" ? "bg-violet-500/10 text-violet-500" :
-    is === "device" ? "bg-primary/10 text-primary" :
-    is === "user" ? "bg-accent/10 text-accent" :
-    "bg-success/10 text-success",
-  );
-  if (is === "agent") {
-    return <div className={wrapCls} style={{ width: size, height: size }}><Bot className="h-[55%] w-[55%]" /></div>;
-  }
-  if (is === "device") {
-    return <div className={wrapCls} style={{ width: size, height: size }}><Smartphone className="h-[55%] w-[55%]" /></div>;
-  }
-  // user / group：真实头像或首字符色块
-  const inner = size - 4;
-  return (
-    <span className={wrapCls} style={{ width: size, height: size }}>
-      <Avatar name={contact.name} avatarUrl={contact.avatarUrl} size={inner} />
-    </span>
-  );
-}
-
-/** 创建群聊对话框 */
-function CreateGroupDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (group: Contact) => void }) {
-  const [name, setName] = useState("");
-  const [agents, setAgents] = useState<Agent[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [creating, setCreating] = useState(false);
-
-  useEffect(() => {
-    void api.get<Agent[]>("/agents").then(setAgents);
-  }, []);
-
-  function toggleAgent(id: string) {
-    setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-  }
-
-  async function create() {
-    if (!name.trim() || selected.length < 2) return;
-    setCreating(true);
-    try {
-      // 创建企业级群聊会话（conversations API，持久化 + 未读）
-      const conv = await api.post<any>("/conversations", {
-        type: "group",
-        title: name,
-        participantIds: selected,
-        prompt: `群聊「${name}」已创建，请开始讨论。`,
-      });
-      onCreated({
-        id: `conv-${conv.id}`,
-        type: "group",
-        name,
-        status: "online",
-        runId: conv.runId,
-        convId: conv.id,
-        participantIds: selected,
-      });
-      onClose();
-    } catch (e) {
-      console.error("创建群聊失败:", e);
-      showToast("创建群聊失败: " + (e as Error).message, "error");
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <Label>群聊名称</Label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="头脑风暴：XXX" />
-      </div>
-      <div>
-        <Label>选择智能体（≥2）</Label>
-        <div className="flex flex-wrap gap-2">
-          {agents.map((a) => (
-            <button
-              key={a.id}
-              onClick={() => toggleAgent(a.id)}
-              className={cls(
-                "rounded-lg border px-3 py-1.5 text-sm transition-colors",
-                selected.includes(a.id)
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border text-muted hover:border-primary/50",
-              )}
-            >
-              {a.name}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose}>取消</Button>
-        <Button onClick={create} disabled={!name.trim() || selected.length < 2 || creating}>
-          {creating ? <Spinner /> : "创建群聊"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-/** 联系人列表项 */
-function ContactItem({
-  contact,
-  active,
-  onClick,
-}: {
-  contact: Contact;
-  active: boolean;
-  onClick: () => void;
-}) {
-  const statusColor = contact.status === "online" ? "bg-success" : contact.status === "busy" ? "bg-warning" : "bg-muted";
-
-  return (
-    <button
-      onClick={onClick}
-      aria-current={active ? "true" : undefined}
-      className={cls(
-        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all",
-        active ? "bg-primary/10" : "hover:bg-muted/10",
-      )}
-    >
-      <div className="relative">
-        <ContactAvatar contact={contact} size={40} />
-        <span className={cls("absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-surface", statusColor)} />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between">
-          <span className={cls("text-sm font-medium truncate", active ? "text-primary" : "text-fg")}>{contact.name}</span>
-          {contact.lastTime && <span className="text-[10px] text-muted">{contact.lastTime}</span>}
-        </div>
-        {contact.lastMessage && (
-          <div className="mt-0.5 text-xs text-muted truncate">{contact.lastMessage}</div>
-        )}
-      </div>
-      {(contact.unread ?? 0) > 0 && (
-        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] text-primary-fg">
-          {contact.unread}
-        </span>
-      )}
-      {/* 归档说明：普通 IM（用户/群聊）不提供归档；智能体协作沉淀在「归档处」（TasksPage 的 chat Run 列表） */}
-    </button>
-  );
-}
-
-/** 高亮消息中的 @提及（@agent 或 @agent:任务），服务端据此解析委派 */
-function renderContent(text: string): React.ReactNode {
-  const parts = text.split(/(@[a-zA-Z0-9-]+(?:\s*[:：]\s*\S+)?)/g);
-  return parts.map((part, i) =>
-    /^@[a-zA-Z0-9-]+/.test(part) ? (
-      <span key={i} className="font-medium text-primary">
-        {part}
-      </span>
-    ) : (
-      part
-    ),
-  );
-}
-
-/** 文件大小格式化 */
-function fmtSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-}
-
-/** 消息附件渲染（图片缩略图 / 文件卡片） */
-function AttachmentView({ att, content, pluginId }: { att: MessageAttachment; content?: string; pluginId?: string }) {
-  // 插件卡片（U1）：按 cardType 分派内置模板；未识别类型折叠框降级（永不白屏）
-  if (att.type === "plugin-card") {
-    if (att.card && isPluginCard(att)) {
-      return <PluginCardView card={att.card} pluginId={pluginId || att.card.cardType} />;
-    }
-    return <div className="mb-1 text-xs italic opacity-60">卡片数据异常</div>;
-  }
-  if (att.type === "audio") {
-    const url = (typeof window !== "undefined" && window.location && window.location.origin) ? att.url.startsWith("http") ? att.url : (window.location.origin + att.url) : att.url;
-    return <VoiceBubble url={url} durationText={content} isUser={false} />;
-  }
-  if (att.type === "image") {
-    return (
-      <div className="mb-2">
-        <img src={att.url} alt={att.name} className="max-h-56 w-auto rounded-lg object-contain" />
-        <div className="mt-1 text-[10px] opacity-70">{att.name} · {fmtSize(att.size)}</div>
-      </div>
-    );
-  }
-  return (
-    <a
-      href={att.url}
-      download={att.name}
-      target="_blank"
-      rel="noreferrer"
-      className="mb-2 flex items-center gap-2 rounded-lg bg-black/5 px-3 py-2 text-xs transition-colors hover:bg-black/10"
-    >
-      <FileIcon className="h-4 w-4 shrink-0" />
-      <span className="truncate">{att.name}</span>
-      <span className="shrink-0 text-muted">{fmtSize(att.size)}</span>
-    </a>
-  );
-}
-
-/**
- * 消息气泡变体（调研《UI组件层调研》：气泡表面 ≠ 消息容器）。
- * - mine：自己发言，主色实心
- * - theirs：他人/系统发言，muted 表面
- * - agent：群聊中 agent 发言，按身份 tint 区分（身份色从 agentId 稳定散列）
- * - ai-ghost：AI 助手消息趋向无框全宽 ghost 形态（弱化表面、强调内容）
- */
-type BubbleVariant = "mine" | "theirs" | "agent" | "ai-ghost";
-
-/**
- * agentId → 身份 tint 色（稳定散列到固定色板；与调研建议的多 agent 身份色一致）。
- * 底色用 agent 色 10% 透明度，文字用身份色本体——明暗档由 token 自动切换，无需 dark: 变体。
- */
-const AGENT_TINTS = [
-  "bg-agent-violet/10 text-agent-violet",
-  "bg-agent-sky/10 text-agent-sky",
-  "bg-agent-emerald/10 text-agent-emerald",
-  "bg-agent-amber/10 text-agent-amber",
-  "bg-agent-rose/10 text-agent-rose",
-];
-export function agentTint(agentId: string): string {
-  let h = 0;
-  for (let i = 0; i < agentId.length; i++) h = (h * 31 + agentId.charCodeAt(i)) >>> 0;
-  return AGENT_TINTS[h % AGENT_TINTS.length];
-}
-
-/** Bubble 表面：内容载体，按变体着形。children 即消息内容区。 */
-function Bubble({ variant, tint, children }: {
-  variant: BubbleVariant;
-  tint?: string;
-  children: React.ReactNode;
-}) {
-  if (variant === "ai-ghost") {
-    // AI 助手 ghost 形态：无框全宽、左侧细线标识来源，视觉重心在内容
-    return (
-      <div className={cls("w-full rounded-xl border-l-2 px-4 py-2.5", tint ?? "border-primary bg-muted/5")}>
-        {children}
-      </div>
-    );
-  }
-  return (
-    <div
-      className={cls(
-        "relative max-w-[70%] rounded-2xl px-4 py-2.5",
-        variant === "mine" && "bg-primary text-primary-fg rounded-br-md",
-        variant === "theirs" && "bg-muted/20 text-fg rounded-bl-md",
-        variant === "agent" && cls("rounded-bl-md", tint ?? agentTint("agent")),
-      )}
-    >
-      {children}
-    </div>
-  );
-}
-
-/** 判定消息的气泡变体（Message 容器层调用；分层接口对移动端同样适用） */
-function bubbleVariantOf(msg: ChatMessage, contact: Contact, meId?: string): BubbleVariant {
-  if (msg.sender === "user") return "mine";
-  // AI 助手 ghost：agent 会话（1:1 与智能体对话）中的助手回复
-  if (contact.type === "agent") return "ai-ghost";
-  // 群聊中的 agent 发言 → 身份 tint；其余（用户会话对方 / 设备）→ theirs
-  if (contact.type === "group" && msg.agentId && msg.agentId !== meId) return "agent";
-  return "theirs";
-}
-
-/** 语音消息气泡：显示时长 + 播放按钮（播放移动端上传的 m4a，[语音 Xs] 内容） */
-function VoiceBubble({ url, durationText, isUser }: { url?: string; durationText?: string; isUser: boolean }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-  const dur = (() => { const m = (durationText || "").match(/(\d+)\s*s/); return m ? m[1] : null; })();
-
-  function toggle() {
-    if (!audioRef.current) return;
-    if (playing) { audioRef.current.pause(); return; }
-    void audioRef.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
-  }
-
-  return (
-    <div className="mb-2 inline-flex items-center gap-2">
-      <audio ref={audioRef}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
-        onEnded={() => setPlaying(false)}
-        preload="none"
-        src={url} />
-      <button
-        onClick={toggle}
-        className="flex items-center gap-2 rounded-lg bg-black/5 px-3 py-1.5 text-xs transition-colors hover:bg-black/10"
-        title="点击播放/暂停语音"
-      >
-        {playing ? <span className="h-2 w-2 rounded-full bg-primary animate-pulse" /> : <span className="inline-block h-2 w-2 rounded-full border border-current" />}
-        <span>{dur ? `${dur}″` : "语音"}</span>
-      </button>
-    </div>
-  );
-}
+import type { ChatMessage, Contact, MessageAttachment, UserInfo } from "./chat/types";
+import { userName, contactInfoFor } from "./chat/types";
+import {
+  Bubble, agentTint, bubbleVariantOf, renderContent, AttachmentView,
+} from "./chat/messageViews";
+import { ContactAvatar, ContactItem, CreateGroupDialog } from "./chat/ContactViews";
+import MessageList from "../components/MessageList";
+import ChatInputBar from "../components/ChatInputBar";
 
 export default function ChatPage() {
   const { state: authState } = useAuth();
@@ -1293,301 +896,65 @@ export default function ChatPage() {
               </div>
             </div>
 
-            {/* 消息列表 */}
-            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-              {messages.length === 0 ? (
-                <div className="flex h-full items-center justify-center">
-                  <div className="text-center">
-                    <MessageSquare className="mx-auto h-12 w-12 text-muted/30" />
-                    <p className="mt-2 text-sm text-muted">开始与 {activeContact.name} 对话</p>
-                  </div>
-                </div>
-              ) : (
-                messages.map((msg) => {
-                  const variant = bubbleVariantOf(msg, activeContact, me?.id);
-                  const tint = variant === "agent" && msg.agentId ? agentTint(msg.agentId) : undefined;
-                  const isMine = msg.sender === "user";
-                  return (
-                  <div
-                    key={msg.id}
-                    className={cls(
-                      "group relative flex",
-                      isMine ? "justify-end" : "justify-start",
-                    )}
-                  >
-                    <div className="flex items-start gap-2 min-w-0">
-                      {multiSelect && (
-                        <button
-                          onClick={() => toggleSelectMsg(msg.id)}
-                          className={cls("self-center flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
-                            selectedMsgs.has(msg.id) ? "border-primary bg-primary text-primary-fg" : "border-muted bg-surface")}
-                        >
-                          {selectedMsgs.has(msg.id) && "✓"}
-                        </button>
-                      )}
-                      {(() => {
-                        if (isMine) return null;
-                        if (activeContact.type === "user" && msg.agentId) {
-                          const u = usersById.get(msg.agentId);
-                          return <Avatar name={msg.senderName ?? u?.displayName ?? u?.username ?? msg.agentId} avatarUrl={u?.avatarUrl} size={28} className="mt-1 shrink-0" />;
-                        }
-                        if (activeContact.type === "group") {
-                          return <Avatar name={msg.senderName ?? msg.agentId ?? "?"} size={28} className="mt-1 shrink-0" />;
-                        }
-                        if (activeContact.type === "agent") {
-                          return <Avatar name={activeContact.name} avatarUrl={(activeContact as any).avatarUrl} size={28} className="mt-1 shrink-0" />;
-                        }
-                        return null;
-                      })()}
-                      {/* Bubble 表面 */}
-                      <Bubble variant={variant} tint={tint}>
-                        {msg.deleted ? (
-                          <div className="text-sm italic opacity-60">消息已撤回</div>
-                        ) : (
-                          <>
-                            {msg.replyTo && (
-                              <div className={cls("mb-1 rounded-md px-2 py-1 text-xs opacity-80 border-l-2", isMine ? "border-primary-fg/60 bg-primary-fg/10" : "border-current/30 bg-black/5")}>
-                                <div className="font-medium">{msg.replyTo.senderName || "引用"}：</div>
-                                <div className="truncate max-w-full">{msg.replyTo.content}</div>
-                              </div>
-                            )}
-                            {(activeContact.type === "group" || activeContact.type === "user") && msg.agentId && msg.agentId !== "user" && msg.agentId !== me?.id && (
-                              <div className={cls("mb-1 text-[11px] font-semibold", variant === "ai-ghost" ? "text-muted" : "opacity-90")}>
-                                {activeContact.type === "user" ? (msg.senderName ?? msg.agentId) : `@${msg.agentId}`}
-                              </div>
-                            )}
-                            {msg.attachment && <AttachmentView att={msg.attachment} content={msg.content} pluginId={msg.agentId} />}
-                            {msg.content && <div className={cls("whitespace-pre-wrap leading-relaxed", variant === "ai-ghost" ? "text-sm text-fg" : "text-sm")}>{renderContent(msg.content)}</div>}
-                            {msg.status === 3 && !msg.content.startsWith("{") && <div className="text-[10px] text-muted italic mt-0.5">已编辑</div>}
-                          </>
-                        )}
-                        <div className={cls(
-                          "mt-1 flex items-center gap-2",
-                          isMine ? "justify-end" : "justify-start",
-                        )}>
-                          <span className={cls(
-                            "text-[10px]",
-                            isMine ? "text-primary-fg/70" : "text-muted",
-                          )}>
-                            {new Date(msg.timestamp).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                          {!msg.deleted && (
-                            <>
-                              <button onClick={() => startQuote(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="引用回复">引用</button>
-                              <button onClick={() => openForward(msg)} className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline" title="转发">转发</button>
-                              {isMine && activeContact?.convId && (
-                                <button
-                                  onClick={() => setEditTarget({ msgId: msg.id, content: msg.content, convId: activeContact.convId! })}
-                                  className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
-                                  title="编辑"
-                                >
-                                  编辑
-                                </button>
-                              )}
-                            </>
-                          )}
-                          {isMine && !msg.deleted && activeContact?.convId && (
-                            <button
-                              onClick={() => void recallMessage(msg)}
-                              className="text-[10px] opacity-0 transition-opacity group-hover:opacity-100 hover:underline"
-                              title="撤回消息"
-                            >
-                              撤回
-                            </button>
-                          )}
-                          {isMine && peerReadTs !== undefined && msg.timestamp <= peerReadTs && (
-                            <span className="text-[10px] font-semibold text-primary">已读</span>
-                          )}
-                        </div>
-                        {/* P1-2: Reaction 摘要栏（每条消息下方） */}
-                        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
-                          <ReactionBar
-                            messageId={msg.id}
-                            reactions={msg.reactions}
-                            currentUserId={me?.id}
-                            onToggle={(emoji, added) => {
-                              setLocalReactions((prev) => {
-                                const msgR = { ...(prev[msg.id] ?? {}) };
-                                if (added) {
-                                  msgR[emoji] = [...(msgR[emoji] ?? []), me?.id ?? "self"];
-                                } else {
-                                  msgR[emoji] = (msgR[emoji] ?? []).filter((u) => u !== me?.id);
-                                  if (msgR[emoji].length === 0) delete msgR[emoji];
-                                }
-                                return { ...prev, [msg.id]: msgR };
-                              });
-                            }}
-                          />
-                        )}
-                      </Bubble>
-                    </div>
-                  </div>
-                  );
-                })
-              )}
-              {/* 群聊运行中提示 */}
-              {activeContact.type === "group" && groupLive?.status === "running" && (
-                <div className="flex items-center gap-2 text-muted">
-                  <Spinner label="Agent 们正在对话…" />
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+            <MessageList
+              messages={messages}
+              activeContact={activeContact}
+              meId={me?.id}
+              usersById={usersById}
+              multiSelect={multiSelect}
+              selectedMsgs={selectedMsgs}
+              peerReadTs={peerReadTs}
+              groupRunning={groupLive?.status === "running"}
+              bottomRef={messagesEndRef}
+              onToggleSelect={toggleSelectMsg}
+              onQuote={startQuote}
+              onForward={openForward}
+              onEdit={(msg) => setEditTarget({ msgId: msg.id, content: msg.content, convId: activeContact.convId! })}
+              onRecall={(msg) => void recallMessage(msg)}
+              onToggleReaction={(messageId, emoji, added) => {
+                setLocalReactions((prev) => {
+                  const msgR = { ...(prev[messageId] ?? {}) };
+                  if (added) {
+                    msgR[emoji] = [...(msgR[emoji] ?? []), me?.id ?? "self"];
+                  } else {
+                    msgR[emoji] = (msgR[emoji] ?? []).filter((u) => u !== me?.id);
+                    if (msgR[emoji].length === 0) delete msgR[emoji];
+                  }
+                  return { ...prev, [messageId]: msgR };
+                });
+              }}
+            />
 
             {/* 输入框 */}
-            <div className="border-t border-border px-6 py-4">
-              {/* 待发送附件预览 */}
-              {draftAttachment && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg bg-muted/20 px-3 py-2">
-                  {draftAttachment.type === "image" ? <ImageIcon className="h-4 w-4 text-muted" /> : <Paperclip className="h-4 w-4 text-muted" />}
-                  <span className="flex-1 truncate text-xs text-muted">{draftAttachment.name}</span>
-                  <button
-                    onClick={() => setDraftAttachment(null)}
-                    className="rounded p-1 text-muted transition-colors hover:text-fg"
-                    aria-label="取消附件"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              {/* 引用回复条 */}
-              {replyTo && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2">
-                  <span className="text-xs text-muted">回复 {replyTo.senderName}</span>
-                  <span className="flex-1 truncate text-xs text-fg">{replyTo.content}</span>
-                  <button onClick={() => setReplyTo(null)} className="rounded p-1 text-muted hover:text-fg" aria-label="取消引用"><X className="h-3 w-3" /></button>
-                </div>
-              )}
-              {/* @提及选择 */}
-              {mentionOpen && activeContact && (activeContact.type === "user" || activeContact.type === "group") && (
-                <div className="mb-2 flex flex-wrap items-center gap-1 rounded-lg bg-surface p-2 shadow-sm border border-border max-h-28 overflow-y-auto">
-                  {(activeContact.participantIds ?? []).map((pid) => {
-                    const u = usersById.get(pid);
-                    const name = u ? (u.displayName || u.username) : (pid.startsWith("user_") ? pid : pid);
-                    if (mentionFilter && !name.includes(mentionFilter)) return null;
-                    return (
-                      <button
-                        key={pid}
-                        onClick={() => {
-                          setInputText((prev) => {
-                            const lastAt = prev.lastIndexOf("@");
-                            const pre = lastAt >= 0 ? prev.slice(0, lastAt) : prev;
-                            return pre + "@" + name + " ";
-                          });
-                          setMentionOpen(false);
-                          inputRef.current?.focus();
-                        }}
-                        className="rounded-full border border-border px-2 py-0.5 text-xs text-primary hover:bg-primary/10"
-                      >
-                        @{name}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-              {/* 表情面板 */}
-              {showEmoji && (
-                <div ref={emojiRef} className="mb-2 flex flex-wrap items-center gap-1 rounded-lg bg-surface p-2 shadow-sm border border-border max-h-32 overflow-y-auto">
-                  {["😀","😂","🤣","😊","😍","😘","😎","🤔","😅","😭","😡","👍","👎","👏","🙏","💪","🔥","❤️","🎉","✅","❌","👻","🤝","☕"].map((e) => (
-                    <button key={e} onClick={() => insertEmoji(e)} className="p-1 text-lg hover:bg-muted/10 rounded">{e}</button>
-                  ))}
-                </div>
-              )}
-              {/* 多选转发工具栏 */}
-              {multiSelect && (
-                <div className="mb-2 flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-2">
-                  <span className="text-xs text-muted">已选 {selectedMsgs.size} 条</span>
-                  <button onClick={() => void forwardSelected()} disabled={selectedMsgs.size === 0} className="ml-auto rounded-lg bg-primary px-3 py-1 text-xs text-primary-fg disabled:opacity-40">转发</button>
-                  <button onClick={toggleMultiSelect} className="rounded-lg px-2 py-1 text-xs text-muted hover:text-fg">取消</button>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <input
-                  ref={imageInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    void handlePickFile(e.target.files?.[0], true);
-                    e.target.value = "";
-                  }}
-                />
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={(e) => {
-                    void handlePickFile(e.target.files?.[0], false);
-                    e.target.value = "";
-                  }}
-                />
-                <button
-                  onClick={() => imageInputRef.current?.click()}
-                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-                  title="发送图片（支持用户/群聊）"
-                  aria-label="发送图片"
-                  disabled={uploading || sending || activeContact.type === "agent"}
-                >
-                  <ImageIcon className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-                  title="发送文件（支持用户/群聊）"
-                  aria-label="发送文件"
-                  disabled={uploading || sending || activeContact.type === "agent"}
-                >
-                  <Paperclip className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => setShowEmoji((v) => !v)}
-                  className="rounded-lg p-2 text-muted transition-colors hover:bg-muted/10 hover:text-fg"
-                  title="表情"
-                  aria-label="表情"
-                >
-                  <span className="text-base leading-none">😀</span>
-                </button>
-                <button
-                  onClick={toggleMultiSelect}
-                  className={cls("rounded-lg p-2 transition-colors", multiSelect ? "bg-primary/10 text-primary" : "text-muted hover:bg-muted/10 hover:text-fg")}
-                  title="多选转发"
-                  aria-label="多选转发"
-                >
-                  <span className="text-sm leading-none">☑</span>
-                </button>
-                <Input
-                  value={inputText}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setInputText(v);
-                    // @提及：输入 @ 打开参与者选择
-                    const lastAt = v.lastIndexOf("@");
-                    if (lastAt >= 0 && v.slice(lastAt + 1).length <= 20) {
-                      const isAfterSpace = v.slice(lastAt + 1).includes(" ") === false;
-                      if (isAfterSpace) { setMentionOpen(true); setMentionFilter(v.slice(lastAt + 1)); }
-                      else setMentionOpen(false);
-                    } else {
-                      setMentionOpen(false);
-                    }
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey && !mentionOpen) sendMessage();
-                    if (e.key === "Escape") { setMentionOpen(false); setShowEmoji(false); }
-                  }}
-                  placeholder={`发送给 ${activeContact.name}...`}
-                  className="flex-1"
-                  disabled={sending || uploading}
-                />
-                <Button
-                  onClick={sendMessage}
-                  disabled={(!inputText.trim() && !draftAttachment) || sending || uploading}
-                  className="px-4"
-                  aria-label="发送消息"
-                >
-                  {sending || uploading ? <Spinner /> : <Send className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
+            <ChatInputBar
+              activeContact={activeContact}
+              inputText={inputText}
+              draftAttachment={draftAttachment}
+              replyTo={replyTo}
+              showEmoji={showEmoji}
+              multiSelect={multiSelect}
+              selectedCount={selectedMsgs.size}
+              uploading={uploading}
+              sending={sending}
+              usersById={usersById}
+              onChangeText={setInputText}
+              onSend={() => void sendMessage()}
+              onPickFile={(f, img) => void handlePickFile(f, img)}
+              onCancelAttachment={() => setDraftAttachment(null)}
+              onCancelReply={() => setReplyTo(null)}
+              onPickMention={(name) => {
+                setInputText((prev) => {
+                  const lastAt = prev.lastIndexOf("@");
+                  const pre = lastAt >= 0 ? prev.slice(0, lastAt) : prev;
+                  return pre + "@" + name + " ";
+                });
+              }}
+              onInsertEmoji={(e) => setInputText((prev) => prev + e)}
+              onToggleEmoji={() => setShowEmoji((v) => !v)}
+              onCloseEmoji={() => setShowEmoji(false)}
+              onToggleMultiSelect={toggleMultiSelect}
+              onForwardSelected={() => void forwardSelected()}
+            />
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
