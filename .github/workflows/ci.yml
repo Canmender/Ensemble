@@ -20,9 +20,10 @@ jobs:
           cache: pnpm
           cache-dependency-path: desktop/pnpm-lock.yaml
       - run: cd desktop && pnpm install --frozen-lockfile
-      - run: cd desktop && pnpm --filter @ensemble/shared build
-      # 只检查 server 和 shared（desktop 包依赖 server 未 build 会报模块未找到）
-      - run: cd desktop && pnpm --filter @ensemble/shared typecheck && pnpm --filter @ensemble/server typecheck
+      # 先 build shared 与 server：desktop 包 typecheck 依赖 server 的 dist 产物，
+      # 未 build 会报 TS2307 模块未找到。之后用 -r 递归跑全部包，避免新增包漏检。
+      - run: cd desktop && pnpm --filter @ensemble/shared build && pnpm --filter @ensemble/server build
+      - run: cd desktop && pnpm -r typecheck
 
   test:
     runs-on: ubuntu-latest
@@ -57,6 +58,7 @@ jobs:
       - run: cd desktop && pnpm --filter @ensemble/shared build
       - run: cd desktop && pnpm --filter @ensemble/server build
       - run: cd desktop && pnpm --filter @ensemble/web build
+      - run: cd desktop && pnpm --filter @ensemble/desktop build
 
   docker:
     runs-on: ubuntu-latest
