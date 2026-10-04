@@ -31,6 +31,7 @@ Thumbs.db
 
 # hermes / claude local state
 .hermes/
+.claude/worktrees/
 
 # Expo
 .expo/

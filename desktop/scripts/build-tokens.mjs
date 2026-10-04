@@ -89,12 +89,17 @@ ${springEntries}
 } as const;
 `;
 // 输出到移动端仓库目录。desktop 的上一级即仓库根（主 checkout 与 .claude/worktrees/* 均成立）；
-// 目录不存在（如独立检出 desktop）时报错并提示，不静默。
+// 目录不存在（如独立检出 desktop）时直接抛错中断，不静默通过——
+// 单源已更新但 RN 产物没更新时，脚本必须硬失败，否则调用方会误以为两侧已同步。
 const mobileDir = resolve(root, "../mobile/src/design/generated");
 try {
   mkdirSync(mobileDir, { recursive: true });
   writeFileSync(join(mobileDir, "tokens.ts"), ts);
   console.log(`✓ RN   → mobile/src/design/generated/tokens.ts`);
 } catch (e) {
-  console.warn(`! RN   → mobile 目录写入失败（${mobileDir}）：${e.message}`);
+  throw new Error(
+    `RN 产物写入失败（${mobileDir}）：${e.message}\n` +
+      `tokens.json 已更新但 mobile 侧 tokens.ts 未更新，两端会不一致。` +
+      `请在仓库根下重跑本脚本（mobile/ 与 desktop/ 需同级）。`,
+  );
 }
