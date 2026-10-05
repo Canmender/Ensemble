@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
@@ -62,7 +62,12 @@ export class WsHub {
   private _sessionToken = randomBytes(32).toString("hex");
 
   // HITL 工具确认：confirmId → { resolve, timer }
-  private pendingConfirms = new Map<string, { resolve: (approved: boolean) => void; timer?: ReturnType<typeof setTimeout> }>();
+  private pendingConfirms = new Map<string, {
+    resolve: (approved: boolean) => void;
+    timer?: ReturnType<typeof setTimeout>;
+    /** 审计用：以下字段在 requestConfirm 时留存，供 resolveConfirm / 超时 / 关机三条路径写入 */
+    userId: string; runId: string; tool: string; argsDigest: string; requestedAt: number;
+  }>();
 
   /** 事件等待者（waitForRun 的注册表） */
   private eventWaiters: EventWaiter[] = [];
@@ -95,6 +100,22 @@ export class WsHub {
   onCallSignal?: (fromUserId: string, fromName: string | undefined, targetUserId: string, call: CallSignal) => void;
   /** 读取 IM 配置（由 context 注入，延迟到运行时读取） */
   getSettings?: () => import("@ensemble/shared").AppSettings;
+  /**
+   * 写审计记录（由 context 注入）。可选——未注入时审批仍正常工作，只是不留痕。
+   * 设计见 docs/AUDIT-DESIGN.md。argsDigest 由本模块用 node:crypto 计算，
+   * 不接受调用方（尤其是客户端）传入的摘要值。
+   */
+  appendAudit?: (entry: {
+    userId: string;
+    action: string;
+    runId?: string;
+    tool?: string;
+    argsDigest?: string;
+    decision: "approve" | "reject" | "auto_reject";
+    reason?: "timeout" | "shutdown";
+    latencyMs?: number;
+    confirmId: string;
+  }) => void;
 
   attach(server: Server, path = "/ws", resolveUser?: (token: string) => AuthUser | undefined): void {
     this.serverPath = path;
@@ -527,17 +548,32 @@ export class WsHub {
    * HITL 工具确认：向订阅了该 run 的客户端发送确认请求，等待用户响应。
    * 超时（默认 5 分钟）自动拒绝。
    */
-  requestConfirm(runId: string, tool: string, args: unknown, timeoutMs?: number): Promise<boolean> {
+  requestConfirm(
+    runId: string,
+    tool: string,
+    args: unknown,
+    userId: string,
+    timeoutMs?: number,
+  ): Promise<boolean> {
     const confirmId = randomBytes(8).toString("hex");
     const effectiveTimeout = timeoutMs ?? (this.getSettings?.().im?.toolConfirmTimeoutMin ?? 5) * 60_000;
+    // 摘要在服务端算：客户端可改代码，不能信任它传入的摘要值
+    const argsDigest = digestArgs(args);
+    const requestedAt = Date.now();
     return new Promise<boolean>((resolve) => {
       const timer = setTimeout(() => {
         this.pendingConfirms.delete(confirmId);
+        // 超时自动拒绝——此前连「被自动拒绝」这个事实都不记录（docs/AUDIT-DESIGN.md §2）
+        this.appendAudit?.({
+          userId, action: "tool_confirm", runId, tool, argsDigest,
+          decision: "auto_reject", reason: "timeout",
+          latencyMs: Date.now() - requestedAt, confirmId,
+        });
         resolve(false);
       }, effectiveTimeout);
       timer.unref?.();
 
-      this.pendingConfirms.set(confirmId, { resolve, timer });
+      this.pendingConfirms.set(confirmId, { resolve, timer, userId, runId, tool, argsDigest, requestedAt });
 
       // 广播确认请求给订阅该 run 的前端客户端
       this.broadcast(runId, 0, {
@@ -555,6 +591,16 @@ export class WsHub {
     if (!pending) return;
     this.pendingConfirms.delete(confirmId);
     if (pending.timer) clearTimeout(pending.timer);
+    this.appendAudit?.({
+      userId: pending.userId,
+      action: "tool_confirm",
+      runId: pending.runId,
+      tool: pending.tool,
+      argsDigest: pending.argsDigest,
+      decision: approved ? "approve" : "reject",
+      latencyMs: Date.now() - pending.requestedAt,
+      confirmId,
+    });
     pending.resolve(approved);
   }
 
@@ -587,6 +633,12 @@ export class WsHub {
     // 清理所有待确认的请求
     for (const [id, pending] of this.pendingConfirms) {
       if (pending.timer) clearTimeout(pending.timer);
+      this.appendAudit?.({
+        userId: pending.userId, action: "tool_confirm", runId: pending.runId,
+        tool: pending.tool, argsDigest: pending.argsDigest,
+        decision: "auto_reject", reason: "shutdown",
+        latencyMs: Date.now() - pending.requestedAt, confirmId: id,
+      });
       pending.resolve(false);
     }
     this.pendingConfirms.clear();
@@ -608,4 +660,25 @@ function extractIp(req: IncomingMessage): string {
   const forwarded = req.headers["x-forwarded-for"];
   if (typeof forwarded === "string" && forwarded) return forwarded.split(",")[0].trim();
   return req.socket.remoteAddress ?? "unknown";
+}
+
+/**
+ * 工具参数的摘要：`sha256:<hex>;keys=[a,b];len=<字节数>`。
+ * 只记「批准了涉及哪些字段的操作」，不记内容本身——
+ * 用户批准一次文件写入不等于同意把文件内容存进可查询日志
+ * （docs/AUDIT-DESIGN.md §4.2）。在服务端计算，不信任客户端传入值。
+ */
+function digestArgs(args: unknown): string {
+  let json: string;
+  try {
+    json = JSON.stringify(args ?? null) ?? "null";
+  } catch {
+    json = "[unserializable]";
+  }
+  const hash = createHash("sha256").update(json).digest("hex").slice(0, 16);
+  const keys =
+    args && typeof args === "object" && !Array.isArray(args)
+      ? Object.keys(args as Record<string, unknown>).sort()
+      : [];
+  return `sha256:${hash};keys=[${keys.join(",")}];len=${Buffer.byteLength(json)}`;
 }

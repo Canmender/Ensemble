@@ -127,6 +127,8 @@ export function createAppContext(
   if (env.apiKey) hub.overrideToken(env.apiKey);
   // 设置 store 引用（用于离线推送）
   hub.store = store;
+  // 审计：工具审批的三条决策路径写入 audit_log（docs/AUDIT-DESIGN.md）
+  hub.appendAudit = (entry) => store.appendAuditLog(entry);
   // 设备多端在线：WS 上线注册设备表，下线/上线广播给同用户其他设备
   hub.onDeviceStatus = (userId, device, online) => {
     if (online) {
@@ -237,9 +239,9 @@ export function createAppContext(
   }
 
   // WS-based HITL 确认：通过 hub 向前端发送确认请求，等待用户响应
-  const wsAskConfirm = async (tool: string, args: unknown, runId?: string): Promise<boolean> => {
-    if (!runId) return false; // 无 runId（headless/CLI）→ 拒绝
-    return hub.requestConfirm(runId, tool, args);
+  const wsAskConfirm = async (tool: string, args: unknown, runId?: string, userId?: string): Promise<boolean> => {
+    if (!runId || !userId) return false; // 无 runId（headless/CLI）或无主体 → 拒绝
+    return hub.requestConfirm(runId, tool, args, userId);
   };
 
   const registry = new AdapterRegistry({

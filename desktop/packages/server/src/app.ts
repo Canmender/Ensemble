@@ -27,6 +27,7 @@ import { e2eRouter } from "./api/routes/e2e";
 import { groupsRouter, userSearchRouter } from "./api/routes/groups";
 import { reactionsRouter } from "./api/routes/reactions";
 import { assistantRouter } from "./api/routes/assistant";
+import { auditRouter } from "./api/routes/audit";
 import { initRelayClient } from "./api/routes/relay";
 import { apiAuth } from "./api/auth";
 import { authRouter } from "./api/routes/auth";
@@ -48,7 +49,12 @@ export interface CreateAppOptions {
 
 /** 简单的内存速率限制中间件（仅限写入方法 POST/PUT/PATCH/DELETE） */
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
-function createWriteRateLimiter(windowMs: number = 60_000, max: number = 60) {
+/**
+ * 通用速率限制：只对 methods 指定的方法计数。
+ * 审计查询单独用一套（只拦 GET），避免占用用户的写配额——
+ * 否则批量写任务时反而查不了审计（docs/AUDIT-DESIGN.md §5）。
+ */
+function createRateLimiter(methods: Set<string>, windowMs: number = 60_000, max: number = 60) {
   const store = new Map<string, { count: number; resetAt: number }>();
 
   // 定期清理过期条目
@@ -63,8 +69,8 @@ function createWriteRateLimiter(windowMs: number = 60_000, max: number = 60) {
   if (timer.unref) timer.unref();
 
   const middleware = (req: Request, res: Response, next: NextFunction) => {
-    // 只对写方法计数（GET 探活/读取不占用配额）
-    if (!WRITE_METHODS.has(req.method)) return next();
+    // 只对指定方法计数（其余不占用配额）
+    if (!methods.has(req.method)) return next();
 
     const ip = req.ip || req.socket?.remoteAddress || "unknown";
     const now = Date.now();
@@ -88,6 +94,15 @@ function createWriteRateLimiter(windowMs: number = 60_000, max: number = 60) {
   };
 
   return middleware;
+}
+
+function createWriteRateLimiter(windowMs?: number, max?: number) {
+  return createRateLimiter(WRITE_METHODS, windowMs, max);
+}
+
+/** 审计查询的读限流：与写限流分开计数，每分钟每 IP 60 次 */
+function createAuditReadLimiter(windowMs?: number, max?: number) {
+  return createRateLimiter(new Set(["GET"]), windowMs, max);
 }
 
 export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express.Express {
@@ -181,6 +196,9 @@ export function createApp(ctx: AppContext, opts: CreateAppOptions = {}): express
   app.use("/api/users", userSearchRouter(ctx));
   app.use("/api/reactions", reactionsRouter(ctx));
   app.use("/api/assistant", assistantRouter(ctx));
+  // 审计查询：独立读限流（不占用写配额）。审计可被用于探测「某人何时批准了
+  // 什么」，故即使只返回元数据也需要限流（docs/AUDIT-DESIGN.md §5）
+  app.use("/api/audit", createAuditReadLimiter(), auditRouter(ctx));
 
   // 自用：桌面端启动自动连接云端中继（移动端 IM/遥控入口）
   initRelayClient(ctx);

@@ -171,6 +171,26 @@ CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_run_agent ON jobs(run_id, agent_id);
 CREATE INDEX IF NOT EXISTS idx_run_events_run_job ON run_events(run_id, job_id);
 
+-- Agent 行为审计台（设计见 docs/AUDIT-DESIGN.md）
+-- 记的是「人的授权行为」而非 Agent 的业务事件，故不复用 run_events。
+-- 不记录消息内容；args 只存摘要（sha256 + 长度 + 键名列表），理由同文档 §4.2。
+CREATE TABLE IF NOT EXISTS audit_log (
+  id          TEXT PRIMARY KEY,
+  ts          TEXT NOT NULL,
+  user_id     TEXT NOT NULL,
+  action      TEXT NOT NULL,
+  run_id      TEXT,
+  tool        TEXT,
+  args_digest TEXT,
+  decision    TEXT NOT NULL,          -- approve | reject | auto_reject
+  reason      TEXT,                   -- auto_reject 的来源：timeout | shutdown
+  risk        TEXT,                   -- 评分在 web 端算，本轮恒为 NULL（见文档 §4.1）
+  latency_ms  INTEGER,
+  confirm_id  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id, ts DESC);
+
 -- 消息表情回应
 CREATE TABLE IF NOT EXISTS reactions (
   message_id TEXT NOT NULL,

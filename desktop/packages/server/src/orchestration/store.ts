@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { randomUUID } from "node:crypto";
 import type {
   AgentEvent,
   ChatMessage,
@@ -9,6 +10,22 @@ import type {
   WorkflowDef,
 } from "@ensemble/shared";
 import { logger } from "../util/logger";
+
+/** 一条审计记录（docs/AUDIT-DESIGN.md §3） */
+export interface AuditEntry {
+  id: string;
+  ts: string;
+  userId: string;
+  action: string;
+  runId?: string;
+  tool?: string;
+  argsDigest?: string;
+  decision: "approve" | "reject" | "auto_reject";
+  reason?: "timeout" | "shutdown";
+  risk?: string;
+  latencyMs?: number;
+  confirmId?: string;
+}
 
 /**
  * 持久化层：tasks / runs / jobs / run_events / chat_messages / workflows
@@ -58,6 +75,7 @@ export class Store {
     getConversation: ReturnType<DatabaseSync["prepare"]>;
     listConversations: ReturnType<DatabaseSync["prepare"]>;
     findSharedConversation: ReturnType<DatabaseSync["prepare"]>;
+    insertAuditLog: ReturnType<DatabaseSync["prepare"]>;
     deleteConversation: ReturnType<DatabaseSync["prepare"]>;
     updateConvMeta: ReturnType<DatabaseSync["prepare"]>;
     incrementUnread: ReturnType<DatabaseSync["prepare"]>;
@@ -94,6 +112,10 @@ export class Store {
       nextEventSeq: db.prepare("SELECT COALESCE(MAX(seq), 0) AS max_seq FROM run_events WHERE run_id = ?"),
       nextJobSeq: db.prepare("SELECT COALESCE(MAX(seq), 0) AS s FROM jobs WHERE run_id = ?"),
       insertRunEvent: db.prepare("INSERT INTO run_events (run_id, seq, job_id, user_id, event_json, ts) VALUES (?, ?, ?, ?, ?, ?)"),
+      // Audit（设计见 docs/AUDIT-DESIGN.md）
+      insertAuditLog: db.prepare(
+        "INSERT INTO audit_log (id, ts, user_id, action, run_id, tool, args_digest, decision, reason, risk, latency_ms, confirm_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+      ),
       getRunEvents: db.prepare("SELECT seq, job_id, event_json FROM run_events WHERE run_id = ? AND seq > ? ORDER BY seq"),
       // Chat messages
       createChatMessage: db.prepare("INSERT INTO chat_messages (id, run_id, seq, job_id, agent_id, role, user_id, content, attachment, reply_to, mentions, deleted, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"),
@@ -332,6 +354,76 @@ export class Store {
     this.eventSeqCounters.delete(runId);
     this.jobSeqCounters.delete(runId);
     this.chatSeqCounters.delete(runId);
+  }
+
+  // ---------- 审计（docs/AUDIT-DESIGN.md）----------
+
+  /** 写一条审计记录。argsDigest 必须由服务端算，不信任客户端传入的摘要。 */
+  appendAuditLog(entry: {
+    userId: string;
+    action: string;
+    runId?: string;
+    tool?: string;
+    argsDigest?: string;
+    decision: "approve" | "reject" | "auto_reject";
+    reason?: "timeout" | "shutdown";
+    risk?: string;
+    latencyMs?: number;
+    confirmId?: string;
+  }): void {
+    this.stmts.insertAuditLog.run(
+      randomUUID(),
+      new Date().toISOString(),
+      entry.userId,
+      entry.action,
+      entry.runId ?? null,
+      entry.tool ?? null,
+      entry.argsDigest ?? null,
+      entry.decision,
+      entry.reason ?? null,
+      entry.risk ?? null,
+      entry.latencyMs ?? null,
+      entry.confirmId ?? null,
+    );
+  }
+
+  /**
+   * 查询审计记录。**强制按 userId 过滤**——本轮不开放跨用户查询
+   * （审计台的价值是「我确认过什么」，不是「管理员查员工」，
+   *  且组织权限体系尚未落地，见 AUDIT-DESIGN.md §5）。
+   */
+  listAuditLog(filter: {
+    userId: string;
+    runId?: string;
+    decision?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+  }): AuditEntry[] {
+    const where = ["user_id = ?"];
+    const vals: unknown[] = [filter.userId];
+    if (filter.runId) { where.push("run_id = ?"); vals.push(filter.runId); }
+    if (filter.decision) { where.push("decision = ?"); vals.push(filter.decision); }
+    if (filter.from) { where.push("ts >= ?"); vals.push(filter.from); }
+    if (filter.to) { where.push("ts <= ?"); vals.push(filter.to); }
+    const limit = Math.min(200, Math.max(1, Number(filter.limit) || 50));
+    const rows = this.db
+      .prepare(`SELECT * FROM audit_log WHERE ${where.join(" AND ")} ORDER BY ts DESC LIMIT ?`)
+      .all(...(vals as any[]), limit) as any[];
+    return rows.map((r) => ({
+      id: r.id,
+      ts: r.ts,
+      userId: r.user_id,
+      action: r.action,
+      runId: r.run_id ?? undefined,
+      tool: r.tool ?? undefined,
+      argsDigest: r.args_digest ?? undefined,
+      decision: r.decision,
+      reason: r.reason ?? undefined,
+      risk: r.risk ?? undefined,
+      latencyMs: r.latency_ms ?? undefined,
+      confirmId: r.confirm_id ?? undefined,
+    }));
   }
 
   getRunEvents(runId: string, afterSeq = 0): Array<{ seq: number; jobId?: string; event: AgentEvent }> {
