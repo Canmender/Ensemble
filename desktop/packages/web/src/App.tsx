@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import {
-  Bot, Brain, HelpCircle, LayoutDashboard, MessageSquare, Monitor, Moon, Puzzle, Settings, Sun, Users,
+  Bot, Brain, HelpCircle, LayoutDashboard, MessageSquare, Monitor, Moon, Puzzle, Settings, ShieldCheck, Sun, Users,
   Workflow, Zap, MonitorSmartphone, Archive, LogOut, User as UserIcon, Download, X
 } from "lucide-react";
 import { api } from "./lib/api";
@@ -36,6 +36,7 @@ const CloudSetupPage = lazy(() => import("./pages/CloudSetupPage"));
 const PluginsPage = lazy(() => import("./pages/PluginsPage"));
 const GroupMembersPage = lazy(() => import("./pages/GroupMembersPage"));
 const GroupAnnouncementPage = lazy(() => import("./pages/GroupAnnouncementPage"));
+const AuditPage = lazy(() => import("./pages/AuditPage"));
 
 const NAV_ITEMS = [
   { to: "/", label: "看板", icon: LayoutDashboard },
@@ -46,6 +47,7 @@ const NAV_ITEMS = [
   { to: "/memory", label: "记忆", icon: Brain },
   { to: "/plugins", label: "功能", icon: Puzzle },
   { to: "/tokens", label: "Token用量", icon: Zap },
+  { to: "/audit", label: "审计", icon: ShieldCheck },
   { to: "/settings", label: "设置", icon: Settings },
 ];
 
@@ -328,6 +330,7 @@ export default function App() {
                 <Route path="/group-members" element={<GroupMembersPage />} />
                 <Route path="/group-announcement" element={<GroupAnnouncementPage />} />
               <Route path="/tokens" element={<TokenUsagePage />} />
+                <Route path="/audit" element={<AuditPage />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>
@@ -479,6 +482,7 @@ export default function App() {
                 <Route path="/group-members" element={<GroupMembersPage />} />
                 <Route path="/group-announcement" element={<GroupAnnouncementPage />} />
               <Route path="/tokens" element={<TokenUsagePage />} />
+                <Route path="/audit" element={<AuditPage />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>
