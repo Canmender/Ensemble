@@ -1,21 +1,22 @@
 /**
  * 可滑动消息气泡包裹层（左滑引用、右滑转发）
  *
- * 用 react-native-gesture-handler 的 Gesture.Pan() + Reanimated 实现：
+ * 用 react-native-gesture-handler 的 Gesture.Pan() + RN 原生 Animated 实现：
  * - 左滑超 80px：松手触发 onReply
  * - 右滑超 80px：松手触发 onForward
- * - 回弹弹簧：withSpring(0, { damping: 20, stiffness: 300 })
+ * - 回弹弹簧：damping 20 / stiffness 300
  * - 多选模式下禁用滑动（避免冲突）
+ *
+ * 迁移说明（2026-10）：原为 reanimated（与 RN 0.86 原生构建不兼容）。
+ * 三个 opacity 原本是 `useAnimatedStyle` 里的连续派生计算
+ * （min(1, |translateX| / 阈值)），此处用 interpolate + extrapolate: "clamp"
+ * 等价复现——30px 起淡入、80px 达满值、超出则钳住，与原逻辑一致。
+ * 手势回调本就在 JS 线程（gesture-handler 的 onUpdate/onEnd 非 worklet），
+ * 故直接 setValue，无需 runOnJS。
  */
-import React, { useCallback } from "react";
-import { View, StyleSheet } from "react-native";
+import React, { useCallback, useRef } from "react";
+import { View, StyleSheet, Animated } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  runOnJS,
-} from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, spacing, radius } from "../theme";
 
@@ -35,10 +36,20 @@ export function SwipeableBubble({
   onReply,
   onForward,
 }: SwipeableBubbleProps) {
-  const translateX = useSharedValue(0);
+  const translateX = useRef(new Animated.Value(0)).current;
+  // 当前位移的 JS 侧镜像：onEnd 需要读数值判断是否越过阈值。
+  // 不用 __getValue/_value——前者未在类型定义中公开，后者是私有字段。
+  const offsetRef = useRef(0);
 
   const resetPosition = useCallback(() => {
-    translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+    offsetRef.current = 0;
+    Animated.spring(translateX, {
+      toValue: 0,
+      damping: 20,
+      stiffness: 300,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
   }, [translateX]);
 
   const handleReply = useCallback(() => {
@@ -56,29 +67,37 @@ export function SwipeableBubble({
     .activeOffsetX([-15, 15]) // 垂直滚动不误触
     .onUpdate((e) => {
       // 限制滑动范围 [-120, 120]
-      translateX.value = Math.max(-120, Math.min(120, e.translationX));
+      const next = Math.max(-120, Math.min(120, e.translationX));
+      offsetRef.current = next;
+      translateX.setValue(next);
     })
     .onEnd(() => {
-      if (translateX.value < -SWIPE_THRESHOLD && onReply) {
-        runOnJS(handleReply)();
-      } else if (translateX.value > SWIPE_THRESHOLD && onForward) {
-        runOnJS(handleForward)();
+      const x = offsetRef.current;
+      if (x < -SWIPE_THRESHOLD && onReply) {
+        handleReply();
+      } else if (x > SWIPE_THRESHOLD && onForward) {
+        handleForward();
       } else {
-        translateX.value = withSpring(0, { damping: 20, stiffness: 300 });
+        resetPosition();
       }
     });
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }));
+  const animatedStyle = {
+    transform: [{ translateX }],
+  };
 
-  const replyOpacity = useAnimatedStyle(() => ({
-    opacity: translateX.value < -30 ? Math.min(1, Math.abs(translateX.value) / SWIPE_THRESHOLD) : 0,
-  }));
+  // 30px 起淡入、80px 达满值、超出钳住——等价于原 min(1, |x| / 阈值)
+  const replyOpacity = translateX.interpolate({
+    inputRange: [-120, -SWIPE_THRESHOLD, -30, 0],
+    outputRange: [1, 1, 0, 0],
+    extrapolate: "clamp",
+  });
 
-  const forwardOpacity = useAnimatedStyle(() => ({
-    opacity: translateX.value > 30 ? Math.min(1, translateX.value / SWIPE_THRESHOLD) : 0,
-  }));
+  const forwardOpacity = translateX.interpolate({
+    inputRange: [0, 30, SWIPE_THRESHOLD, 120],
+    outputRange: [0, 0, 1, 1],
+    extrapolate: "clamp",
+  });
 
   return (
     <View style={styles.container}>

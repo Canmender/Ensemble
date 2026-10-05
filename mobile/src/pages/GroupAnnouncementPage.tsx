@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRoute } from "@react-navigation/native";
 import { api } from "../services/api";
 import { useMeStore } from "../store/meStore";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { ms, colors, spacing, radius, fontSize, elevation } from "../theme";
 import { LiquidGlass } from "../components/Glass";
 
 export default function GroupAnnouncementPage() {
@@ -140,7 +140,7 @@ export default function GroupAnnouncementPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   contentContainer: { padding: spacing.lg, paddingBottom: 100 },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg },

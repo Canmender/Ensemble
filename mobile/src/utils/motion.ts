@@ -1,11 +1,20 @@
 /**
  * 动效弹簧物理常量 —— 权威源 tokens.json 的 primitive.spring（经 build-tokens.mjs 生成）
  *
- * reanimated springify() 默认 damping=120 很"死"，必须显式传参。
- * 物理参数（damping/stiffness）与时长参数互斥——用弹簧时不要混 duration。
+ * 弹簧物理参数（damping/stiffness）与时长参数互斥——用弹簧时不要混 duration。
  *
- * useReducedMotion 兜底：系统开启「减弱动态效果」时布局转场退化为直接跳位，
- * 符合 WCAG 2.3.3 / 系统无障碍约定。调用方用 hooks 版本自动获得兜底。
+ * 无障碍兜底：系统开启「减弱动态效果」时动效退化，符合 WCAG 2.3.3 /
+ * 系统无障碍约定。
+ *
+ * 迁移说明（2026-10）：原实现用 reanimated 的 useReducedMotion + LinearTransition。
+ * 因 reanimated 与 RN 0.86 原生构建不兼容（3.19.5 的 CMakeLists 硬编码 4.x 的
+ * src/main/cpp 布局，而其 C++ 源码实际在 Common/cpp/，导致原生构建失败、APK
+ * 出不来），已整体迁往 RN 原生 Animated。
+ * - useReducedMotion → AccessibilityInfo.isReduceMotionEnabled +
+ *   reduceMotionChanged 事件，可访问性行为等价保留。
+ * - LinearTransition 无 RN 等价实现：LayoutAnimation 只能用预设曲线、无法自定义
+ *   damping/stiffness，与下列 SPRING_* 参数对不上，属语义不等价的近似，故移除。
+ *   受影响的仅是列表重排/新消息入场的位移跟随（视觉打磨），不影响功能与数据。
  */
 import { springs } from "../design/generated/tokens";
 
@@ -16,25 +25,24 @@ export const SPRING_SNAPPY = springs.snappy;
 /** 温和入场：新消息气泡/卡片出现 */
 export const SPRING_GENTLE = springs.gentleEntry;
 
-import { useMemo } from "react";
-import { LinearTransition, useReducedMotion } from "react-native-reanimated";
+import { useEffect, useState } from "react";
+import { AccessibilityInfo } from "react-native";
 
-/** 布局转场（列表增删/重排）——通用档（无兜底版本，非组件上下文用） */
-export const layoutSpring = () =>
-  LinearTransition.springify().damping(SPRING_GENERAL.damping).stiffness(SPRING_GENERAL.stiffness);
+/** 跟踪系统「减弱动态效果」设置，替代 reanimated 的 useReducedMotion */
+export function useReducedMotion(): boolean {
+  const [reduced, setReduced] = useState(false);
 
-/** 布局转场——温和入场档（新消息） */
-export const layoutSpringGentle = () =>
-  LinearTransition.springify().damping(SPRING_GENTLE.damping).stiffness(SPRING_GENTLE.stiffness);
+  useEffect(() => {
+    let alive = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((v) => {
+      if (alive) setReduced(v);
+    });
+    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", setReduced);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
+  }, []);
 
-/** 组件内使用：系统减弱动态时返回 undefined（跳过 layout 动画 = 直接落位） */
-export function useLayoutSpring() {
-  const reduced = useReducedMotion();
-  return useMemo(() => (reduced ? undefined : layoutSpring()), [reduced]);
-}
-
-/** 组件内使用：温和档 + 减弱动态兜底 */
-export function useLayoutSpringGentle() {
-  const reduced = useReducedMotion();
-  return useMemo(() => (reduced ? undefined : layoutSpringGentle()), [reduced]);
+  return reduced;
 }

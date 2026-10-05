@@ -7,6 +7,15 @@ build/
 release/
 *.tsbuildinfo
 
+# tsc 编译产物与源码同目录混放（勿入库）
+# 仅限定 shared/src/types/，避免误伤手写 .d.ts：
+# server/src/types/express.d.ts、web/src/types/desktop.d.ts、
+# mobile/src/types/react-native-zeroconf.d.ts 均为手写环境/模块声明。
+desktop/packages/shared/src/types/*.js
+desktop/packages/shared/src/types/*.js.map
+desktop/packages/shared/src/types/*.d.ts
+desktop/packages/shared/src/types/*.d.ts.map
+
 # env
 .env
 .env.local

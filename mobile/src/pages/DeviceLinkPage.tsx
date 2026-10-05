@@ -20,34 +20,23 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Application from "expo-application";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "../services/api";
 import { useDeviceStore } from "../store/deviceStore";
-import { colors, spacing, radius, fontSize, elevation } from "../theme";
+import { ms, colors, spacing, radius, fontSize, elevation } from "../theme";
 import { useMeStore } from "../store/meStore";
 import type { PairedDevice } from "../services/api";
 
-/** 生成简单的设备 ID（用于配对请求） */
+/**
+ * 取本机设备 ID（用于配对请求）。
+ *
+ * 只读 connection.init() 已写入 store 的真实设备信息——那裡的 id 来自
+ * Android ID 或持久化存储。此处不再自行生成：早前版本会用随机 id 覆写
+ * currentDevice，ip/端口填 0.0.0.0/0，会污染 SettingsPage 的设备名显示与
+ * 推送注册（两者都读同一份 store）。
+ */
 function getDeviceId(): string {
-  const stored = useDeviceStore.getState().currentDevice?.id;
-  if (stored) return stored;
-  // 生成并持久化一个随机 ID
-  const id = `mobile-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  useDeviceStore.setState({
-    currentDevice: {
-      id,
-      name: "手机端",
-      type: "mobile",
-      os: "React Native",
-      appVersion: Application.nativeApplicationVersion ?? "0.9.33",
-      wsPort: 0,
-      httpPort: 0,
-      ip: "0.0.0.0",
-      lastSeen: Date.now(),
-    },
-  });
-  return id;
+  return useDeviceStore.getState().currentDevice?.id ?? "";
 }
 
 export default function DeviceLinkPage() {
@@ -89,6 +78,10 @@ export default function DeviceLinkPage() {
     setError(null);
     try {
       const deviceId = getDeviceId();
+      if (!deviceId) {
+        setError("设备信息尚未初始化，请稍后重试");
+        return;
+      }
       const res = await api.confirmPair(trimmed, deviceId);
       if (res.data?.pairId) {
         Alert.alert("配对成功", "已与桌面设备建立安全连接");
@@ -214,7 +207,7 @@ export default function DeviceLinkPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = ms({
   container: { flex: 1, backgroundColor: colors.bg },
   content: { padding: spacing.lg, paddingBottom: 96 },
   inputSection: {
